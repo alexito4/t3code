@@ -15,7 +15,9 @@ const runtimeVersionPolicy =
   (APP_VARIANT === "development" ? "appVersion" : "fingerprint");
 
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
+const personalTeamAppleTeamId = repoEnv.T3CODE_IOS_PERSONAL_TEAM_APPLE_TEAM_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
+const IOS_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/;
 
 const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
 // Universal exports already contain their own rounded-square silhouette. Using one as an adaptive
@@ -29,6 +31,15 @@ if (
 ) {
   throw new Error(
     "T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID must be a reverse-DNS identifier such as com.example.t3code when T3CODE_IOS_PERSONAL_TEAM=1.",
+  );
+}
+
+if (
+  isIosPersonalTeamBuild &&
+  (!personalTeamAppleTeamId || !IOS_TEAM_ID_PATTERN.test(personalTeamAppleTeamId))
+) {
+  throw new Error(
+    "T3CODE_IOS_PERSONAL_TEAM_APPLE_TEAM_ID must be a 10-character Apple team ID when T3CODE_IOS_PERSONAL_TEAM=1.",
   );
 }
 
@@ -194,8 +205,10 @@ const config: ExpoConfig = {
     bundleIdentifier: iosBundleIdentifier,
     // Pin code signing to the T3 Tools team so non-interactive `expo run:ios`
     // does not fall back to a personal team (which cannot sign app groups,
-    // Sign in with Apple, or push notification entitlements).
-    appleTeamId: "ARK85ZXQ4Z",
+    // Sign in with Apple, or push notification entitlements). Personal Team
+    // builds pin to the caller's own team instead, via
+    // T3CODE_IOS_PERSONAL_TEAM_APPLE_TEAM_ID.
+    appleTeamId: isIosPersonalTeamBuild ? personalTeamAppleTeamId! : "ARK85ZXQ4Z",
     associatedDomains: [
       `applinks:${variant.relyingParty}`,
       `webcredentials:${variant.relyingParty}`,
