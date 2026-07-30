@@ -18,7 +18,7 @@ cd "$REPO_ROOT"
 
 case "$cmd" in
     dev)
-        exec env T3CODE_HOST=0.0.0.0 pnpm dev "$@"
+        exec env T3CODE_HOST=0.0.0.0 pnpm --config.minimum-release-age=0 dev "$@"
         ;;
     connect)
         exec node apps/server/src/bin.ts connect "$@"
