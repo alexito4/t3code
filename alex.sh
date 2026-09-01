@@ -3,11 +3,22 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Each branch is one independently-droppable concern, rebased onto fresh
+# origin/main on its own, then composed into main in this order. Drop a
+# feature by removing its line here — no rebase archaeology required. See
+# ALEX.md for what each branch is and how to update the PR-derived ones.
+PATCH_BRANCHES=(
+    patch/alex-fork-tooling
+    patch/ios-personal-team
+    patch/fork-docs
+    patch/pr8296-side-questions
+)
+
 usage() {
     echo "Usage: alex.sh <dev|connect|sync|dist|pair> [args...]" >&2
     echo "  dev      Run pnpm dev with T3CODE_HOST=0.0.0.0 (LAN-reachable)" >&2
     echo "  connect  Run \`t3 connect\` from source (extra args forwarded, e.g. \`connect status\`)" >&2
-    echo "  sync     Rebase main onto origin/main and push --force-with-lease to fork" >&2
+    echo "  sync     Rebase each patch branch onto origin/main, recompose main, push --force-with-lease to fork" >&2
     echo "  dist     Build, sign, and install a local arm64 build to /Applications" >&2
     echo "  pair     Mint a pairing token for the official app's running server (extra args forwarded)" >&2
     exit 1
@@ -27,10 +38,24 @@ case "$cmd" in
         exec node apps/server/src/bin.ts connect "$@"
         ;;
     sync)
-        git checkout main
         git fetch origin main
-        git rebase origin/main
+
+        for branch in "${PATCH_BRANCHES[@]}"; do
+            echo "==> Rebasing $branch onto origin/main"
+            git checkout "$branch"
+            git rebase origin/main
+        done
+
+        echo "==> Recomposing main"
+        git checkout -B main origin/main
+        for branch in "${PATCH_BRANCHES[@]}"; do
+            git merge --no-ff --no-edit "$branch"
+        done
+
         git push --force-with-lease fork main
+        for branch in "${PATCH_BRANCHES[@]}"; do
+            git push --force-with-lease fork "$branch"
+        done
         ;;
     dist)
         export PNPM_CONFIG_MINIMUM_RELEASE_AGE=0
