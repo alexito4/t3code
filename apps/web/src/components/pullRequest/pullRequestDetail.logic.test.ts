@@ -13,6 +13,7 @@ import {
   buildExplainPullRequestHandoff,
   buildFixFindingHandoff,
   buildFixFindingsHandoff,
+  buildReviewPullRequestHandoff,
   groupPullRequestTimelineConversations,
   handoffPrompt,
   handoffReviewComments,
@@ -991,6 +992,30 @@ describe("asking about a change rather than working on it", () => {
     expect(handoff.prompt).toBe("Explain this pull request.");
     expect(handoff.reviewComments[0]?.text).toContain("worth reading closely");
     expect(handoff.reviewComments[0]?.text).toContain("Explain only. Do not change any code.");
+  });
+
+  it("puts the reader's configured checklist in the composer itself, not hidden in a chip", () => {
+    const handoff = buildReviewPullRequestHandoff(
+      base,
+      "Check that error handling matches repo conventions.",
+    );
+    expect(handoff.prompt).toBe("Check that error handling matches repo conventions.");
+    const chip = handoff.reviewComments[0]!;
+    expect(chip.text).not.toContain("error handling");
+    // The chip is only which pull request this is: no untrusted-data notice and no
+    // review-specific instructions, both of which would just repeat what the checklist,
+    // now the prompt itself, already says.
+    expect(chip.text).toBe(
+      [
+        "The pull request is #42, titled `Add the pull requests page`, at `https://github.com/pingdotgg/t3code/pull/42`.",
+        "Its branch is `feat/page` targeting `main`.",
+      ].join("\n"),
+    );
+  });
+
+  it("falls back to a generic request when the configured checklist is empty", () => {
+    const handoff = buildReviewPullRequestHandoff(base, "   ");
+    expect(handoff.prompt).toBe("Review this pull request.");
   });
 
   it("puts the reader's request in the composer and the selected lines in chips", () => {

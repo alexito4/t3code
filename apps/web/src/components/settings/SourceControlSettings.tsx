@@ -53,6 +53,7 @@ import {
   JujutsuIcon,
   type Icon,
 } from "../Icons";
+import { PullRequestReviewSettingsSection } from "./PullRequestReviewSettings";
 import { RedactedSensitiveText } from "./RedactedSensitiveText";
 import { SourceControlWritingSettingsSection } from "./SourceControlWritingSettings";
 import {
@@ -592,6 +593,7 @@ export function SourceControlSettingsPanel() {
       )}
 
       {isPrimaryEnvironment ? <SourceControlWritingSettingsSection /> : null}
+      {isPrimaryEnvironment ? <PullRequestReviewSettingsSection /> : null}
     </SettingsPageContainer>
   );
 }
