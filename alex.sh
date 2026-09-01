@@ -9,10 +9,14 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # entire diff every time). Drop a feature by removing its line here and
 # running `rebuild` — no history archaeology required. See ALEX.md for what
 # each branch is and how to update the PR-derived ones.
+#
+# patch/fork-infra is the one exception to "one concern per branch": it's
+# everything needed to build/sign/run this fork for personal use (alex.sh,
+# desktop identity, iOS team ID, this file's own history, ALEX.md), which
+# never gets dropped piecemeal — new infra work goes there too, not into a
+# new branch.
 PATCH_BRANCHES=(
-    patch/alex-fork-tooling
-    patch/ios-personal-team
-    patch/fork-docs
+    patch/fork-infra
     patch/pr8296-side-questions
 )
 
