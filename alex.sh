@@ -52,9 +52,14 @@ case "$cmd" in
             git merge --no-ff --no-edit "$branch"
         done
 
-        git push --force-with-lease fork main
+        # Explicit local:remote refspecs, not just a branch name: these
+        # branches track origin/main (for the rebase above), and a bare
+        # branch-name push resolves its destination through that tracking
+        # config instead of the branch's own name, which silently force-pushes
+        # everything to fork's main. Cost a working main once already.
+        git push --force-with-lease fork main:main
         for branch in "${PATCH_BRANCHES[@]}"; do
-            git push --force-with-lease fork "$branch"
+            git push --force-with-lease fork "$branch:$branch"
         done
         ;;
     dist)
