@@ -8,7 +8,7 @@ usage() {
     echo "  dev      Run pnpm dev with T3CODE_HOST=0.0.0.0 (LAN-reachable)" >&2
     echo "  connect  Run \`t3 connect\` from source (extra args forwarded, e.g. \`connect status\`)" >&2
     echo "  sync     Rebase main onto origin/main and push --force-with-lease to fork" >&2
-    echo "  dist     Build a local arm64 .dmg from source" >&2
+    echo "  dist     Build, sign, and install a local arm64 build to /Applications" >&2
     echo "  pair     Mint a pairing token for the official app's running server (extra args forwarded)" >&2
     exit 1
 }
@@ -36,7 +36,44 @@ case "$cmd" in
         export PNPM_CONFIG_MINIMUM_RELEASE_AGE=0
         export T3CODE_DESKTOP_PERSONAL_BUILD=1
         pnpm build:desktop
-        exec pnpm dist:desktop:dmg:arm64
+        pnpm dist:desktop:dmg:arm64
+
+        # electron-builder skips codesigning entirely for unsigned local
+        # builds, leaving Electron's stock ad-hoc signature (with no
+        # entitlements) on the binary. Without allow-jit /
+        # allow-unsigned-executable-memory, V8 can't allocate JIT memory and
+        # the app silently exits within its first second. Re-sign ad-hoc with
+        # the entitlements the official notarized build gets for free, using
+        # the zip artifact (a plain .app) rather than the dmg.
+        zip_path="$(ls -t release/*-arm64.zip | head -1)"
+        stage_dir="$(mktemp -d)"
+        ditto -x -k "$zip_path" "$stage_dir"
+        app_path="$(find "$stage_dir" -maxdepth 1 -iname "*.app")"
+
+        entitlements_path="$(mktemp -t t3code-personal-entitlements).plist"
+        cat >"$entitlements_path" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>
+PLIST
+        codesign --force --deep --options runtime --entitlements "$entitlements_path" --sign - "$app_path"
+
+        install_path="/Applications/$(basename "$app_path")"
+        rm -rf "$install_path"
+        ditto "$app_path" "$install_path"
+        rm -rf "$stage_dir" "$entitlements_path"
+
+        echo "Installed $install_path"
+        echo "First launch needs one Finder double-click to clear Gatekeeper's unsigned-app approval (open/exec from a terminal won't trigger or satisfy it)."
         ;;
     pair)
         exec node apps/server/src/bin.ts pair "$@"
