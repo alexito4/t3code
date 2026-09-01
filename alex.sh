@@ -32,6 +32,7 @@ case "$cmd" in
         git push --force-with-lease fork main
         ;;
     dist)
+        export PNPM_CONFIG_MINIMUM_RELEASE_AGE=0
         pnpm build:desktop
         exec pnpm dist:desktop:dmg:arm64
         ;;
