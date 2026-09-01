@@ -3,10 +3,12 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Each branch is one independently-droppable concern, rebased onto fresh
-# origin/main on its own, then composed into main in this order. Drop a
-# feature by removing its line here — no rebase archaeology required. See
-# ALEX.md for what each branch is and how to update the PR-derived ones.
+# Each branch is one independently-droppable concern, kept current by
+# merging origin/main into it (not rebasing — a merge only ever resolves the
+# *new* delta since the last sync; a rebase re-derives conflicts for the
+# entire diff every time). Drop a feature by removing its line here and
+# running `rebuild` — no history archaeology required. See ALEX.md for what
+# each branch is and how to update the PR-derived ones.
 PATCH_BRANCHES=(
     patch/alex-fork-tooling
     patch/ios-personal-team
@@ -15,10 +17,12 @@ PATCH_BRANCHES=(
 )
 
 usage() {
-    echo "Usage: alex.sh <dev|connect|sync|dist|pair> [args...]" >&2
+    echo "Usage: alex.sh <dev|connect|sync|rebuild|dist|pair> [args...]" >&2
     echo "  dev      Run pnpm dev with T3CODE_HOST=0.0.0.0 (LAN-reachable)" >&2
     echo "  connect  Run \`t3 connect\` from source (extra args forwarded, e.g. \`connect status\`)" >&2
-    echo "  sync     Rebase each patch branch onto origin/main, recompose main, push --force-with-lease to fork" >&2
+    echo "  sync     Merge origin/main into main and fast-forward-push to fork (the routine path)" >&2
+    echo "  rebuild  Merge origin/main into every patch branch, then rebuild main from scratch" >&2
+    echo "           (fallback for a messy sync conflict, or for adding/removing a patch branch)" >&2
     echo "  dist     Build, sign, and install a local arm64 build to /Applications" >&2
     echo "  pair     Mint a pairing token for the official app's running server (extra args forwarded)" >&2
     exit 1
@@ -38,28 +42,49 @@ case "$cmd" in
         exec node apps/server/src/bin.ts connect "$@"
         ;;
     sync)
+        # The routine path: main only ever gains commits, so this is a plain
+        # fast-forward push — no --force needed. If this conflicts, either
+        # resolve it right here on main, or abandon with `git merge --abort`
+        # and run `./alex.sh rebuild` instead.
+        git fetch origin main
+        git checkout main
+        git merge origin/main
+        git push fork main:main
+        ;;
+    rebuild)
+        # The fallback path: refresh every patch branch against origin/main
+        # independently (small, isolated conflicts, resolved once each), then
+        # throw main away and rebuild it from origin/main plus the current
+        # patch branch set. Reach for this when a plain sync conflict gets
+        # messy, or when adding/removing a line from PATCH_BRANCHES.
+        #
+        # This does NOT pull in an upstream PR author's own new commits (e.g.
+        # upstream-pr-8296) — that stays a deliberate, separate step. See
+        # ALEX.md's "Merged early from open upstream PRs" section.
         git fetch origin main
 
         for branch in "${PATCH_BRANCHES[@]}"; do
-            echo "==> Rebasing $branch onto origin/main"
+            echo "==> Merging origin/main into $branch"
             git checkout "$branch"
-            git rebase origin/main
+            git merge origin/main
         done
 
-        echo "==> Recomposing main"
+        echo "==> Rebuilding main"
         git checkout -B main origin/main
         for branch in "${PATCH_BRANCHES[@]}"; do
             git merge --no-ff --no-edit "$branch"
         done
 
         # Explicit local:remote refspecs, not just a branch name: these
-        # branches track origin/main (for the rebase above), and a bare
+        # branches track origin/main (for the merge above), and a bare
         # branch-name push resolves its destination through that tracking
         # config instead of the branch's own name, which silently force-pushes
-        # everything to fork's main. Cost a working main once already.
+        # everything to fork's main. Cost a working main once already. Only
+        # main needs --force here — checkout -B rewrites its history; every
+        # patch branch only ever gained commits, so those still fast-forward.
         git push --force-with-lease fork main:main
         for branch in "${PATCH_BRANCHES[@]}"; do
-            git push --force-with-lease fork "$branch:$branch"
+            git push fork "$branch:$branch"
         done
         ;;
     dist)
