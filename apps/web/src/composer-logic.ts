@@ -1,8 +1,9 @@
+import { parseSideQuestion } from "@t3tools/client-runtime/state/orchestration";
 import { splitPromptIntoComposerSegments } from "./composer-editor-mentions";
 import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
 
 export type ComposerTriggerKind = "path" | "slash-command" | "skill";
-export type ComposerSlashCommand = "model" | "plan" | "default";
+export type ComposerSlashCommand = "model" | "plan" | "default" | "btw";
 export type ComposerSubmissionIntent = "foreground" | "background";
 
 export interface ComposerTrigger {
@@ -22,6 +23,28 @@ export function composerSubmissionIntentForEnter(input: {
     return null;
   }
   return input.modifierKey && input.isDraftThread ? "background" : "foreground";
+}
+
+export function parseComposerSideQuestion(
+  value: string,
+  input: { isServerThread: boolean; hasPendingUserInput: boolean },
+): string | null {
+  return canAskComposerSideQuestion(input) ? parseSideQuestion(value) : null;
+}
+
+export function canAskComposerSideQuestion(input: {
+  isServerThread: boolean;
+  hasPendingUserInput: boolean;
+}): boolean {
+  return input.isServerThread && !input.hasPendingUserInput;
+}
+
+export function canOfferComposerSideQuestionCommand(input: {
+  trigger: ComposerTrigger;
+  isServerThread: boolean;
+  hasPendingUserInput: boolean;
+}): boolean {
+  return input.trigger.rangeStart === 0 && canAskComposerSideQuestion(input);
 }
 
 const isInlineTokenSegment = (
@@ -270,7 +293,7 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
 
 export function parseStandaloneComposerSlashCommand(
   text: string,
-): Exclude<ComposerSlashCommand, "model"> | null {
+): Exclude<ComposerSlashCommand, "model" | "btw"> | null {
   const match = /^\/(plan|default)\s*$/i.exec(text.trim());
   if (!match) {
     return null;

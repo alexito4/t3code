@@ -59,6 +59,7 @@ import {
   AssetWorkspaceContextResolutionError,
   RpcClientId,
   EnvironmentAuthorizationError,
+  TextGenerationError,
   ThreadId,
   type TerminalAttachStreamEvent,
   type TerminalError,
@@ -88,6 +89,13 @@ import {
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
+import * as TextGeneration from "./textGeneration/TextGeneration.ts";
+import * as SideQuestionCoordinator from "./textGeneration/SideQuestionCoordinator.ts";
+import {
+  formatSideQuestionConversation,
+  formatSideQuestionContext,
+  isSideQuestionContextWithinLimit,
+} from "./textGeneration/TextGenerationPrompts.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
   observeRpcStream as instrumentRpcStream,
@@ -143,6 +151,9 @@ import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
+const isTextGenerationError = Schema.is(TextGenerationError);
+const SIDE_QUESTION_CONTEXT_TURNS_PER_PAGE = 50;
+const SIDE_QUESTION_CONTEXT_MAX_PAGES = 20;
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
@@ -462,6 +473,8 @@ const makeWsRpcLayer = (
       const currentSessionId = currentSession.sessionId;
       const crypto = yield* Crypto.Crypto;
       const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+      const textGeneration = yield* TextGeneration.TextGeneration;
+      const sideQuestionCoordinator = yield* SideQuestionCoordinator.SideQuestionCoordinator;
       const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
       const threadDeletionReactor = yield* ThreadDeletionReactor;
       const analytics = yield* AnalyticsService.AnalyticsService;
@@ -1298,6 +1311,123 @@ const makeWsRpcLayer = (
                     }),
               ),
             ),
+            { "rpc.aggregate": "orchestration" },
+          ),
+        [ORCHESTRATION_WS_METHODS.askSideQuestion]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.askSideQuestion,
+            Effect.gen(function* () {
+              const firstPage = yield* projectionSnapshotQuery.getThreadDetailSnapshot(
+                input.threadId,
+                { turnLimit: SIDE_QUESTION_CONTEXT_TURNS_PER_PAGE },
+              );
+              if (Option.isNone(firstPage)) {
+                return yield* new TextGenerationError({
+                  operation: "answerSideQuestion",
+                  detail: `Thread '${input.threadId}' was not found.`,
+                });
+              }
+
+              const firstSnapshot = projectThreadDetailSnapshot(firstPage.value);
+              const thread = firstSnapshot.thread;
+              let context = formatSideQuestionContext(thread);
+              if (!isSideQuestionContextWithinLimit(context)) {
+                return yield* new TextGenerationError({
+                  operation: "answerSideQuestion",
+                  detail: "The thread context is too large for a side question.",
+                });
+              }
+              let beforeCursor = firstSnapshot.page?.beforeCursor ?? null;
+              let pageCount = 1;
+              while (beforeCursor !== null) {
+                if (pageCount >= SIDE_QUESTION_CONTEXT_MAX_PAGES) {
+                  return yield* new TextGenerationError({
+                    operation: "answerSideQuestion",
+                    detail: "The thread context is too large for a side question.",
+                  });
+                }
+                const page = yield* projectionSnapshotQuery.getThreadDetailSnapshot(
+                  input.threadId,
+                  { turnLimit: SIDE_QUESTION_CONTEXT_TURNS_PER_PAGE, beforeCursor },
+                );
+                if (Option.isNone(page)) {
+                  return yield* new TextGenerationError({
+                    operation: "answerSideQuestion",
+                    detail: `Thread '${input.threadId}' was not found.`,
+                  });
+                }
+                const olderContext = formatSideQuestionContext(
+                  projectThreadDetailSnapshot(page.value).thread,
+                );
+                context = [olderContext, context].filter(Boolean).join("\n\n");
+                if (!isSideQuestionContextWithinLimit(context)) {
+                  return yield* new TextGenerationError({
+                    operation: "answerSideQuestion",
+                    detail: "The thread context is too large for a side question.",
+                  });
+                }
+                beforeCursor = page.value.page?.beforeCursor ?? null;
+                pageCount += 1;
+              }
+
+              const previousConversation = formatSideQuestionConversation(
+                input.previousTurns ?? [],
+              );
+              const providerContext = [
+                context,
+                previousConversation ? `Earlier side conversation:\n${previousConversation}` : "",
+              ]
+                .filter(Boolean)
+                .join("\n\n");
+              if (!isSideQuestionContextWithinLimit(providerContext)) {
+                return yield* new TextGenerationError({
+                  operation: "answerSideQuestion",
+                  detail: "The side-question context is too large.",
+                });
+              }
+
+              const project = yield* projectionSnapshotQuery.getProjectShellById(thread.projectId);
+              if (Option.isNone(project)) {
+                return yield* new TextGenerationError({
+                  operation: "answerSideQuestion",
+                  detail: `Thread project '${thread.projectId}' was not found.`,
+                });
+              }
+
+              const requestId = input.requestId ?? (yield* crypto.randomUUIDv4);
+              const modelSelection = input.modelSelection ?? thread.modelSelection;
+              return yield* sideQuestionCoordinator.run(
+                {
+                  threadId: input.threadId,
+                  requestId,
+                  question: input.question,
+                  context: providerContext,
+                  modelSelection,
+                },
+                textGeneration.answerSideQuestion({
+                  cwd: thread.worktreePath ?? project.value.workspaceRoot,
+                  question: input.question,
+                  context: providerContext,
+                  modelSelection,
+                }),
+              );
+            }).pipe(
+              Effect.mapError((cause) =>
+                isTextGenerationError(cause)
+                  ? cause
+                  : new TextGenerationError({
+                      operation: "answerSideQuestion",
+                      detail: "Failed to load side-question context.",
+                      cause,
+                    }),
+              ),
+            ),
+            { "rpc.aggregate": "orchestration" },
+          ),
+        [ORCHESTRATION_WS_METHODS.cancelSideQuestion]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.cancelSideQuestion,
+            sideQuestionCoordinator.cancel(input).pipe(Effect.map((cancelled) => ({ cancelled }))),
             { "rpc.aggregate": "orchestration" },
           ),
         [ORCHESTRATION_WS_METHODS.getWorkflowScript]: (input) =>
@@ -2513,6 +2643,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
+    const sideQuestionCoordinator = yield* SideQuestionCoordinator.SideQuestionCoordinator;
     return HttpRouter.add(
       "GET",
       "/ws",
@@ -2548,6 +2679,12 @@ export const websocketRpcRouteLayer = Layer.unwrap(
             ).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(ProviderMaintenanceRunner.layer),
+              Layer.provide(
+                Layer.succeed(
+                  SideQuestionCoordinator.SideQuestionCoordinator,
+                  sideQuestionCoordinator,
+                ),
+              ),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
               // One server-lifetime service means clients share the same PR caches, and a WS
               // mutation invalidates the HTTP diff cache that every client reads from.

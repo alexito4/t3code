@@ -94,6 +94,13 @@ export function useComposerCommandMenu({
           description: "Switch model",
         },
         {
+          id: "cmd:btw",
+          type: "slash-command" as const,
+          command: "btw",
+          label: "/btw",
+          description: "Ask without interrupting the agent",
+        },
+        {
           id: "cmd:plan",
           type: "slash-command" as const,
           command: "plan",
@@ -111,7 +118,9 @@ export function useComposerCommandMenu({
       const builtIn = allBuiltIn.filter(
         (item) =>
           item.command.includes(q) &&
-          (item.command === "model" || onUpdateInteractionMode !== undefined),
+          (item.command === "model" ||
+            item.command === "btw" ||
+            onUpdateInteractionMode !== undefined),
       );
 
       const providerCommands: ComposerCommandItem[] = [];

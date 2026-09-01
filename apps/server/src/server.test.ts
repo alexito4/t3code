@@ -18,8 +18,8 @@ import {
   MessageId,
   ExternalLauncherCommandNotFoundError,
   OrchestrationThreadDetailSnapshot,
-  type OrchestrationThreadStreamItem,
   type OrchestrationThreadActivity,
+  type OrchestrationThreadStreamItem,
   type OrchestrationThreadShell,
   TerminalNotRunningError,
   type OrchestrationCommand,
@@ -111,6 +111,7 @@ import {
   resolveAvailableEditorsForConfig,
   resolveFileManagerRevealKindForConfig,
 } from "./ws.ts";
+import * as SideQuestionCoordinator from "./textGeneration/SideQuestionCoordinator.ts";
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as GitManager from "./git/GitManager.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
@@ -130,6 +131,8 @@ import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 import * as ProviderService from "./provider/Services/ProviderService.ts";
 import { ProviderAdapterRequestError } from "./provider/Errors.ts";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "./provider/providerMaintenance.ts";
+import * as TextGeneration from "./textGeneration/TextGeneration.ts";
+import { SIDE_QUESTION_CONTEXT_MAX_BYTES } from "./textGeneration/TextGenerationPrompts.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
@@ -447,6 +450,7 @@ const buildAppUnderTest = (options?: {
     environmentTheme?: Partial<EnvironmentTheme.EnvironmentThemeService["Service"]>;
     providerRegistry?: Partial<ProviderRegistry.ProviderRegistry["Service"]>;
     providerService?: Partial<ProviderService.ProviderService["Service"]>;
+    textGeneration?: Partial<TextGeneration.TextGeneration["Service"]>;
     serverSettings?: Partial<ServerSettings.ServerSettingsService["Service"]>;
     externalLauncher?: Partial<ExternalLauncher.ExternalLauncher["Service"]>;
     vcsDriver?: Partial<VcsDriver.VcsDriver["Service"]>;
@@ -714,6 +718,9 @@ const buildAppUnderTest = (options?: {
           Layer.mock(ProviderService.ProviderService)({
             uploadFeedback: () => Effect.die("Provider feedback is not stubbed in this test"),
             ...options?.layers?.providerService,
+          }),
+          Layer.mock(TextGeneration.TextGeneration)({
+            ...options?.layers?.textGeneration,
           }),
         ),
       ),
@@ -1500,6 +1507,638 @@ const NodeHttpServerTestWithWsDeflate = HttpServer.layerTestClient.pipe(
 );
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
+  it.effect("coalesces matching side questions without sharing different answers", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const singleFlight = yield* SideQuestionCoordinator.make;
+        const input = {
+          threadId: defaultThreadId,
+          question: "Same question",
+          context: "Same context",
+          modelSelection: defaultModelSelection,
+        };
+        const started = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        let generationCount = 0;
+        const generation = Effect.gen(function* () {
+          generationCount += 1;
+          yield* Deferred.succeed(started, undefined);
+          yield* Deferred.await(release);
+          return { answer: "Shared answer" };
+        });
+
+        const first = yield* singleFlight
+          .run({ ...input, requestId: "shared-1" }, generation)
+          .pipe(Effect.forkChild);
+        yield* Deferred.await(started);
+        const second = yield* singleFlight
+          .run({ ...input, requestId: "shared-2" }, generation)
+          .pipe(Effect.forkChild);
+        yield* Effect.yieldNow;
+        yield* Deferred.succeed(release, undefined);
+
+        assert.deepEqual(yield* Fiber.join(first), { answer: "Shared answer" });
+        assert.deepEqual(yield* Fiber.join(second), { answer: "Shared answer" });
+        assert.equal(generationCount, 1);
+
+        const firstDistinctStarted = yield* Deferred.make<void>();
+        const secondDistinctStarted = yield* Deferred.make<void>();
+        const releaseDistinct = yield* Deferred.make<void>();
+        const firstDistinct = yield* singleFlight
+          .run(
+            {
+              threadId: defaultThreadId,
+              requestId: "distinct-1",
+              question: "First question",
+              context: "Same context",
+              modelSelection: defaultModelSelection,
+            },
+            Deferred.succeed(firstDistinctStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(releaseDistinct)),
+              Effect.as({ answer: "First answer" }),
+            ),
+          )
+          .pipe(Effect.forkChild);
+        const secondDistinct = yield* singleFlight
+          .run(
+            {
+              threadId: defaultThreadId,
+              requestId: "distinct-2",
+              question: "Second question",
+              context: "Same context",
+              modelSelection: defaultModelSelection,
+            },
+            Deferred.succeed(secondDistinctStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(releaseDistinct)),
+              Effect.as({ answer: "Second answer" }),
+            ),
+          )
+          .pipe(Effect.forkChild);
+        yield* Deferred.await(firstDistinctStarted);
+        yield* Deferred.await(secondDistinctStarted);
+        yield* Deferred.succeed(releaseDistinct, undefined);
+
+        assert.deepEqual(yield* Fiber.join(firstDistinct), { answer: "First answer" });
+        assert.deepEqual(yield* Fiber.join(secondDistinct), { answer: "Second answer" });
+      }),
+    ),
+  );
+
+  it.effect("does not share matching questions from different context snapshots", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const singleFlight = yield* SideQuestionCoordinator.make;
+        const firstStarted = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        const first = yield* singleFlight
+          .run(
+            {
+              threadId: defaultThreadId,
+              requestId: "context-1",
+              question: "Same follow-up",
+              context: "First context",
+              modelSelection: defaultModelSelection,
+            },
+            Deferred.succeed(firstStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(release)),
+              Effect.as({ answer: "First history answer" }),
+            ),
+          )
+          .pipe(Effect.forkChild);
+        const second = yield* singleFlight
+          .run(
+            {
+              threadId: defaultThreadId,
+              requestId: "context-2",
+              question: "Same follow-up",
+              context: "Second context",
+              modelSelection: defaultModelSelection,
+            },
+            Deferred.await(release).pipe(Effect.as({ answer: "Second history answer" })),
+          )
+          .pipe(Effect.forkChild);
+
+        yield* Deferred.await(firstStarted);
+        yield* Effect.yieldNow;
+        yield* Deferred.succeed(release, undefined);
+
+        assert.deepEqual(yield* Fiber.join(first), { answer: "First history answer" });
+        assert.deepEqual(yield* Fiber.join(second), { answer: "Second history answer" });
+      }),
+    ),
+  );
+
+  it.effect("rejects duplicate active side-question request IDs", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const singleFlight = yield* SideQuestionCoordinator.make;
+        const started = yield* Deferred.make<void>();
+        const interrupted = yield* Deferred.make<void>();
+        const request = {
+          threadId: defaultThreadId,
+          requestId: "duplicate-id",
+          question: "First question",
+          context: "Current context",
+          modelSelection: defaultModelSelection,
+        };
+        const first = yield* singleFlight
+          .run(
+            request,
+            Deferred.succeed(started, undefined).pipe(
+              Effect.andThen(Effect.never),
+              Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
+            ),
+          )
+          .pipe(Effect.forkChild);
+        yield* Deferred.await(started);
+
+        let duplicateStarted = false;
+        const duplicateExit = yield* singleFlight
+          .run(
+            { ...request, question: "Second question" },
+            Effect.sync(() => {
+              duplicateStarted = true;
+              return { answer: "Duplicate answer" };
+            }),
+          )
+          .pipe(Effect.exit);
+        assert.isTrue(duplicateExit._tag === "Failure");
+        assert.isFalse(duplicateStarted);
+
+        yield* singleFlight.cancel(request);
+        yield* Deferred.await(interrupted);
+        assert.isTrue((yield* Fiber.await(first))._tag === "Failure");
+      }),
+    ),
+  );
+
+  it.effect("keeps shared side-question work alive after the first caller is canceled", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const singleFlight = yield* SideQuestionCoordinator.make;
+        const input = {
+          threadId: defaultThreadId,
+          question: "Why SQLite?",
+          context: "Same context",
+          modelSelection: defaultModelSelection,
+        };
+        const started = yield* Deferred.make<void>();
+        const release = yield* Deferred.make<void>();
+        let generationCount = 0;
+        const generation = Effect.gen(function* () {
+          generationCount += 1;
+          yield* Deferred.succeed(started, undefined);
+          yield* Deferred.await(release);
+          return { answer: "For local durability." };
+        });
+
+        const owner = yield* singleFlight
+          .run({ ...input, requestId: "caller-1" }, generation)
+          .pipe(Effect.forkChild);
+        yield* Deferred.await(started);
+        const follower = yield* singleFlight
+          .run({ ...input, requestId: "caller-2" }, generation)
+          .pipe(Effect.forkChild);
+        yield* Effect.yieldNow;
+        yield* Fiber.interrupt(owner);
+        yield* Deferred.succeed(release, undefined);
+
+        assert.deepEqual(yield* Fiber.join(follower), { answer: "For local durability." });
+        assert.equal(generationCount, 1);
+
+        assert.deepEqual(
+          yield* singleFlight.run(
+            { ...input, requestId: "caller-3" },
+            Effect.sync(() => {
+              generationCount += 1;
+              return { answer: "Fresh answer" };
+            }),
+          ),
+          { answer: "Fresh answer" },
+        );
+        assert.equal(generationCount, 2);
+      }),
+    ),
+  );
+
+  it.effect("cancels the provider after the last side-question caller stops", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const singleFlight = yield* SideQuestionCoordinator.make;
+        const started = yield* Deferred.make<void>();
+        const interrupted = yield* Deferred.make<void>();
+        const request = {
+          threadId: defaultThreadId,
+          requestId: "stop-me",
+          question: "Keep going?",
+          context: "Current context",
+          modelSelection: defaultModelSelection,
+        };
+        const generation = Deferred.succeed(started, undefined).pipe(
+          Effect.andThen(Effect.never),
+          Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
+        );
+
+        const caller = yield* singleFlight.run(request, generation).pipe(Effect.forkChild);
+        yield* Deferred.await(started);
+        assert.isTrue(yield* singleFlight.cancel(request));
+        yield* Deferred.await(interrupted);
+        assert.isTrue((yield* Fiber.await(caller))._tag === "Failure");
+      }),
+    ),
+  );
+
+  it.effect("cancels the provider after the last side-question caller disconnects", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const singleFlight = yield* SideQuestionCoordinator.make;
+        const started = yield* Deferred.make<void>();
+        const interrupted = yield* Deferred.make<void>();
+        const request = {
+          threadId: defaultThreadId,
+          requestId: "disconnect-me",
+          question: "Keep going?",
+          context: "Current context",
+          modelSelection: defaultModelSelection,
+        };
+        const generation = Deferred.succeed(started, undefined).pipe(
+          Effect.andThen(Effect.never),
+          Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
+        );
+
+        const caller = yield* singleFlight.run(request, generation).pipe(Effect.forkChild);
+        yield* Deferred.await(started);
+        yield* Fiber.interrupt(caller);
+        yield* Deferred.await(interrupted);
+      }),
+    ),
+  );
+
+  it.effect("does not start a side-question provider after an early stop", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const singleFlight = yield* SideQuestionCoordinator.make;
+        const request = {
+          threadId: defaultThreadId,
+          requestId: "stop-before-start",
+          question: "Start later?",
+          context: "Current context",
+          modelSelection: defaultModelSelection,
+        };
+        let started = false;
+
+        assert.isTrue(yield* singleFlight.cancel(request));
+        const exit = yield* singleFlight
+          .run(
+            request,
+            Effect.sync(() => {
+              started = true;
+              return { answer: "Too late" };
+            }),
+          )
+          .pipe(Effect.exit);
+
+        assert.isTrue(exit._tag === "Failure");
+        assert.isFalse(started);
+      }),
+    ),
+  );
+
+  it.effect("bounds remembered early side-question stops", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const singleFlight = yield* SideQuestionCoordinator.make;
+        const request = (requestId: string) => ({
+          threadId: defaultThreadId,
+          requestId,
+          question: "Start later?",
+          context: "Current context",
+          modelSelection: defaultModelSelection,
+        });
+
+        for (let index = 0; index <= 1_024; index += 1) {
+          yield* singleFlight.cancel(request(`bounded-${index}`));
+        }
+
+        assert.deepEqual(
+          yield* singleFlight.run(
+            request("bounded-0"),
+            Effect.succeed({ answer: "Oldest stop expired" }),
+          ),
+          { answer: "Oldest stop expired" },
+        );
+        let newestStarted = false;
+        const newestExit = yield* singleFlight
+          .run(
+            request("bounded-1024"),
+            Effect.sync(() => {
+              newestStarted = true;
+              return { answer: "Too late" };
+            }),
+          )
+          .pipe(Effect.exit);
+        assert.isTrue(newestExit._tag === "Failure");
+        assert.isFalse(newestStarted);
+      }),
+    ),
+  );
+
+  it.effect("answers a side question without dispatching an orchestration command", () =>
+    Effect.gen(function* () {
+      const snapshot = makeDefaultOrchestrationReadModel();
+      const thread = snapshot.threads[0]!;
+      const project = snapshot.projects[0]!;
+      const received: Array<TextGeneration.SideQuestionGenerationInput> = [];
+      let dispatchCount = 0;
+      const toolActivity = (
+        id: string,
+        output: string,
+        createdAt: string,
+      ): OrchestrationThreadActivity =>
+        ({
+          id,
+          tone: "tool",
+          kind: "tool.completed",
+          summary: "Command completed",
+          payload: {
+            itemType: "command_execution",
+            data: {
+              item: {
+                command: "print-context",
+                aggregatedOutput: output,
+              },
+            },
+          },
+          turnId: null,
+          createdAt,
+        }) as OrchestrationThreadActivity;
+      const currentThread = {
+        ...thread,
+        messages: [
+          {
+            id: MessageId.make("current-side-question-context"),
+            role: "assistant" as const,
+            text: "Current context",
+            turnId: null,
+            streaming: false,
+            createdAt: "2026-01-01T00:00:02.000Z",
+            updatedAt: "2026-01-01T00:00:02.000Z",
+          },
+        ],
+        activities: [
+          toolActivity(
+            "current-side-question-tool",
+            "Current tool summary\nCURRENT_TOOL_SECRET",
+            "2026-01-01T00:00:02.500Z",
+          ),
+        ],
+      };
+      const olderThread = {
+        ...thread,
+        messages: [
+          {
+            id: MessageId.make("older-side-question-context"),
+            role: "user" as const,
+            text: "Older context",
+            turnId: null,
+            streaming: false,
+            createdAt: "2026-01-01T00:00:01.000Z",
+            updatedAt: "2026-01-01T00:00:01.000Z",
+          },
+        ],
+        activities: [
+          toolActivity(
+            "older-side-question-tool",
+            "Older tool summary\nOLDER_TOOL_SECRET",
+            "2026-01-01T00:00:01.500Z",
+          ),
+        ],
+      };
+
+      let pageReadCount = 0;
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            dispatch: () =>
+              Effect.sync(() => {
+                dispatchCount += 1;
+                return { sequence: dispatchCount };
+              }),
+          },
+          projectionSnapshotQuery: {
+            getThreadDetailSnapshot: () =>
+              Effect.sync(() => {
+                pageReadCount += 1;
+                const firstPage = pageReadCount === 1;
+                return Option.some({
+                  snapshotSequence: 0,
+                  thread: firstPage ? currentThread : olderThread,
+                  page: {
+                    beforeCursor: firstPage ? "older-page" : null,
+                    hasMore: firstPage,
+                    snapshotSequence: 0,
+                  },
+                });
+              }),
+            getProjectShellById: () => Effect.succeed(Option.some(project)),
+          },
+          textGeneration: {
+            answerSideQuestion: (input) =>
+              Effect.sync(() => {
+                received.push(input);
+                return { answer: "It uses the active thread context." };
+              }),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const sideModelSelection = {
+        instanceId: ProviderInstanceId.make("claudeAgent"),
+        model: "claude-sonnet-4-5",
+        options: [{ id: "reasoningEffort", value: "high" }],
+      };
+      const result = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.askSideQuestion]({
+            threadId: defaultThreadId,
+            question: "How does this work?",
+            modelSelection: sideModelSelection,
+            previousTurns: [
+              {
+                question: "What did we inspect?",
+                answer: "The reconnect flow.",
+              },
+            ],
+          }),
+        ),
+      );
+
+      assert.deepEqual(result, { answer: "It uses the active thread context." });
+      assert.equal(received[0]?.cwd, project.workspaceRoot);
+      assert.equal(received[0]?.question, "How does this work?");
+      assert.include(received[0]!.context, "SIDE USER:\nWhat did we inspect?");
+      assert.include(received[0]!.context, "SIDE ASSISTANT:\nThe reconnect flow.");
+      assert.include(received[0]!.context, "Current tool summary");
+      assert.include(received[0]!.context, "Older tool summary");
+      assert.notInclude(received[0]!.context, "CURRENT_TOOL_SECRET");
+      assert.notInclude(received[0]!.context, "OLDER_TOOL_SECRET");
+      assert.deepEqual(received[0]?.modelSelection, sideModelSelection);
+      assert.equal(dispatchCount, 0);
+      assert.equal(pageReadCount, 2);
+      assert.isBelow(
+        received[0]!.context.indexOf("Older context"),
+        received[0]!.context.indexOf("Current context"),
+      );
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("does not coalesce matching questions across thread context revisions", () =>
+    Effect.gen(function* () {
+      const snapshot = makeDefaultOrchestrationReadModel();
+      const thread = snapshot.threads[0]!;
+      const project = snapshot.projects[0]!;
+      const firstGenerationStarted = yield* Deferred.make<void>();
+      const secondGenerationStarted = yield* Deferred.make<void>();
+      const releaseFirstGeneration = yield* Deferred.make<void>();
+      const received: Array<TextGeneration.SideQuestionGenerationInput> = [];
+      let snapshotReadCount = 0;
+
+      yield* buildAppUnderTest({
+        layers: {
+          projectionSnapshotQuery: {
+            getThreadDetailSnapshot: () =>
+              Effect.sync(() => {
+                snapshotReadCount += 1;
+                const context = snapshotReadCount === 1 ? "Earlier context" : "Updated context";
+                return Option.some({
+                  snapshotSequence: snapshotReadCount,
+                  thread: {
+                    ...thread,
+                    messages: [
+                      {
+                        id: MessageId.make(`side-question-context-${snapshotReadCount}`),
+                        role: "assistant" as const,
+                        text: context,
+                        turnId: null,
+                        streaming: false,
+                        createdAt: thread.createdAt,
+                        updatedAt: thread.updatedAt,
+                      },
+                    ],
+                  },
+                  page: {
+                    beforeCursor: null,
+                    hasMore: false,
+                    snapshotSequence: snapshotReadCount,
+                  },
+                });
+              }),
+            getProjectShellById: () => Effect.succeed(Option.some(project)),
+          },
+          textGeneration: {
+            answerSideQuestion: (input) =>
+              Effect.gen(function* () {
+                received.push(input);
+                if (received.length === 1) {
+                  yield* Deferred.succeed(firstGenerationStarted, undefined);
+                  yield* Deferred.await(releaseFirstGeneration);
+                } else {
+                  yield* Deferred.succeed(secondGenerationStarted, undefined);
+                }
+                return { answer: input.context };
+              }),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          Effect.gen(function* () {
+            const input = { threadId: defaultThreadId, question: "What changed?" };
+            const first = yield* client[ORCHESTRATION_WS_METHODS.askSideQuestion](input).pipe(
+              Effect.forkChild,
+            );
+            yield* Deferred.await(firstGenerationStarted);
+            const second = yield* client[ORCHESTRATION_WS_METHODS.askSideQuestion](input).pipe(
+              Effect.forkChild,
+            );
+            yield* Deferred.await(secondGenerationStarted);
+            yield* Deferred.succeed(releaseFirstGeneration, undefined);
+            yield* Fiber.join(first);
+            yield* Fiber.join(second);
+          }),
+        ),
+      );
+
+      assert.equal(received.length, 2);
+      assert.include(received[0]!.context, "Earlier context");
+      assert.include(received[1]!.context, "Updated context");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("rejects oversized side-question context before starting a provider", () =>
+    Effect.gen(function* () {
+      const snapshot = makeDefaultOrchestrationReadModel();
+      const thread = snapshot.threads[0]!;
+      const project = snapshot.projects[0]!;
+      const oversizedThread = {
+        ...thread,
+        messages: [
+          {
+            id: MessageId.make("oversized-side-question-context"),
+            role: "user" as const,
+            text: "a".repeat(SIDE_QUESTION_CONTEXT_MAX_BYTES),
+            turnId: null,
+            streaming: false,
+            createdAt: thread.createdAt,
+            updatedAt: thread.updatedAt,
+          },
+        ],
+      };
+      let generationCount = 0;
+
+      yield* buildAppUnderTest({
+        layers: {
+          projectionSnapshotQuery: {
+            getThreadDetailSnapshot: () =>
+              Effect.succeed(
+                Option.some({
+                  snapshotSequence: 0,
+                  thread: oversizedThread,
+                  page: { beforeCursor: null, hasMore: false, snapshotSequence: 0 },
+                }),
+              ),
+            getProjectShellById: () => Effect.succeed(Option.some(project)),
+          },
+          textGeneration: {
+            answerSideQuestion: () =>
+              Effect.sync(() => {
+                generationCount += 1;
+                return { answer: "unreachable" };
+              }),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const result = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.askSideQuestion]({
+            threadId: defaultThreadId,
+            question: "Will this start a provider?",
+          }),
+        ).pipe(Effect.result),
+      );
+
+      assertTrue(result._tag === "Failure");
+      assertTrue(result.failure._tag === "TextGenerationError");
+      assert.include(result.failure.detail, "too large");
+      assert.equal(generationCount, 0);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("parks HTTP ingress until command readiness", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
