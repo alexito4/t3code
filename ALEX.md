@@ -45,6 +45,17 @@ buildable/runnable for personal use (see Fork infrastructure below).
   merged, drop the branch from `PATCH_BRANCHES` and `rebuild` — `main` will already have it via
   `upstream/main` at that point.
 
+- **Projects list page** — there was no way to see all projects at a glance, only a per-project
+  settings screen reachable one at a time. Adds a `/projects` page listing every project
+  (favicon, workspace path, thread count, last activity) plus an "Activity" section showing
+  threads active per day over the last 30 days, styled to match the existing Usage page
+  (headline stat + legend on the left, chart beside it, no card wrapper). Also adds a "Projects"
+  icon to the sidebar's bottom-left utility bar and makes the "Projects" breadcrumb segment on
+  the per-project settings page a real link back to the list. On branch
+  `feat/projects-list-page` (based on `upstream/main`) and composed into `main` via
+  `PATCH_BRANCHES`. Sent upstream: https://github.com/pingdotgg/t3code/pull/9238 (open). Once
+  merged, drop the branch from `PATCH_BRANCHES` and `rebuild`.
+
 ## Merged early from open upstream PRs
 
 Features from someone else's still-open, unmerged upstream PR, pulled onto `main` ahead of

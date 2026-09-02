@@ -19,6 +19,7 @@ PATCH_BRANCHES=(
     patch/fork-infra
     patch/pr8296-side-questions
     fix/codex-usage-archived-sessions
+    feat/projects-list-page
 )
 
 usage() {
