@@ -819,6 +819,96 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
       }),
     );
 
+    it.effect("separates staged and unstaged changes into their own diff sources", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        yield* writeTextFile(cwd, "staged.txt", "staged content\n");
+        yield* git(cwd, ["add", "staged.txt"]);
+        yield* writeTextFile(cwd, "README.md", "# unstaged change\n");
+        yield* writeTextFile(cwd, "untracked.txt", "untracked content\n");
+
+        const preview = yield* driver.getReviewDiffPreview({ cwd, ignoreWhitespace: false });
+
+        const staged = preview.sources.find((source) => source.kind === "staged");
+        const unstaged = preview.sources.find((source) => source.kind === "unstaged");
+
+        assert.isDefined(staged);
+        assert.isDefined(unstaged);
+        assert.include(staged?.diff ?? "", "staged.txt");
+        assert.notInclude(staged?.diff ?? "", "README.md");
+        assert.notInclude(staged?.diff ?? "", "untracked.txt");
+
+        assert.include(unstaged?.diff ?? "", "README.md");
+        assert.include(unstaged?.diff ?? "", "untracked.txt");
+        assert.notInclude(unstaged?.diff ?? "", "staged.txt");
+      }),
+    );
+
+    it.effect("loads full file contents for staged diff expansion", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        yield* writeTextFile(cwd, "README.md", "# staged change\n");
+        yield* git(cwd, ["add", "README.md"]);
+        yield* writeTextFile(cwd, "README.md", "# further unstaged edit\n");
+
+        const contents = yield* driver.getReviewDiffFileContents(
+          makeReviewDiffFileContentsInput(cwd, { sourceKind: "staged" }),
+        );
+
+        assert.strictEqual(contents.oldContents, "# test\n");
+        assert.strictEqual(contents.newContents, "# staged change\n");
+      }),
+    );
+
+    it.effect("loads full file contents for unstaged diff expansion", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        yield* writeTextFile(cwd, "README.md", "# staged change\n");
+        yield* git(cwd, ["add", "README.md"]);
+        yield* writeTextFile(cwd, "README.md", "# further unstaged edit\n");
+
+        const contents = yield* driver.getReviewDiffFileContents(
+          makeReviewDiffFileContentsInput(cwd, { sourceKind: "unstaged" }),
+        );
+
+        assert.strictEqual(contents.oldContents, "# staged change\n");
+        assert.strictEqual(contents.newContents, "# further unstaged edit\n");
+      }),
+    );
+
+    it.effect("loads new untracked files for unstaged diff expansion", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        yield* writeTextFile(cwd, "untracked.txt", "untracked content\n");
+
+        const contents = yield* driver.getReviewDiffFileContents(
+          makeReviewDiffFileContentsInput(cwd, {
+            sourceKind: "unstaged",
+            changeType: "new",
+            oldPath: "untracked.txt",
+            newPath: "untracked.txt",
+          }),
+        );
+
+        assert.deepStrictEqual(contents, {
+          oldContents: "",
+          newContents: "untracked content\n",
+        });
+      }),
+    );
+
     it.effect("loads full file contents for working-tree diff expansion", () =>
       Effect.gen(function* () {
         const cwd = yield* makeTmpDir();

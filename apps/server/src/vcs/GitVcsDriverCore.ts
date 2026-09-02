@@ -2281,6 +2281,64 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       .filter((diff) => diff.length > 0)
       .join("\n");
 
+    const stagedResult = yield* executeGit(
+      "GitVcsDriver.getReviewDiffPreview.staged",
+      input.cwd,
+      [
+        "diff",
+        "--cached",
+        "--patch",
+        "--no-color",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--minimal",
+        ...(input.ignoreWhitespace ? ["--ignore-all-space"] : []),
+        "--",
+      ],
+      {
+        maxOutputBytes: REVIEW_DIFF_PATCH_MAX_OUTPUT_BYTES,
+        appendTruncationMarker: true,
+      },
+    ).pipe(
+      Effect.orElseSucceed(() => ({
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        stdoutTruncated: false,
+        stderrTruncated: false,
+      })),
+    );
+
+    const unstagedTrackedResult = yield* executeGit(
+      "GitVcsDriver.getReviewDiffPreview.unstaged",
+      input.cwd,
+      [
+        "diff",
+        "--patch",
+        "--no-color",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--minimal",
+        ...(input.ignoreWhitespace ? ["--ignore-all-space"] : []),
+        "--",
+      ],
+      {
+        maxOutputBytes: REVIEW_DIFF_PATCH_MAX_OUTPUT_BYTES,
+        appendTruncationMarker: true,
+      },
+    ).pipe(
+      Effect.orElseSucceed(() => ({
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        stdoutTruncated: false,
+        stderrTruncated: false,
+      })),
+    );
+    const unstagedDiff = [unstagedTrackedResult.stdout.trimEnd(), dirtyUntracked.diff.trimEnd()]
+      .filter((diff) => diff.length > 0)
+      .join("\n");
+
     const baseResult =
       baseRef && branch
         ? yield* executeGit(
@@ -2325,9 +2383,11 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
             }),
         ),
       );
-    const [dirtyDiffHash, baseDiffHash] = yield* Effect.all([
+    const [dirtyDiffHash, baseDiffHash, stagedDiffHash, unstagedDiffHash] = yield* Effect.all([
       hashDiff(dirtyDiff),
       hashDiff(baseDiff),
+      hashDiff(stagedResult.stdout),
+      hashDiff(unstagedDiff),
     ]);
 
     const sources: ReviewDiffPreviewSource[] = [
@@ -2340,6 +2400,26 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         diff: dirtyDiff,
         diffHash: dirtyDiffHash,
         truncated: dirtyTrackedResult.stdoutTruncated || dirtyUntracked.truncated,
+      },
+      {
+        id: "staged",
+        kind: "staged",
+        title: "Staged changes",
+        baseRef: null,
+        headRef: null,
+        diff: stagedResult.stdout,
+        diffHash: stagedDiffHash,
+        truncated: stagedResult.stdoutTruncated,
+      },
+      {
+        id: "unstaged",
+        kind: "unstaged",
+        title: "Unstaged changes",
+        baseRef: null,
+        headRef: null,
+        diff: unstagedDiff,
+        diffHash: unstagedDiffHash,
+        truncated: unstagedTrackedResult.stdoutTruncated || dirtyUntracked.truncated,
       },
       {
         id: "branch-range",
@@ -2480,6 +2560,44 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
           input.changeType === "new"
             ? Effect.succeed("")
             : readReviewFileAtRevision(input, input.baseRef ?? "HEAD", input.oldPath),
+          input.changeType === "deleted"
+            ? Effect.succeed("")
+            : readWorkingTreeReviewFile(input, repositoryRoot),
+        ],
+        { concurrency: 2 },
+      );
+      return { oldContents, newContents };
+    }
+
+    if (input.sourceKind === "staged") {
+      const [oldContents, newContents] = yield* Effect.all(
+        [
+          input.changeType === "new"
+            ? Effect.succeed("")
+            : readReviewFileAtRevision(input, "HEAD", input.oldPath),
+          input.changeType === "deleted"
+            ? Effect.succeed("")
+            : readReviewFileAtRevision(input, "", input.newPath),
+        ],
+        { concurrency: 2 },
+      );
+      return { oldContents, newContents };
+    }
+
+    if (input.sourceKind === "unstaged") {
+      const repositoryRoot = yield* runGitStdout(
+        "GitVcsDriver.getReviewDiffFileContents.repositoryRoot",
+        input.cwd,
+        ["rev-parse", "--show-toplevel"],
+      ).pipe(Effect.map((value) => value.trim()));
+      if (repositoryRoot.length === 0) {
+        return yield* reviewDiffFileError(input, "Could not resolve the Git repository root.");
+      }
+      const [oldContents, newContents] = yield* Effect.all(
+        [
+          input.changeType === "new"
+            ? Effect.succeed("")
+            : readReviewFileAtRevision(input, "", input.oldPath),
           input.changeType === "deleted"
             ? Effect.succeed("")
             : readWorkingTreeReviewFile(input, repositoryRoot),

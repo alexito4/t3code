@@ -5,11 +5,13 @@ import * as Arr from "effect/Array";
 import { pipe } from "effect/Function";
 import * as Order from "effect/Order";
 
-export type ReviewSectionKind = "turn" | "working-tree" | "branch-range";
+export type ReviewSectionKind = "turn" | "working-tree" | "staged" | "unstaged" | "branch-range";
 
 const DIRTY_WORKTREE_SECTION_ID = "git:working-tree";
 const DIRTY_WORKTREE_TITLE = "Dirty worktree";
 const DIRTY_WORKTREE_SUBTITLE = "Tracked, staged, and untracked worktree changes";
+const STAGED_SUBTITLE = "Staged changes";
+const UNSTAGED_SUBTITLE = "Unstaged changes";
 
 export interface ReviewSectionItem {
   readonly id: string;
@@ -158,6 +160,12 @@ const readyCheckpointOrder = Order.make<OrchestrationCheckpointSummary>(
 function gitSubtitle(section: ReviewDiffPreviewSource): string | null {
   if (section.kind === "working-tree") {
     return DIRTY_WORKTREE_SUBTITLE;
+  }
+  if (section.kind === "staged") {
+    return STAGED_SUBTITLE;
+  }
+  if (section.kind === "unstaged") {
+    return UNSTAGED_SUBTITLE;
   }
   if (section.baseRef) {
     return `${section.baseRef} ... ${section.headRef ?? "HEAD"}`;

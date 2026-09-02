@@ -5,22 +5,26 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "./lib/storage";
 
+export type DiffPanelGitScope = "uncommitted" | "unstaged" | "staged" | "branch";
+
 export type DiffPanelSelection =
   | { kind: "branch"; baseRef: string | null }
+  | { kind: "uncommitted" }
   | { kind: "unstaged" }
+  | { kind: "staged" }
   | { kind: "turn"; turnId: TurnId; filePath: string | null; revealRequestId: number };
 
 export type DiffRenderMode = "stacked" | "split";
 
 const DEFAULT_SELECTION: DiffPanelSelection = { kind: "branch", baseRef: null };
-const DEFAULT_WORKING_TREE_SELECTION: DiffPanelSelection = { kind: "unstaged" };
+const DEFAULT_WORKING_TREE_SELECTION: DiffPanelSelection = { kind: "uncommitted" };
 
 interface DiffPanelStoreState {
   byThreadKey: Record<string, DiffPanelSelection>;
   branchBaseRefByThreadKey: Record<string, string | null>;
   diffRenderMode: DiffRenderMode;
   setDiffRenderMode: (mode: DiffRenderMode) => void;
-  selectGitScope: (ref: ScopedThreadRef, scope: "branch" | "unstaged") => void;
+  selectGitScope: (ref: ScopedThreadRef, scope: DiffPanelGitScope) => void;
   selectBranchBaseRef: (ref: ScopedThreadRef, baseRef: string | null) => void;
   selectTurn: (ref: ScopedThreadRef, turnId: TurnId, filePath?: string) => void;
   reconcileTurnSelection: (ref: ScopedThreadRef, availableTurnIds: ReadonlyArray<TurnId>) => void;
@@ -51,9 +55,7 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
             byThreadKey: {
               ...state.byThreadKey,
               [threadKey]:
-                scope === "branch"
-                  ? { kind: "branch", baseRef: previousBaseRef }
-                  : { kind: "unstaged" },
+                scope === "branch" ? { kind: "branch", baseRef: previousBaseRef } : { kind: scope },
             },
             branchBaseRefByThreadKey:
               previous?.kind === "branch"
