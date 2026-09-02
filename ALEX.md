@@ -34,6 +34,17 @@ buildable/runnable for personal use (see Fork infrastructure below).
   (`feat/pull-request-review-checklist`), not composed into `main`. Sent upstream:
   https://github.com/pingdotgg/t3code/pull/9099 (draft, not yet submitted).
 
+- **Codex usage undercount fix** — the Usage screen's Codex scan only read
+  `~/.codex/sessions`, never `~/.codex/archived_sessions` (where Codex CLI rotates completed
+  rollouts), silently undercounting Codex cost/tokens by 5x+ on an account that archives
+  sessions. Also adds the "Unpriced" cost-quality metric to the web Usage page, matching
+  mobile. Unlike the PR-review-checklist entry above, this one is wanted in daily use now, so
+  it's on branch `fix/codex-usage-archived-sessions` (based on `upstream/main`, no `patch/`
+  rename needed — the prefix is convention, not a requirement) and _is_ composed into `main` via
+  `PATCH_BRANCHES`. Sent upstream: https://github.com/pingdotgg/t3code/pull/9226 (open). Once
+  merged, drop the branch from `PATCH_BRANCHES` and `rebuild` — `main` will already have it via
+  `upstream/main` at that point.
+
 ## Merged early from open upstream PRs
 
 Features from someone else's still-open, unmerged upstream PR, pulled onto `main` ahead of

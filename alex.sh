@@ -18,6 +18,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PATCH_BRANCHES=(
     patch/fork-infra
     patch/pr8296-side-questions
+    fix/codex-usage-archived-sessions
 )
 
 usage() {
