@@ -68,6 +68,19 @@ case "$cmd" in
         # ALEX.md's "Merged early from open upstream PRs" section.
         git fetch upstream main
 
+        # Bash reads PATCH_BRANCHES once, from whatever alex.sh happened to be
+        # on disk when this process started. If you just edited the array on
+        # patch/fork-infra but invoked `rebuild` from a checkout that hasn't
+        # picked that commit up yet (e.g. still on `main` from before), the
+        # loops below would silently use the stale list — once dropped a
+        # branch from a real rebuild. Reload from patch/fork-infra's own
+        # committed copy so the array is always current, regardless of what's
+        # actually checked out here.
+        mapfile -t PATCH_BRANCHES < <(
+            git show patch/fork-infra:alex.sh |
+                awk '/^PATCH_BRANCHES=\(/{f=1;next} /^\)/{f=0} f{print $1}'
+        )
+
         for branch in "${PATCH_BRANCHES[@]}"; do
             echo "==> Merging upstream/main into $branch"
             git checkout "$branch"
