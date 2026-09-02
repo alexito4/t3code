@@ -6,7 +6,7 @@ import {
   Files,
   GitPullRequest,
   Globe2,
-  MessageCircleQuestion,
+  MessageCirclePlus,
   Plus,
   TerminalSquare,
   Volume2,
@@ -104,7 +104,7 @@ const SURFACE_DISABLED_REASONS = {
   diff: "Diff is only available for server threads in Git repositories.",
   pullRequest: "This thread's branch has no pull request yet.",
   agents: "Agents are only available from a thread.",
-  sideQuestion: "Side questions need a running thread with no pending input.",
+  sideQuestion: "Side chats need a running thread with no pending input.",
 } as const;
 
 /** Overlays that must win over the launcher's letter shortcuts. */
@@ -332,9 +332,9 @@ function RightPanelEmptyState(props: {
       badgeCount: props.liveAgentCount,
     },
     {
-      label: "Side question",
+      label: "Side chat",
       description: "Ask without interrupting the agent.",
-      icon: MessageCircleQuestion,
+      icon: MessageCirclePlus,
       shortcut: "Q",
       available: props.sideQuestionAvailable,
       disabledReason: SURFACE_UNAVAILABLE_HINTS.sideQuestion,
@@ -526,7 +526,7 @@ function surfaceTitle(
     case "agents":
       return "Agents";
     case "side-question":
-      return "Side question";
+      return "Side chat";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -613,7 +613,7 @@ function SurfaceIcon({
     case "agents":
       return <Bot className="size-3 shrink-0" />;
     case "side-question":
-      return <MessageCircleQuestion className="size-3 shrink-0" />;
+      return <MessageCirclePlus className="size-3 shrink-0" />;
   }
 }
 
@@ -673,8 +673,8 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       onClick: props.onAddAgents,
     },
     {
-      label: "Side question",
-      icon: MessageCircleQuestion,
+      label: "Side chat",
+      icon: MessageCirclePlus,
       shortcut: "Q",
       available: props.sideQuestionAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.sideQuestion,
