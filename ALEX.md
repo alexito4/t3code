@@ -63,7 +63,14 @@ FETCH_HEAD`, `git range-diff` against the old tip to see what changed, then merg
     refreshed `upstream-pr-8296` into `patch/pr8296-side-questions`.
   - **My own fixes/improvements to this feature** belong on a branch based on
     `upstream-pr-8296` (not on `patch/pr8296-side-questions` directly), so they stay sendable as
-    a PR against `Bil0000:feat/btw-side-questions` later.
+    a PR against `Bil0000:feat/btw-side-questions` later. Then merge that branch into
+    `patch/pr8296-side-questions` too if it should land in the daily build now, ahead of sending
+    it upstream.
+    - `improve/pr8296-side-question-button` (2026-09-02) — a "Side question" entry in the right
+      panel's empty-state launcher and `+` add-surface menu (shortcut `Q`), opening the panel
+      with an empty turn list ready for a first question instead of requiring `/btw` typed in
+      the main composer. Reuses the existing `submitSideQuestion`/`askSideQuestion` path, no new
+      server-side plumbing. Already merged into `patch/pr8296-side-questions`.
   - **To drop this feature**: remove `patch/pr8296-side-questions` from `PATCH_BRANCHES` in
     `alex.sh` and run `rebuild`. That's it — isolation was the entire point of moving to
     branches.
