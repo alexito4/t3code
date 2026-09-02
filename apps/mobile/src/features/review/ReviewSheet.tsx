@@ -540,6 +540,8 @@ export function ReviewSheet(props: ReviewSheetProps) {
     });
     const actions: MenuAction[] = [
       sectionAction(sectionMenu.workingTree, "Working tree"),
+      sectionAction(sectionMenu.unstaged, "Unstaged"),
+      sectionAction(sectionMenu.staged, "Staged"),
       sectionAction(sectionMenu.branchChanges, "Branch changes"),
       sectionAction(sectionMenu.latestTurn, "Latest turn"),
     ];
@@ -724,6 +726,28 @@ export function ReviewSheet(props: ReviewSheetProps) {
                   }}
                 >
                   <NativeHeaderToolbar.Label>Working tree</NativeHeaderToolbar.Label>
+                </NativeHeaderToolbar.MenuAction>
+                <NativeHeaderToolbar.MenuAction
+                  disabled={sectionMenu.unstaged === null}
+                  isOn={selectedSection?.id === sectionMenu.unstaged?.id}
+                  onPress={() => {
+                    if (sectionMenu.unstaged) {
+                      selectSection(sectionMenu.unstaged.id);
+                    }
+                  }}
+                >
+                  <NativeHeaderToolbar.Label>Unstaged</NativeHeaderToolbar.Label>
+                </NativeHeaderToolbar.MenuAction>
+                <NativeHeaderToolbar.MenuAction
+                  disabled={sectionMenu.staged === null}
+                  isOn={selectedSection?.id === sectionMenu.staged?.id}
+                  onPress={() => {
+                    if (sectionMenu.staged) {
+                      selectSection(sectionMenu.staged.id);
+                    }
+                  }}
+                >
+                  <NativeHeaderToolbar.Label>Staged</NativeHeaderToolbar.Label>
                 </NativeHeaderToolbar.MenuAction>
                 <NativeHeaderToolbar.MenuAction
                   disabled={sectionMenu.branchChanges === null}
