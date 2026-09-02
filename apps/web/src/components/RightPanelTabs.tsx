@@ -75,12 +75,14 @@ interface RightPanelTabsProps {
   onAddFiles: () => void;
   onAddPullRequest: () => void;
   onAddAgents: () => void;
+  onAddSideQuestion: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
   filesAvailable: boolean;
   pullRequestAvailable: boolean;
   agentsAvailable: boolean;
+  sideQuestionAvailable: boolean;
   pullRequestStatuses?: Readonly<Record<string, PullRequestTabStatus>>;
   /** Running + waiting subagents; badges the Agents card in the empty state. */
   liveAgentCount: number;
@@ -102,6 +104,7 @@ const SURFACE_DISABLED_REASONS = {
   diff: "Diff is only available for server threads in Git repositories.",
   pullRequest: "This thread's branch has no pull request yet.",
   agents: "Agents are only available from a thread.",
+  sideQuestion: "Side questions need a running thread with no pending input.",
 } as const;
 
 /** Overlays that must win over the launcher's letter shortcuts. */
@@ -124,6 +127,7 @@ const SURFACE_UNAVAILABLE_HINTS = {
   diff: "Available for Git repositories.",
   pullRequest: "No pull request on this branch yet.",
   agents: "Available from a thread.",
+  sideQuestion: "Needs a running thread with no pending input.",
 } as const;
 
 type TabContextMenuAction =
@@ -253,12 +257,14 @@ function RightPanelEmptyState(props: {
   onAddFiles: () => void;
   onAddPullRequest: () => void;
   onAddAgents: () => void;
+  onAddSideQuestion: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
   filesAvailable: boolean;
   pullRequestAvailable: boolean;
   agentsAvailable: boolean;
+  sideQuestionAvailable: boolean;
   liveAgentCount: number;
 }) {
   // -1 means no highlight: it only appears on hover or arrow use.
@@ -324,6 +330,16 @@ function RightPanelEmptyState(props: {
       disabledReason: SURFACE_UNAVAILABLE_HINTS.agents,
       onClick: props.onAddAgents,
       badgeCount: props.liveAgentCount,
+    },
+    {
+      label: "Side question",
+      description: "Ask without interrupting the agent.",
+      icon: MessageCircleQuestion,
+      shortcut: "Q",
+      available: props.sideQuestionAvailable,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.sideQuestion,
+      onClick: props.onAddSideQuestion,
+      badgeCount: 0,
     },
   ] as const;
 
@@ -656,6 +672,14 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       disabledReason: SURFACE_DISABLED_REASONS.agents,
       onClick: props.onAddAgents,
     },
+    {
+      label: "Side question",
+      icon: MessageCircleQuestion,
+      shortcut: "Q",
+      available: props.sideQuestionAvailable,
+      disabledReason: SURFACE_DISABLED_REASONS.sideQuestion,
+      onClick: props.onAddSideQuestion,
+    },
   ] as const;
 
   const handleAddSurfaceMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -943,12 +967,14 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddFiles={props.onAddFiles}
             onAddPullRequest={props.onAddPullRequest}
             onAddAgents={props.onAddAgents}
+            onAddSideQuestion={props.onAddSideQuestion}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}
             diffAvailable={props.diffAvailable}
             filesAvailable={props.filesAvailable}
             pullRequestAvailable={props.pullRequestAvailable}
             agentsAvailable={props.agentsAvailable}
+            sideQuestionAvailable={props.sideQuestionAvailable}
             liveAgentCount={props.liveAgentCount}
           />
         ) : (

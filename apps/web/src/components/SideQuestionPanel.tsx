@@ -179,8 +179,16 @@ export function SideQuestionPanel(props: {
                     className="block text-sm [&_[data-slot=textarea]]:max-h-50 [&_[data-slot=textarea]]:overflow-y-auto [&_[data-slot=textarea]]:p-0"
                     value={draft}
                     style={{ resize: "none" }}
-                    aria-label="Ask a follow-up side question"
-                    placeholder="Ask another side question…"
+                    aria-label={
+                      props.turns.length === 0
+                        ? "Ask a side question"
+                        : "Ask a follow-up side question"
+                    }
+                    placeholder={
+                      props.turns.length === 0
+                        ? "Ask without interrupting the agent…"
+                        : "Ask another side question…"
+                    }
                     onChange={(event) => setDraft(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.nativeEvent.isComposing || event.key !== "Enter") return;

@@ -90,6 +90,7 @@ import { isElectron } from "../env";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import {
+  canAskComposerSideQuestion,
   collapseExpandedComposerCursor,
   type ComposerSubmissionIntent,
   parseComposerSideQuestion,
@@ -3670,6 +3671,35 @@ function ChatViewContent(props: ChatViewProps) {
     if (!activeThreadRef) return;
     useRightPanelStore.getState().open(activeThreadRef, "agents");
   }, [activeThreadRef]);
+  const sideQuestionAvailable =
+    activeThreadRef !== null &&
+    canAskComposerSideQuestion({
+      isServerThread,
+      hasPendingUserInput: activePendingProgress !== null,
+    });
+  const addSideQuestionSurface = useCallback(() => {
+    if (!activeThreadRef || !activeThread || !sideQuestionAvailable) return;
+    if (sideQuestionState) {
+      setSideQuestionMode("panel");
+    } else {
+      setSideQuestionsByThread((current) => ({
+        ...current,
+        [routeThreadKey]: {
+          mode: "panel",
+          modelSelection: activeThread.modelSelection,
+          turns: [],
+        },
+      }));
+    }
+    useRightPanelStore.getState().open(activeThreadRef, "side-question");
+  }, [
+    activeThread,
+    activeThreadRef,
+    routeThreadKey,
+    setSideQuestionMode,
+    sideQuestionAvailable,
+    sideQuestionState,
+  ]);
   const openFileSurface = useCallback(
     (relativePath: string) => {
       if (!activeThreadRef || !activeProject) return;
@@ -7891,12 +7921,14 @@ function ChatViewContent(props: ChatViewProps) {
           onAddFiles={addFilesSurface}
           onAddPullRequest={addPullRequestSurface}
           onAddAgents={addAgentsSurface}
+          onAddSideQuestion={addSideQuestionSurface}
           browserAvailable={isPreviewSupportedInRuntime()}
           terminalAvailable={activeProject !== null}
           diffAvailable={isServerThread && isGitRepo}
           filesAvailable={activeProject !== null}
           pullRequestAvailable={pullRequestSurfaceAvailable}
           agentsAvailable
+          sideQuestionAvailable={sideQuestionAvailable}
           pullRequestStatuses={pullRequestTabStatuses}
           liveAgentCount={agentPanelModel.liveCount}
         >
@@ -7931,12 +7963,14 @@ function ChatViewContent(props: ChatViewProps) {
             onAddFiles={addFilesSurface}
             onAddPullRequest={addPullRequestSurface}
             onAddAgents={addAgentsSurface}
+            onAddSideQuestion={addSideQuestionSurface}
             browserAvailable={isPreviewSupportedInRuntime()}
             terminalAvailable={activeProject !== null}
             diffAvailable={isServerThread && isGitRepo}
             filesAvailable={activeProject !== null}
             pullRequestAvailable={pullRequestSurfaceAvailable}
             agentsAvailable
+            sideQuestionAvailable={sideQuestionAvailable}
             pullRequestStatuses={pullRequestTabStatuses}
             liveAgentCount={agentPanelModel.liveCount}
           >
