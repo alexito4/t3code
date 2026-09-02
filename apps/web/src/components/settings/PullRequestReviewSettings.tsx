@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 
 import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
@@ -9,7 +8,6 @@ import { searchableSetting } from "./settingsSearch";
 export function PullRequestReviewSettingsSection() {
   const settings = usePrimarySettings();
   const updateSettings = useUpdatePrimarySettings();
-  const instructionsRef = useRef<HTMLTextAreaElement>(null);
   const instructions = settings.pullRequestReviewInstructions;
   const defaultInstructions = DEFAULT_UNIFIED_SETTINGS.pullRequestReviewInstructions;
 
@@ -30,11 +28,10 @@ export function PullRequestReviewSettingsSection() {
         <div className="mt-3 max-w-2xl pb-3.5">
           <Textarea
             key={instructions}
-            ref={instructionsRef}
             defaultValue={instructions}
             onBlur={(event) => {
               const next = event.target.value.trim();
-              if (next.length > 0 && next !== instructions) {
+              if (next !== instructions) {
                 updateSettings({ pullRequestReviewInstructions: next });
               }
             }}
