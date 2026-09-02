@@ -76,10 +76,14 @@ case "$cmd" in
         # branch from a real rebuild. Reload from patch/fork-infra's own
         # committed copy so the array is always current, regardless of what's
         # actually checked out here.
-        mapfile -t PATCH_BRANCHES < <(
-            git show patch/fork-infra:alex.sh |
-                awk '/^PATCH_BRANCHES=\(/{f=1;next} /^\)/{f=0} f{print $1}'
-        )
+        #
+        # `mapfile`/`readarray` need bash 4+; macOS ships bash 3.2 at
+        # /bin/bash (Apple froze it pre-GPLv3), so this reads the old way.
+        PATCH_BRANCHES=()
+        while IFS= read -r branch; do
+            PATCH_BRANCHES+=("$branch")
+        done < <(git show patch/fork-infra:alex.sh |
+            awk '/^PATCH_BRANCHES=\(/{f=1;next} /^\)/{f=0} f{print $1}')
 
         for branch in "${PATCH_BRANCHES[@]}"; do
             echo "==> Merging upstream/main into $branch"
