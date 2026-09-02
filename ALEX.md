@@ -90,6 +90,27 @@ the official one. Never meant to merge upstream.
     `userData` dir (`t3code-personal`), gated behind `T3CODE_DESKTOP_PERSONAL_BUILD=1`, so it
     can run alongside an official install instead of colliding with it. Shared app state
     (`~/.t3/userdata`) is untouched, so projects/threads stay shared as normal.
+  - **Personal build branding** — same idea as the official Nightly channel's distinctive
+    visuals, so a personal build is recognizable at a glance next to an official install:
+    - App icon: `assets/personal/app-icon.icon` (Icon Composer project, warm orange solid fill
+      - the shared `text.svg` T3 mark, mirroring `assets/prod` and `assets/nightly`'s
+        structure) wired through `scripts/lib/brand-assets.ts` (`personal*` asset paths),
+        `scripts/export-brand-icons.ts` (`ICON_VARIANTS`), and
+        `scripts/build-desktop-artifact.ts` (`resolveDesktopBuildIconAssets`,
+        `resolveDesktopProductName` → `"T3 Code (Personal)"`), all gated on the same
+        `T3CODE_DESKTOP_PERSONAL_BUILD=1` check as the bundle id. After changing the icon
+        project, re-run `node scripts/export-brand-icons.ts` — like the other channels, the
+        macOS 1024pt PNG (`assets/personal/personal-macos-1024.png`) still needs one manual
+        export from the Icon Composer GUI per `assets/README.md`; the CLI exporter refuses that
+        preset for every channel, not just this one.
+    - Sidebar/composer-button art: `"Personal"` stage label (added to `DesktopAppStageLabel` in
+      `packages/contracts/src/ipc.ts`, resolved in `DesktopEnvironment.ts`'s
+      `resolveDesktopAppStageLabel`) drives a `"personal"` variant in
+      `apps/web/src/components/SidebarStageBackdrop.tsx` (`SunsetHorizonArt`, alongside
+      `NightlySkyArt`/`DevBlueprintArt`), painted with `--stage-sunset-*` tokens in
+      `apps/web/src/index.css`. Unlike the nightly/dev art, the sunset palette is one fixed
+      set of colors (not retinted per selectable color theme) — a personal build is a fixed
+      identity, not a swappable theme, so this was scoped down deliberately.
   - **iOS personal-team Apple Team ID** (`apps/mobile/app.config.ts`) — reads
     `T3CODE_IOS_PERSONAL_TEAM_APPLE_TEAM_ID` so local iOS builds can sign with a personal Apple
     Developer team instead of the project's real one.

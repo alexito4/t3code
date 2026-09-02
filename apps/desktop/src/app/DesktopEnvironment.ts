@@ -104,6 +104,10 @@ function resolveDesktopAppStageLabel(input: {
     return "Dev";
   }
 
+  if (isPersonalBuild) {
+    return "Personal";
+  }
+
   return isNightlyDesktopVersion(input.appVersion) ? "Nightly" : "Alpha";
 }
 

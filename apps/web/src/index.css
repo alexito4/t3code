@@ -554,10 +554,24 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     --stage-night-glow-secondary: oklch(0.345571 0.117466 273.568);
     --stage-night-sparkle: oklch(0.880867 0.057747 269.011);
 
+    /* Fixed identity mark for personal fork builds (see ALEX.md) — unlike
+       the maintainer palettes below, this doesn't retint per color theme. */
+    --stage-sunset-top: oklch(0.86 0.09 70);
+    --stage-sunset-mid: oklch(0.72 0.16 50);
+    --stage-sunset-bottom: oklch(0.48 0.18 35);
+    --stage-sunset-highlight: oklch(0.95 0.04 60);
+    --stage-sunset-secondary: oklch(0.75 0.14 40);
+    --stage-sunset-tertiary: oklch(0.55 0.15 20);
+    --stage-sunset-sun-highlight: oklch(0.92 0.12 80);
+    --stage-sunset-sun-secondary: oklch(0.7 0.17 45);
+
     @variant dark {
       --stage-art-top: oklch(0.581473 0.149124 256.9);
       --stage-art-mid: oklch(0.456509 0.159377 261.945);
       --stage-art-bottom: oklch(0.291327 0.136578 267.649);
+      --stage-sunset-top: oklch(0.62 0.11 55);
+      --stage-sunset-mid: oklch(0.5 0.15 42);
+      --stage-sunset-bottom: oklch(0.32 0.14 30);
     }
   }
 
