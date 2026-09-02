@@ -16,18 +16,38 @@ export type DiffPanelSelection =
 
 export type DiffRenderMode = "stacked" | "split";
 
+/** A pending "scroll this file into view" request for a thread's diff panel. */
+export interface DiffPanelFileReveal {
+  filePath: string;
+  revealRequestId: number;
+}
+
 const DEFAULT_SELECTION: DiffPanelSelection = { kind: "branch", baseRef: null };
 const DEFAULT_WORKING_TREE_SELECTION: DiffPanelSelection = { kind: "uncommitted" };
 
 interface DiffPanelStoreState {
   byThreadKey: Record<string, DiffPanelSelection>;
   branchBaseRefByThreadKey: Record<string, string | null>;
+  /**
+   * File-reveal requests for scopes other than `turn`. The `turn` variant
+   * carries its own `filePath`/`revealRequestId` (set alongside the turn
+   * itself by `selectTurn`), since opening a turn's diff and revealing one of
+   * its files is one atomic action from the caller's perspective. Every other
+   * scope selects a file after the scope is already active (e.g. clicking a
+   * row in the file-tree sidebar), so it's tracked independently here instead
+   * of being duplicated onto each scope's selection variant.
+   */
+  fileRevealByThreadKey: Record<string, DiffPanelFileReveal | undefined>;
   diffRenderMode: DiffRenderMode;
+  fileTreeVisible: boolean;
   setDiffRenderMode: (mode: DiffRenderMode) => void;
+  setFileTreeVisible: (visible: boolean) => void;
   selectGitScope: (ref: ScopedThreadRef, scope: DiffPanelGitScope) => void;
   selectBranchBaseRef: (ref: ScopedThreadRef, baseRef: string | null) => void;
   selectTurn: (ref: ScopedThreadRef, turnId: TurnId, filePath?: string) => void;
   reconcileTurnSelection: (ref: ScopedThreadRef, availableTurnIds: ReadonlyArray<TurnId>) => void;
+  /** Reveal (scroll to) a file in the diff currently showing for `ref`, whatever its scope. */
+  revealFile: (ref: ScopedThreadRef, filePath: string) => void;
   removeThread: (ref: ScopedThreadRef) => void;
 }
 
@@ -41,8 +61,11 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
     (set) => ({
       byThreadKey: {},
       branchBaseRefByThreadKey: {},
+      fileRevealByThreadKey: {},
       diffRenderMode: "stacked",
+      fileTreeVisible: true,
       setDiffRenderMode: (diffRenderMode) => set({ diffRenderMode }),
+      setFileTreeVisible: (fileTreeVisible) => set({ fileTreeVisible }),
       selectGitScope: (ref, scope) =>
         set((state) => {
           const threadKey = scopedThreadKey(ref);
@@ -113,16 +136,51 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
             },
           };
         }),
+      revealFile: (ref, filePath) =>
+        set((state) => {
+          const threadKey = scopedThreadKey(ref);
+          const trimmedFilePath = filePath.trim();
+          if (!trimmedFilePath) return state;
+          const previous = state.byThreadKey[threadKey];
+          if (previous?.kind === "turn") {
+            return {
+              byThreadKey: {
+                ...state.byThreadKey,
+                [threadKey]: {
+                  ...previous,
+                  filePath: trimmedFilePath,
+                  revealRequestId: previous.revealRequestId + 1,
+                },
+              },
+            };
+          }
+          const previousReveal = state.fileRevealByThreadKey[threadKey];
+          return {
+            fileRevealByThreadKey: {
+              ...state.fileRevealByThreadKey,
+              [threadKey]: {
+                filePath: trimmedFilePath,
+                revealRequestId: (previousReveal?.revealRequestId ?? 0) + 1,
+              },
+            },
+          };
+        }),
       removeThread: (ref) =>
         set((state) => {
           const threadKey = scopedThreadKey(ref);
-          if (!(threadKey in state.byThreadKey) && !(threadKey in state.branchBaseRefByThreadKey)) {
+          if (
+            !(threadKey in state.byThreadKey) &&
+            !(threadKey in state.branchBaseRefByThreadKey) &&
+            !(threadKey in state.fileRevealByThreadKey)
+          ) {
             return state;
           }
           const { [threadKey]: _removed, ...byThreadKey } = state.byThreadKey;
           const { [threadKey]: _removedBaseRef, ...branchBaseRefByThreadKey } =
             state.branchBaseRefByThreadKey;
-          return { byThreadKey, branchBaseRefByThreadKey };
+          const { [threadKey]: _removedReveal, ...fileRevealByThreadKey } =
+            state.fileRevealByThreadKey;
+          return { byThreadKey, branchBaseRefByThreadKey, fileRevealByThreadKey };
         }),
     }),
     {
@@ -135,6 +193,7 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
         byThreadKey: state.byThreadKey,
         branchBaseRefByThreadKey: state.branchBaseRefByThreadKey,
         diffRenderMode: state.diffRenderMode,
+        fileTreeVisible: state.fileTreeVisible,
       }),
     },
   ),
@@ -150,4 +209,17 @@ export function selectThreadDiffPanelSelection(
     byThreadKey[scopedThreadKey(ref)] ??
     (hasWorkingTreeChanges ? DEFAULT_WORKING_TREE_SELECTION : DEFAULT_SELECTION)
   );
+}
+
+/**
+ * The pending file-reveal request for a non-`turn` scope. `turn` selections
+ * carry their own `filePath`/`revealRequestId` (see `DiffPanelFileReveal`'s
+ * doc comment) and are read directly off the `DiffPanelSelection`.
+ */
+export function selectThreadFileReveal(
+  fileRevealByThreadKey: Record<string, DiffPanelFileReveal | undefined>,
+  ref: ScopedThreadRef | null | undefined,
+): DiffPanelFileReveal | null {
+  if (!ref) return null;
+  return fileRevealByThreadKey[scopedThreadKey(ref)] ?? null;
 }
