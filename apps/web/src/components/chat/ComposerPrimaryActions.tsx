@@ -268,7 +268,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
                 : isSendBusy
                   ? "Sending"
                   : isSideQuestion
-                    ? "Ask side question"
+                    ? "Ask in side chat"
                     : "Send message"
       }
     >

@@ -1,7 +1,7 @@
 import type { ModelSelection, ScopedThreadRef, ServerProvider } from "@t3tools/contracts";
 import type { UnifiedSettings } from "@t3tools/contracts/settings";
 import { createModelSelection } from "@t3tools/shared/model";
-import { MessageCircleQuestion, Minimize2Icon, XIcon } from "lucide-react";
+import { MessageCirclePlus, Minimize2Icon, XIcon } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 
 import { composerSubmissionIntentForEnter } from "../composer-logic";
@@ -123,7 +123,7 @@ export function SideQuestionPanel(props: {
           type="button"
           size="icon-xs"
           variant="ghost-muted"
-          aria-label="Minimize side question"
+          aria-label="Minimize side chat"
           onClick={props.onMinimize}
         >
           <Minimize2Icon className="size-3.5" />
@@ -180,14 +180,12 @@ export function SideQuestionPanel(props: {
                     value={draft}
                     style={{ resize: "none" }}
                     aria-label={
-                      props.turns.length === 0
-                        ? "Ask a side question"
-                        : "Ask a follow-up side question"
+                      props.turns.length === 0 ? "Start a side chat" : "Continue the side chat"
                     }
                     placeholder={
                       props.turns.length === 0
                         ? "Ask without interrupting the agent…"
-                        : "Ask another side question…"
+                        : "Continue the side chat…"
                     }
                     onChange={(event) => setDraft(event.target.value)}
                     onKeyDown={(event) => {
@@ -216,7 +214,7 @@ export function SideQuestionPanel(props: {
                           instanceEntries={providerEntries}
                           modelOptionsByInstance={modelOptionsByInstance}
                           terminalOpen={false}
-                          triggerAriaLabel="Side question model"
+                          triggerAriaLabel="Side chat model"
                           onInstanceModelChange={selectModel}
                         />
                         <TraitsPicker
@@ -244,7 +242,7 @@ export function SideQuestionPanel(props: {
                   </div>
                   {pending ? (
                     <ComposerStopButton
-                      ariaLabel="Stop side question"
+                      ariaLabel="Stop side chat"
                       className="size-9 sm:size-8"
                       onClick={props.onStop}
                     />
@@ -299,13 +297,13 @@ export function SideQuestionMinimized(props: {
       <div className="flex items-center gap-1 px-3 py-1.5 sm:px-4">
         <button
           type="button"
-          aria-label="Open side question"
+          aria-label="Open side chat"
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 self-stretch text-left text-xs text-muted-foreground hover:text-foreground"
           onClick={props.onRestore}
           onPointerDown={(event) => event.preventDefault()}
         >
-          <MessageCircleQuestion aria-hidden className="size-3.5 shrink-0" />
-          <span className="shrink-0 font-medium text-foreground">Side question</span>
+          <MessageCirclePlus aria-hidden className="size-3.5 shrink-0" />
+          <span className="shrink-0 font-medium text-foreground">Side chat</span>
           <span className="min-w-0 flex-1 truncate">{props.question}</span>
           {props.status === "loading" ? (
             <Spinner aria-hidden="true" className="size-3.5 shrink-0" />
@@ -323,7 +321,7 @@ export function SideQuestionMinimized(props: {
           type="button"
           size="icon-micro"
           variant="ghost-muted"
-          aria-label="Dismiss side question"
+          aria-label="Dismiss side chat"
           onClick={props.onDismiss}
           onPointerDown={(event) => event.preventDefault()}
         >

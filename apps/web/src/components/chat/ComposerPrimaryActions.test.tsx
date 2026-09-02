@@ -221,7 +221,7 @@ describe("ComposerPrimaryActions", () => {
   it("labels side questions as Ask even when a plan is active", () => {
     const markup = renderSendButton(null, true, true);
 
-    expect(markup).toContain('aria-label="Ask side question"');
+    expect(markup).toContain('aria-label="Ask in side chat"');
     expect(markup).not.toContain("Refine");
   });
 
@@ -234,7 +234,7 @@ describe("ComposerPrimaryActions", () => {
     const markup = renderPendingActions(true, isSideQuestion);
 
     expect(markup).toContain("Submit");
-    expect(markup).not.toContain('aria-label="Ask side question"');
+    expect(markup).not.toContain('aria-label="Ask in side chat"');
   });
 
   it("offers Stop generation while a running turn is waiting for user input", () => {

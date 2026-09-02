@@ -77,26 +77,26 @@ describe("SideQuestionPanel", () => {
     expect(markup).toContain("chat-composer-glass-shell");
     expect(markup).toContain('data-surface-subheader="true"');
     expect(markup).toContain("in-data-[preview-panel-mode=inline]:h-7");
-    expect(markup).not.toContain('<div class="font-medium text-sm">Side question</div>');
+    expect(markup).not.toContain('<div class="font-medium text-sm">Side chat</div>');
     expect(markup).toContain('data-side-question-composer-shell="true"');
     expect(markup).toContain('data-side-question-composer-dock="true"');
     expect(markup).toContain("pb-[3.25rem]");
     expect(markup).toContain("relative px-3 pb-2 pt-3.5 sm:px-4 sm:pt-4");
     expect(markup).toContain('data-chat-composer-main-surface="true"');
-    expect(markup).toContain('aria-label="Ask a follow-up side question"');
+    expect(markup).toContain('aria-label="Continue the side chat"');
     expect(markup).toContain('data-size="default"');
     expect(markup).toContain("min-h-17.5");
     expect(markup).not.toContain("min-h-16.5");
     expect(markup).toContain("[&amp;_[data-slot=textarea]]:p-0");
     expect(markup).toContain('style="resize:none"');
-    expect(markup).toContain("Ask another side question…");
+    expect(markup).toContain("Continue the side chat…");
     expect(markup).toContain('aria-label="Ask follow-up"');
     expect(markup).toContain('class="size-3.5"');
-    expect(markup).toContain('aria-label="Side question model"');
+    expect(markup).toContain('aria-label="Side chat model"');
     expect(markup).toContain("High");
     expect(markup).toContain('data-user-message-actions="true"');
     expect(markup).toContain('aria-label="Copy link"');
-    expect(markup).toContain('aria-label="Minimize side question"');
+    expect(markup).toContain('aria-label="Minimize side chat"');
     expect(markup).not.toContain('data-side-question-context="true"');
     expect(markup).not.toContain("chat-composer-glass-shell-with-context");
     expect(markup).not.toContain("calendaty-staging");
@@ -114,7 +114,7 @@ describe("SideQuestionPanel", () => {
     );
 
     expect(markup.match(/<textarea[^>]*>/)?.[0]).not.toContain("disabled");
-    expect(markup).toContain('aria-label="Stop side question"');
+    expect(markup).toContain('aria-label="Stop side chat"');
     expect(markup).toContain("size-9 sm:size-8");
   });
 
@@ -131,9 +131,9 @@ describe("SideQuestionPanel", () => {
       />,
     );
 
-    expect(markup).toContain('aria-label="Side question model"');
+    expect(markup).toContain('aria-label="Side chat model"');
     expect(markup).toContain("Medium");
-    expect(markup).toContain('aria-label="Stop side question"');
+    expect(markup).toContain('aria-label="Stop side chat"');
   });
 
   it("renders a compact composer attachment that can restore or dismiss the panel", () => {
@@ -147,9 +147,9 @@ describe("SideQuestionPanel", () => {
     );
 
     expect(markup).toContain("chat-composer-top-drawer");
-    expect(markup).toContain("Side question");
+    expect(markup).toContain("Side chat");
     expect(markup).toContain("Why SQLite?");
-    expect(markup).toContain('aria-label="Open side question"');
-    expect(markup).toContain('aria-label="Dismiss side question"');
+    expect(markup).toContain('aria-label="Open side chat"');
+    expect(markup).toContain('aria-label="Dismiss side chat"');
   });
 });

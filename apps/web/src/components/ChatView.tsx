@@ -5588,7 +5588,7 @@ function ChatViewContent(props: ChatViewProps) {
           toastManager.add(
             stackedThreadToast({
               type: "info",
-              title: "No recent side answer",
+              title: "No side chat yet",
               description: "Add a question after /btw.",
             }),
           );
@@ -5608,7 +5608,7 @@ function ChatViewContent(props: ChatViewProps) {
         toastManager.add(
           stackedThreadToast({
             type: "warning",
-            title: "Side questions are text only",
+            title: "Side chats are text only",
             description: "Remove draft attachments and context, then try /btw again.",
           }),
         );

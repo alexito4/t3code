@@ -6,7 +6,7 @@ const source = NodeFS.readFileSync(new URL("./ThreadDetailScreen.tsx", import.me
 describe("side question composer", () => {
   it("submits a follow-up when Return is pressed", () => {
     const input = source.match(
-      /<TextInput\s+multiline[\s\S]*?accessibilityLabel="Ask a follow-up side question"[\s\S]*?\/>/,
+      /<TextInput\s+multiline[\s\S]*?accessibilityLabel="Continue the side chat"[\s\S]*?\/>/,
     )?.[0];
 
     expect(input).toBeDefined();

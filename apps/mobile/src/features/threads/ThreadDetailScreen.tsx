@@ -354,7 +354,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const sideSettingsSession = useMemo<ExistingThreadSettingsRouteSession>(
     () => ({
       ownerId: `${selectedThreadKey}:side-question`,
-      title: "Side question settings",
+      title: "Side chat settings",
       showRuntime: false,
       providerGroups: sideProviderGroups,
       selectedModel: sideModelSelection,
@@ -722,9 +722,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                 question,
                 id: requestId,
                 answer:
-                  error instanceof Error
-                    ? error.message
-                    : "The side question could not be answered.",
+                  error instanceof Error ? error.message : "The side chat could not be answered.",
                 status: "error",
               },
             ],
@@ -827,7 +825,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                 {
                   id: errorId,
                   question: sideQuestion,
-                  answer: "Side questions are text only. Remove draft images and try again.",
+                  answer: "Side chats are text only. Remove draft images and try again.",
                   status: "error",
                 },
               ],
@@ -1036,12 +1034,12 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                     <View className="flex-row items-center gap-3 px-4 py-3">
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel="Open side question"
+                        accessibilityLabel="Open side chat"
                         className="min-w-0 flex-1"
                         onPress={() => setSideQuestionMode("expanded")}
                       >
                         <Text className="text-2xs font-t3-bold uppercase tracking-wide text-foreground-muted">
-                          Side question
+                          Side chat
                         </Text>
                         <Text
                           className="mt-0.5 text-sm text-foreground-secondary"
@@ -1052,7 +1050,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                       </Pressable>
                       {sideQuestionPending ? (
                         <ControlPill
-                          accessibilityLabel="Stop side question"
+                          accessibilityLabel="Stop side chat"
                           className="h-9 w-9"
                           icon="stop.fill"
                           variant="danger"
@@ -1061,7 +1059,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                       ) : null}
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel="Dismiss side question"
+                        accessibilityLabel="Dismiss side chat"
                         onPress={() => setSideQuestionMode("hidden")}
                       >
                         <Text className="text-sm text-foreground-muted">Close</Text>
@@ -1072,7 +1070,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                       <View className="mb-3 flex-row items-start justify-between gap-3">
                         <View className="min-w-0 flex-1">
                           <Text className="text-2xs font-t3-bold uppercase tracking-wide text-foreground-muted">
-                            Side question
+                            Side chat
                           </Text>
                           <Text className="mt-1 text-sm text-foreground-secondary">
                             Ask without interrupting the main agent.
@@ -1081,14 +1079,14 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                         <View className="flex-row gap-3">
                           <Pressable
                             accessibilityRole="button"
-                            accessibilityLabel="Minimize side question"
+                            accessibilityLabel="Minimize side chat"
                             onPress={() => setSideQuestionMode("minimized")}
                           >
                             <Text className="text-sm text-foreground-muted">Minimize</Text>
                           </Pressable>
                           <Pressable
                             accessibilityRole="button"
-                            accessibilityLabel="Dismiss side question"
+                            accessibilityLabel="Dismiss side chat"
                             onPress={() => setSideQuestionMode("hidden")}
                           >
                             <Text className="text-sm text-foreground-muted">Close</Text>
@@ -1133,7 +1131,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                       </ScrollView>
                       <View className="mt-3 flex-row items-center justify-between gap-2">
                         <ComposerInlineControl
-                          accessibilityLabel="Side question model and reasoning settings"
+                          accessibilityLabel="Side chat model and reasoning settings"
                           emphasized
                           iconNode={
                             <ProviderIcon
@@ -1147,7 +1145,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                         />
                         {sideQuestionPending ? (
                           <ControlPill
-                            accessibilityLabel="Stop side question"
+                            accessibilityLabel="Stop side chat"
                             icon="stop.fill"
                             variant="danger"
                             onPress={stopSideQuestion}
@@ -1159,7 +1157,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                           multiline
                           submitBehavior="submit"
                           value={sideQuestionState.draft}
-                          accessibilityLabel="Ask a follow-up side question"
+                          accessibilityLabel="Continue the side chat"
                           placeholder="Ask a follow-up…"
                           onSubmitEditing={() => {
                             const question = sideQuestionState.draft.trim();
