@@ -28,6 +28,29 @@ Two ways to update, both in `alex.sh`:
 Things that add product functionality, distinct from the plumbing that just makes the fork
 buildable/runnable for personal use (see Fork infrastructure below).
 
+- **Review panel parity with Codex** — Codex's Review panel has three things T3 Code's didn't: a
+  full staged/unstaged/committed diff-source split, per-file stage/revert buttons, and a
+  collapsible file-tree browser with git-status badges. Split into four independently-droppable
+  branches, each its own concern:
+  - `patch/review-diff-staged-unstaged` — splits the old combined "Working tree" scope into
+    Uncommitted/Unstaged/Staged, end to end (contracts, server git plumbing, web dropdown,
+    mobile section menu including `ReviewSheet.tsx` UI wiring).
+  - `patch/review-diff-committed-mode` — adds a "Committed" per-commit diff mode, adapted from
+    upstream PR https://github.com/pingdotgg/t3code/pull/6102 (open, unmerged as of 2026-09-02).
+    Depends on `patch/review-diff-staged-unstaged`'s scope structure, so it's built on top of
+    that branch rather than independently on `upstream/main`. Mobile only gets the data-model
+    update (`ReviewSectionKind`), matching #6102's own scope — no mobile "Commits" picker UI.
+  - `patch/review-diff-file-actions` — per-file stage/unstage/discard buttons in the diff header.
+    `discardFile` runs a silent `git stash push -- <path>` immediately before the destructive
+    checkout/clean, left unpopped, purely as a recovery net — no confirmation dialog, the
+    one-click UX matches Codex exactly. Web + desktop only, deliberately no mobile UI.
+  - `patch/review-diff-file-tree` — a collapsible file-tree sidebar in the diff panel using
+    `@pierre/trees`' `gitStatus` option (installed, unused elsewhere in the codebase before this)
+    for added/modified/deleted/renamed/untracked badges.
+  - Built for personal use first; not yet sent upstream as PRs. Revisit upstreaming once lived
+    with for a while — see the "personal first, upstream later" call in the planning
+    conversation that produced these.
+
 - **Configurable "Review this PR" pull request action** — adds a "Review this PR" menu item
   next to "Ask a question" / "Explain this PR", backed by a user-editable checklist in
   Settings → Source Control → Pull requests. Lives on its own branch
