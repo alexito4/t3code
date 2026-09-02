@@ -53,9 +53,11 @@ buildable/runnable for personal use (see Fork infrastructure below).
 
 - **Configurable "Review this PR" pull request action** — adds a "Review this PR" menu item
   next to "Ask a question" / "Explain this PR", backed by a user-editable checklist in
-  Settings → Source Control → Pull requests. Lives on its own branch
-  (`feat/pull-request-review-checklist`), not composed into `main`. Sent upstream:
-  https://github.com/pingdotgg/t3code/pull/9099 (draft, not yet submitted).
+  Settings → Source Control → Pull requests. On branch `feat/pull-request-review-checklist`
+  (based on `upstream/main`) and composed into `main` via `PATCH_BRANCHES` as of 2026-09-02 —
+  wanted in daily use now rather than waiting on upstream. Sent upstream:
+  https://github.com/pingdotgg/t3code/pull/9099 (open). Once merged, drop the branch from
+  `PATCH_BRANCHES` and `rebuild`.
 
 - **Codex usage undercount fix** — the Usage screen's Codex scan only read
   `~/.codex/sessions`, never `~/.codex/archived_sessions` (where Codex CLI rotates completed

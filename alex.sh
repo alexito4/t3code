@@ -20,6 +20,7 @@ PATCH_BRANCHES=(
     patch/pr8296-side-questions
     fix/codex-usage-archived-sessions
     feat/projects-list-page
+    feat/pull-request-review-checklist
     patch/review-diff-staged-unstaged
     patch/review-diff-committed-mode
     patch/review-diff-file-actions
