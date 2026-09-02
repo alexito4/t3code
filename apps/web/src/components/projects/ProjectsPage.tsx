@@ -2,11 +2,13 @@ import { useNavigate } from "@tanstack/react-router";
 import { CloudIcon, ContainerIcon } from "lucide-react";
 import { useMemo } from "react";
 
+import { enumerateDays } from "@t3tools/shared/usageFormat";
 import { isElectron } from "../../env";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { useThreadShells } from "../../state/entities";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { useSettingsProjectGroups } from "../settings/ProjectSettingsPanel";
+import { ProjectActivityChart, type ProjectActivitySeries } from "./ProjectActivityChart";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../ui/empty";
 import { ScrollArea } from "../ui/scroll-area";
@@ -22,6 +24,31 @@ interface ProjectStats {
 }
 
 const EMPTY_STATS: ProjectStats = { activeThreadCount: 0, lastActivityAt: null };
+const ACTIVITY_WINDOW_DAYS = 30;
+const ACTIVITY_SERIES_LIMIT = 5;
+// Slots 1-5 of the categorical ramp; safe up to 8 for line/area charts, but a
+// 6th top project starts crowding the legend, so the rest fold into "Other".
+const ACTIVITY_COLORS = [
+  "light-dark(#2a78d6, #3987e5)",
+  "light-dark(#eb6834, #d95926)",
+  "light-dark(#1baf7a, #199e70)",
+  "light-dark(#eda100, #c98500)",
+  "light-dark(#e87ba4, #d55181)",
+];
+const OTHER_SERIES_ID = "__other__";
+
+/** Maps every physical project ref to its logical group key, for O(1) thread attribution. */
+function buildProjectKeyByRef(
+  groups: readonly SidebarProjectSnapshot[],
+): ReadonlyMap<string, string> {
+  const projectKeyByRef = new Map<string, string>();
+  for (const group of groups) {
+    for (const ref of group.memberProjectRefs) {
+      projectKeyByRef.set(`${ref.environmentId}:${ref.projectId}`, group.projectKey);
+    }
+  }
+  return projectKeyByRef;
+}
 
 /** Derives per-project thread counts and last-activity by matching thread shells against each
  * group's member project refs, in a single pass rather than one query per row. */
@@ -30,12 +57,7 @@ function useProjectStatsByKey(
 ): ReadonlyMap<string, ProjectStats> {
   const threads = useThreadShells();
   return useMemo(() => {
-    const projectKeyByRef = new Map<string, string>();
-    for (const group of groups) {
-      for (const ref of group.memberProjectRefs) {
-        projectKeyByRef.set(`${ref.environmentId}:${ref.projectId}`, group.projectKey);
-      }
-    }
+    const projectKeyByRef = buildProjectKeyByRef(groups);
     const stats = new Map<string, ProjectStats>();
     for (const thread of threads) {
       const projectKey = projectKeyByRef.get(`${thread.environmentId}:${thread.projectId}`);
@@ -54,10 +76,73 @@ function useProjectStatsByKey(
   }, [groups, threads]);
 }
 
+interface ProjectActivityData {
+  readonly series: readonly ProjectActivitySeries[];
+  readonly days: readonly string[];
+  readonly countsByDay: ReadonlyMap<string, ReadonlyMap<string, number>>;
+  readonly hasActivity: boolean;
+}
+
+/** Buckets each thread's most recent activity day into its project, then folds every project
+ * past the top 5 by volume into "Other" so the chart never has to invent a 6th-and-beyond hue. */
+function useProjectActivityData(groups: readonly SidebarProjectSnapshot[]): ProjectActivityData {
+  const threads = useThreadShells();
+  return useMemo(() => {
+    const untilDay = new Date().toISOString().slice(0, 10);
+    const sinceDay = new Date(Date.now() - (ACTIVITY_WINDOW_DAYS - 1) * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const days = enumerateDays(sinceDay, untilDay);
+    const projectKeyByRef = buildProjectKeyByRef(groups);
+
+    const totalByProjectKey = new Map<string, number>();
+    const dayAndProjectKeyToCount = new Map<string, Map<string, number>>();
+    for (const thread of threads) {
+      const projectKey = projectKeyByRef.get(`${thread.environmentId}:${thread.projectId}`);
+      if (!projectKey) continue;
+      const day = (thread.latestUserMessageAt ?? thread.updatedAt).slice(0, 10);
+      if (day < sinceDay || day > untilDay) continue;
+
+      totalByProjectKey.set(projectKey, (totalByProjectKey.get(projectKey) ?? 0) + 1);
+      const perProject = dayAndProjectKeyToCount.get(day) ?? new Map<string, number>();
+      perProject.set(projectKey, (perProject.get(projectKey) ?? 0) + 1);
+      dayAndProjectKeyToCount.set(day, perProject);
+    }
+
+    const topProjectKeys = [...totalByProjectKey.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, ACTIVITY_SERIES_LIMIT)
+      .map(([projectKey]) => projectKey);
+    const displayNameByKey = new Map(groups.map((group) => [group.projectKey, group.displayName]));
+    const series: ProjectActivitySeries[] = topProjectKeys.map((projectKey, index) => ({
+      id: projectKey,
+      label: displayNameByKey.get(projectKey) ?? projectKey,
+      color: ACTIVITY_COLORS[index] ?? "var(--muted-foreground)",
+    }));
+    const hasOther = totalByProjectKey.size > topProjectKeys.length;
+    if (hasOther) {
+      series.push({ id: OTHER_SERIES_ID, label: "Other", color: "var(--muted-foreground)" });
+    }
+
+    const countsByDay = new Map<string, Map<string, number>>();
+    for (const [day, perProject] of dayAndProjectKeyToCount) {
+      const counts = new Map<string, number>();
+      for (const [projectKey, count] of perProject) {
+        const seriesId = topProjectKeys.includes(projectKey) ? projectKey : OTHER_SERIES_ID;
+        counts.set(seriesId, (counts.get(seriesId) ?? 0) + count);
+      }
+      countsByDay.set(day, counts);
+    }
+
+    return { series, days, countsByDay, hasActivity: totalByProjectKey.size > 0 };
+  }, [groups, threads]);
+}
+
 export function ProjectsPage() {
   const navigate = useNavigate();
   const groups = useSettingsProjectGroups();
   const statsByKey = useProjectStatsByKey(groups);
+  const activity = useProjectActivityData(groups);
 
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground isolate">
@@ -81,21 +166,38 @@ export function ProjectsPage() {
                 </EmptyHeader>
               </Empty>
             ) : (
-              <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
-                {groups.map((group) => (
-                  <ProjectRow
-                    key={group.projectKey}
-                    group={group}
-                    stats={statsByKey.get(group.projectKey) ?? EMPTY_STATS}
-                    onOpen={() =>
-                      void navigate({
-                        to: "/projects/$projectKey",
-                        params: { projectKey: group.projectKey },
-                      })
-                    }
-                  />
-                ))}
-              </ul>
+              <div className="flex flex-col gap-6">
+                {activity.hasActivity ? (
+                  <section className="flex flex-col gap-3 rounded-lg border border-border p-4">
+                    <div>
+                      <h2 className="text-sm font-medium">Activity</h2>
+                      <p className="text-xs text-muted-foreground">
+                        Threads active per day over the last {ACTIVITY_WINDOW_DAYS} days
+                      </p>
+                    </div>
+                    <ProjectActivityChart
+                      series={activity.series}
+                      days={activity.days}
+                      countsByDay={activity.countsByDay}
+                    />
+                  </section>
+                ) : null}
+                <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+                  {groups.map((group) => (
+                    <ProjectRow
+                      key={group.projectKey}
+                      group={group}
+                      stats={statsByKey.get(group.projectKey) ?? EMPTY_STATS}
+                      onOpen={() =>
+                        void navigate({
+                          to: "/projects/$projectKey",
+                          params: { projectKey: group.projectKey },
+                        })
+                      }
+                    />
+                  ))}
+                </ul>
+              </div>
             )}
           </WorkspacePageContainer>
         </ScrollArea>
