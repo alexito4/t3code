@@ -335,17 +335,16 @@ export function ProjectActivityChart({ series, days, countsByDay }: ProjectActiv
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1 pl-12 text-xs text-muted-foreground">
-        {series.map((entry) => (
-          <span key={entry.id} className="flex items-center gap-1.5">
-            <span
-              className="size-2 shrink-0 rounded-full"
-              style={{ backgroundColor: entry.color }}
-              aria-hidden
-            />
-            {entry.label}
-          </span>
-        ))}
+      <div className="flex justify-between pl-12 text-[10px] text-muted-foreground uppercase">
+        <span>{days[0] === undefined ? "" : formatDayShort(days[0])}</span>
+        <span>
+          {days[Math.floor(days.length / 2)] === undefined
+            ? ""
+            : formatDayShort(days[Math.floor(days.length / 2)] ?? "")}
+        </span>
+        <span>
+          {days[days.length - 1] === undefined ? "" : formatDayShort(days[days.length - 1] ?? "")}
+        </span>
       </div>
     </div>
   );

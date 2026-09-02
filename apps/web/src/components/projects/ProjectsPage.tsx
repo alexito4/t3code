@@ -2,7 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { CloudIcon, ContainerIcon } from "lucide-react";
 import { useMemo } from "react";
 
-import { enumerateDays } from "@t3tools/shared/usageFormat";
+import { enumerateDays, formatPercent } from "@t3tools/shared/usageFormat";
 import { isElectron } from "../../env";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { useThreadShells } from "../../state/entities";
@@ -80,6 +80,8 @@ interface ProjectActivityData {
   readonly series: readonly ProjectActivitySeries[];
   readonly days: readonly string[];
   readonly countsByDay: ReadonlyMap<string, ReadonlyMap<string, number>>;
+  readonly seriesTotals: ReadonlyMap<string, number>;
+  readonly totalCount: number;
   readonly hasActivity: boolean;
 }
 
@@ -125,16 +127,26 @@ function useProjectActivityData(groups: readonly SidebarProjectSnapshot[]): Proj
     }
 
     const countsByDay = new Map<string, Map<string, number>>();
+    const seriesTotals = new Map<string, number>();
     for (const [day, perProject] of dayAndProjectKeyToCount) {
       const counts = new Map<string, number>();
       for (const [projectKey, count] of perProject) {
         const seriesId = topProjectKeys.includes(projectKey) ? projectKey : OTHER_SERIES_ID;
         counts.set(seriesId, (counts.get(seriesId) ?? 0) + count);
+        seriesTotals.set(seriesId, (seriesTotals.get(seriesId) ?? 0) + count);
       }
       countsByDay.set(day, counts);
     }
+    const totalCount = [...totalByProjectKey.values()].reduce((sum, count) => sum + count, 0);
 
-    return { series, days, countsByDay, hasActivity: totalByProjectKey.size > 0 };
+    return {
+      series,
+      days,
+      countsByDay,
+      seriesTotals,
+      totalCount,
+      hasActivity: totalByProjectKey.size > 0,
+    };
   }, [groups, threads]);
 }
 
@@ -166,23 +178,55 @@ export function ProjectsPage() {
                 </EmptyHeader>
               </Empty>
             ) : (
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-8">
                 {activity.hasActivity ? (
-                  <section className="flex flex-col gap-3 rounded-lg border border-border p-4">
-                    <div>
-                      <h2 className="text-sm font-medium">Activity</h2>
-                      <p className="text-xs text-muted-foreground">
-                        Threads active per day over the last {ACTIVITY_WINDOW_DAYS} days
-                      </p>
+                  <section className="grid gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+                    <div className="flex min-w-0 flex-col gap-5">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-4xl font-semibold text-foreground tabular-nums">
+                          {activity.totalCount}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Active threads · last {ACTIVITY_WINDOW_DAYS} days
+                        </span>
+                      </div>
+                      {activity.series.map((entry) => {
+                        const total = activity.seriesTotals.get(entry.id) ?? 0;
+                        const share = activity.totalCount === 0 ? 0 : total / activity.totalCount;
+                        return (
+                          <div key={entry.id} className="flex flex-col gap-1">
+                            <div className="flex items-baseline justify-between gap-4">
+                              <span className="flex min-w-0 items-center gap-2 text-sm text-foreground">
+                                <span
+                                  aria-hidden
+                                  className="size-2 shrink-0 rounded-full"
+                                  style={{ backgroundColor: entry.color }}
+                                />
+                                <span className="truncate">{entry.label}</span>
+                              </span>
+                              <span className="shrink-0 text-sm text-foreground tabular-nums">
+                                {total}
+                              </span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {formatPercent(share)} of threads
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <ProjectActivityChart
-                      series={activity.series}
-                      days={activity.days}
-                      countsByDay={activity.countsByDay}
-                    />
+
+                    <div className="flex min-w-0 flex-col gap-3">
+                      <h2 className="text-sm font-medium text-foreground">Daily active threads</h2>
+                      <ProjectActivityChart
+                        series={activity.series}
+                        days={activity.days}
+                        countsByDay={activity.countsByDay}
+                      />
+                    </div>
                   </section>
                 ) : null}
-                <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+                <ul className="flex flex-col divide-y divide-border">
                   {groups.map((group) => (
                     <ProjectRow
                       key={group.projectKey}
