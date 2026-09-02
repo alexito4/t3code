@@ -5,6 +5,8 @@ import * as Layer from "effect/Layer";
 import {
   GitManagerError,
   GitCommandError,
+  type GitFilePathInput,
+  type GitFilePathResult,
   type VcsSwitchRefInput,
   type VcsSwitchRefResult,
   type VcsCreateRefInput,
@@ -49,6 +51,15 @@ export class GitWorkflowService extends Context.Service<
     readonly invalidateRemoteStatus: (cwd: string) => Effect.Effect<void, never>;
     readonly invalidateStatus: (cwd: string) => Effect.Effect<void, never>;
     readonly pullCurrentBranch: (cwd: string) => Effect.Effect<VcsPullResult, GitCommandError>;
+    readonly stageFile: (
+      input: GitFilePathInput,
+    ) => Effect.Effect<GitFilePathResult, GitCommandError>;
+    readonly unstageFile: (
+      input: GitFilePathInput,
+    ) => Effect.Effect<GitFilePathResult, GitCommandError>;
+    readonly discardFile: (
+      input: GitFilePathInput,
+    ) => Effect.Effect<GitFilePathResult, GitCommandError>;
     readonly runStackedAction: (
       input: GitRunStackedActionInput,
       options?: GitManager.GitRunStackedActionOptions,
@@ -288,6 +299,18 @@ export const make = Effect.gen(function* () {
     pullCurrentBranch: (cwd) =>
       ensureGitCommand("GitWorkflowService.pullCurrentBranch", cwd).pipe(
         Effect.andThen(git.pullCurrentBranch(cwd)),
+      ),
+    stageFile: (input) =>
+      ensureGitCommand("GitWorkflowService.stageFile", input.cwd).pipe(
+        Effect.andThen(git.stageFile(input)),
+      ),
+    unstageFile: (input) =>
+      ensureGitCommand("GitWorkflowService.unstageFile", input.cwd).pipe(
+        Effect.andThen(git.unstageFile(input)),
+      ),
+    discardFile: (input) =>
+      ensureGitCommand("GitWorkflowService.discardFile", input.cwd).pipe(
+        Effect.andThen(git.discardFile(input)),
       ),
     runStackedAction: (input, options) =>
       ensureGit("GitWorkflowService.runStackedAction", input.cwd).pipe(

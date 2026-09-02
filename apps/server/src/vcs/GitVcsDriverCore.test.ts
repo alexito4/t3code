@@ -2073,4 +2073,179 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
       }),
     );
   });
+
+  describe("file staging actions", () => {
+    it.effect("stages a single file without staging others", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        yield* writeTextFile(cwd, "a.txt", "a\n");
+        yield* writeTextFile(cwd, "b.txt", "b\n");
+
+        const result = yield* driver.stageFile({ cwd, path: "a.txt" });
+        assert.equal(result.path, "a.txt");
+
+        assert.equal(yield* git(cwd, ["diff", "--cached", "--name-only"]), "a.txt");
+        assert.include(yield* git(cwd, ["status", "--porcelain"]), "?? b.txt");
+      }),
+    );
+
+    it.effect("unstages a single file without unstaging others", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        yield* writeTextFile(cwd, "a.txt", "a\n");
+        yield* writeTextFile(cwd, "b.txt", "b\n");
+        yield* git(cwd, ["add", "a.txt", "b.txt"]);
+
+        const result = yield* driver.unstageFile({ cwd, path: "a.txt" });
+        assert.equal(result.path, "a.txt");
+
+        assert.equal(yield* git(cwd, ["diff", "--cached", "--name-only"]), "b.txt");
+        assert.include(yield* git(cwd, ["status", "--porcelain"]), "?? a.txt");
+      }),
+    );
+
+    it.effect("discards a tracked file's uncommitted changes back to HEAD", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const pathService = yield* Path.Path;
+
+        yield* writeTextFile(cwd, "README.md", "changed\n");
+        // Stage it too, to prove a "staged" discard still fully reverts.
+        yield* git(cwd, ["add", "README.md"]);
+
+        const result = yield* driver.discardFile({ cwd, path: "README.md" });
+        assert.equal(result.path, "README.md");
+
+        assert.equal(
+          yield* fileSystem.readFileString(pathService.join(cwd, "README.md")),
+          "# test\n",
+        );
+        assert.equal(yield* git(cwd, ["status", "--porcelain"]), "");
+      }),
+    );
+
+    it.effect("discards an untracked file by deleting it", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const pathService = yield* Path.Path;
+
+        yield* writeTextFile(cwd, "new.txt", "new file\n");
+
+        const result = yield* driver.discardFile({ cwd, path: "new.txt" });
+        assert.equal(result.path, "new.txt");
+
+        assert.equal(yield* fileSystem.exists(pathService.join(cwd, "new.txt")), false);
+        assert.equal(yield* git(cwd, ["status", "--porcelain"]), "");
+      }),
+    );
+
+    it.effect("discards a new file that was staged but never committed", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const pathService = yield* Path.Path;
+
+        yield* writeTextFile(cwd, "new.txt", "new file\n");
+        yield* git(cwd, ["add", "new.txt"]);
+
+        yield* driver.discardFile({ cwd, path: "new.txt" });
+
+        assert.equal(yield* fileSystem.exists(pathService.join(cwd, "new.txt")), false);
+        assert.equal(yield* git(cwd, ["status", "--porcelain"]), "");
+      }),
+    );
+
+    it.effect("leaves a recoverable stash entry before discarding a tracked file", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const pathService = yield* Path.Path;
+
+        yield* writeTextFile(cwd, "README.md", "about to be lost\n");
+        yield* driver.discardFile({ cwd, path: "README.md" });
+
+        // The discard already reverted the working tree...
+        assert.equal(
+          yield* fileSystem.readFileString(pathService.join(cwd, "README.md")),
+          "# test\n",
+        );
+
+        // ...but the pre-discard content is recoverable from the stash.
+        const stashList = yield* git(cwd, ["stash", "list"]);
+        assert.include(stashList, "t3code-pre-discard:");
+
+        yield* git(cwd, ["stash", "pop"]);
+        assert.equal(
+          yield* fileSystem.readFileString(pathService.join(cwd, "README.md")),
+          "about to be lost\n",
+        );
+      }),
+    );
+
+    it.effect("leaves a recoverable stash entry before discarding an untracked file", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const pathService = yield* Path.Path;
+
+        yield* writeTextFile(cwd, "new.txt", "irreplaceable\n");
+        yield* driver.discardFile({ cwd, path: "new.txt" });
+
+        assert.equal(yield* fileSystem.exists(pathService.join(cwd, "new.txt")), false);
+
+        const stashList = yield* git(cwd, ["stash", "list"]);
+        assert.include(stashList, "t3code-pre-discard:");
+
+        yield* git(cwd, ["stash", "pop"]);
+        assert.equal(
+          yield* fileSystem.readFileString(pathService.join(cwd, "new.txt")),
+          "irreplaceable\n",
+        );
+      }),
+    );
+
+    it.effect("rejects a path that resolves outside the repository root", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        const stageError = yield* driver
+          .stageFile({ cwd, path: "../outside.txt" })
+          .pipe(Effect.flip);
+        assert.equal(stageError._tag, "GitCommandError");
+        assert.include(stageError.detail, "outside the repository root");
+
+        const unstageError = yield* driver
+          .unstageFile({ cwd, path: "../outside.txt" })
+          .pipe(Effect.flip);
+        assert.equal(unstageError._tag, "GitCommandError");
+        assert.include(unstageError.detail, "outside the repository root");
+
+        const discardError = yield* driver
+          .discardFile({ cwd, path: "../outside.txt" })
+          .pipe(Effect.flip);
+        assert.equal(discardError._tag, "GitCommandError");
+        assert.include(discardError.detail, "outside the repository root");
+      }),
+    );
+  });
 });

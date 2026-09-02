@@ -110,6 +110,17 @@ export const VcsPullInput = Schema.Struct({
 });
 export type VcsPullInput = typeof VcsPullInput.Type;
 
+/**
+ * Shared input for the single-file `git.stageFile` / `git.unstageFile` /
+ * `git.discardFile` RPCs. These operate on one repo-relative file path at a
+ * time, unlike `GitRunStackedAction`'s multi-file, phase-driven flow.
+ */
+export const GitFilePathInput = Schema.Struct({
+  cwd: TrimmedNonEmptyStringSchema,
+  path: TrimmedNonEmptyStringSchema,
+});
+export type GitFilePathInput = typeof GitFilePathInput.Type;
+
 export const GitRunStackedActionInput = Schema.Struct({
   actionId: TrimmedNonEmptyStringSchema,
   cwd: TrimmedNonEmptyStringSchema,
@@ -334,6 +345,11 @@ export const VcsPullResult = Schema.Struct({
   upstreamRef: TrimmedNonEmptyStringSchema.pipe(Schema.NullOr),
 });
 export type VcsPullResult = typeof VcsPullResult.Type;
+
+export const GitFilePathResult = Schema.Struct({
+  path: TrimmedNonEmptyStringSchema,
+});
+export type GitFilePathResult = typeof GitFilePathResult.Type;
 
 // RPC / domain errors
 export class GitCommandError extends Schema.TaggedErrorClass<GitCommandError>()("GitCommandError", {

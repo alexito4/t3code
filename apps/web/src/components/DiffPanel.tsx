@@ -4,9 +4,15 @@ import { useParams } from "@tanstack/react-router";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
+  type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
-import type { ReviewDiffPreviewSourceKind, ScopedThreadRef, TurnId } from "@t3tools/contracts";
+import type {
+  GitFilePathResult,
+  ReviewDiffPreviewSourceKind,
+  ScopedThreadRef,
+  TurnId,
+} from "@t3tools/contracts";
 import {
   ArrowRightIcon,
   CheckIcon,
@@ -15,8 +21,11 @@ import {
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
   Columns2Icon,
+  MinusIcon,
   PilcrowIcon,
+  PlusIcon,
   RefreshCwIcon,
+  RotateCcwIcon,
   Rows3Icon,
   SearchIcon,
   TextWrapIcon,
@@ -24,7 +33,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOpenInPreferredEditor } from "../editorPreferences";
 import { type DraftId } from "../composerDraftStore";
-import { openDiffFilePrimaryAction } from "../diffFileActions";
+import { openDiffFilePrimaryAction, resolveDiffFileStagingActions } from "../diffFileActions";
 import { useCheckpointDiff } from "~/lib/checkpointDiffState";
 import { cn } from "~/lib/utils";
 import { selectThreadDiffPanelSelection, useDiffPanelStore } from "../diffPanelStore";
@@ -71,11 +80,13 @@ import {
   DropdownMenuTrigger,
 } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { toastManager } from "./ui/toast";
 import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
 import { serverEnvironment } from "../state/server";
 import { reviewEnvironment } from "../state/review";
 import { vcsEnvironment } from "../state/vcs";
+import { gitEnvironment } from "../state/git";
 import { buildBaseRefChoices, filterBaseRefChoices } from "../lib/baseRefChoices";
 import { createGitDiffFileContentsLoader } from "../lib/diffFileContents";
 
@@ -321,6 +332,60 @@ export default function DiffPanel({
     refresh: refreshBranchDiffPreview,
     resourceKey: `diff:${activeThreadRefreshKey ?? ""}`,
   });
+
+  const fileStagingActions = resolveDiffFileStagingActions(
+    selectedGitScope,
+    selectedTurnId !== null,
+  );
+  const stageFileCommand = useAtomCommand(gitEnvironment.stageFile);
+  const unstageFileCommand = useAtomCommand(gitEnvironment.unstageFile);
+  const discardFileCommand = useAtomCommand(gitEnvironment.discardFile);
+  const applyDiffFileStagingResult = useCallback(
+    (result: AtomCommandResult<GitFilePathResult, unknown>, failureTitle: string) => {
+      if (result._tag === "Failure") {
+        if (isAtomCommandInterrupted(result)) return;
+        const error = squashAtomCommandFailure(result);
+        toastManager.add({
+          type: "error",
+          title: failureTitle,
+          description: error instanceof Error ? error.message : "An error occurred.",
+        });
+        return;
+      }
+      refreshBranchDiffPreview();
+    },
+    [refreshBranchDiffPreview],
+  );
+  const handleStageFile = useCallback(
+    (filePath: string) => {
+      if (!activeThread || !activeCwd) return;
+      void stageFileCommand({
+        environmentId: activeThread.environmentId,
+        input: { cwd: activeCwd, path: filePath },
+      }).then((result) => applyDiffFileStagingResult(result, "Stage failed"));
+    },
+    [activeThread, activeCwd, stageFileCommand, applyDiffFileStagingResult],
+  );
+  const handleUnstageFile = useCallback(
+    (filePath: string) => {
+      if (!activeThread || !activeCwd) return;
+      void unstageFileCommand({
+        environmentId: activeThread.environmentId,
+        input: { cwd: activeCwd, path: filePath },
+      }).then((result) => applyDiffFileStagingResult(result, "Unstage failed"));
+    },
+    [activeThread, activeCwd, unstageFileCommand, applyDiffFileStagingResult],
+  );
+  const handleDiscardFile = useCallback(
+    (filePath: string) => {
+      if (!activeThread || !activeCwd) return;
+      void discardFileCommand({
+        environmentId: activeThread.environmentId,
+        input: { cwd: activeCwd, path: filePath },
+      }).then((result) => applyDiffFileStagingResult(result, "Discard failed"));
+    },
+    [activeThread, activeCwd, discardFileCommand, applyDiffFileStagingResult],
+  );
 
   const selectedGitSource = branchDiffPreview.data?.sources.find(
     (source) => source.kind === GIT_SCOPE_TO_SOURCE_KIND[selectedGitScope],
@@ -965,35 +1030,102 @@ export default function DiffPanel({
                   renderHeaderPrefix={(fileDiff, fileKey, collapsed) => {
                     const filePath = resolveFileDiffPath(fileDiff);
                     return (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <Button
-                              size="icon-micro"
-                              variant="ghost"
-                              className={cn(
-                                "-ms-0.5 [--control-icon-color:currentColor] bg-transparent hover:bg-foreground/10",
-                                getDiffCollapseIconClassName(fileDiff),
-                              )}
-                              aria-label={collapsed ? `Expand ${filePath}` : `Collapse ${filePath}`}
-                              aria-expanded={!collapsed}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                toggleDiffFileCollapsed(fileKey);
-                              }}
-                            />
-                          }
-                        >
-                          {collapsed ? (
-                            <ChevronRightIcon className="size-4" />
-                          ) : (
-                            <ChevronDownIcon className="size-4" />
-                          )}
-                        </TooltipTrigger>
-                        <TooltipPopup side="top">
-                          {collapsed ? "Expand diff" : "Collapse diff"}
-                        </TooltipPopup>
-                      </Tooltip>
+                      <>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                size="icon-micro"
+                                variant="ghost"
+                                className={cn(
+                                  "-ms-0.5 [--control-icon-color:currentColor] bg-transparent hover:bg-foreground/10",
+                                  getDiffCollapseIconClassName(fileDiff),
+                                )}
+                                aria-label={
+                                  collapsed ? `Expand ${filePath}` : `Collapse ${filePath}`
+                                }
+                                aria-expanded={!collapsed}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleDiffFileCollapsed(fileKey);
+                                }}
+                              />
+                            }
+                          >
+                            {collapsed ? (
+                              <ChevronRightIcon className="size-4" />
+                            ) : (
+                              <ChevronDownIcon className="size-4" />
+                            )}
+                          </TooltipTrigger>
+                          <TooltipPopup side="top">
+                            {collapsed ? "Expand diff" : "Collapse diff"}
+                          </TooltipPopup>
+                        </Tooltip>
+                        {fileStagingActions.canStage && (
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  size="icon-micro"
+                                  variant="ghost"
+                                  className="bg-transparent hover:bg-foreground/10"
+                                  aria-label={`Stage ${filePath}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleStageFile(filePath);
+                                  }}
+                                />
+                              }
+                            >
+                              <PlusIcon className="size-4" />
+                            </TooltipTrigger>
+                            <TooltipPopup side="top">Stage file</TooltipPopup>
+                          </Tooltip>
+                        )}
+                        {fileStagingActions.canUnstage && (
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  size="icon-micro"
+                                  variant="ghost"
+                                  className="bg-transparent hover:bg-foreground/10"
+                                  aria-label={`Unstage ${filePath}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleUnstageFile(filePath);
+                                  }}
+                                />
+                              }
+                            >
+                              <MinusIcon className="size-4" />
+                            </TooltipTrigger>
+                            <TooltipPopup side="top">Unstage file</TooltipPopup>
+                          </Tooltip>
+                        )}
+                        {fileStagingActions.canDiscard && (
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <Button
+                                  size="icon-micro"
+                                  variant="ghost"
+                                  className="bg-transparent hover:bg-foreground/10"
+                                  aria-label={`Discard changes to ${filePath}`}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleDiscardFile(filePath);
+                                  }}
+                                />
+                              }
+                            >
+                              <RotateCcwIcon className="size-4" />
+                            </TooltipTrigger>
+                            <TooltipPopup side="top">Discard changes</TooltipPopup>
+                          </Tooltip>
+                        )}
+                      </>
                     );
                   }}
                   options={{

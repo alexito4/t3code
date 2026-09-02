@@ -2234,6 +2234,24 @@ const makeWsRpcLayer = (
             ),
             { "rpc.aggregate": "vcs" },
           ),
+        [WS_METHODS.gitStageFile]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.gitStageFile,
+            gitWorkflow.stageFile(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
+            { "rpc.aggregate": "git" },
+          ),
+        [WS_METHODS.gitUnstageFile]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.gitUnstageFile,
+            gitWorkflow.unstageFile(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
+            { "rpc.aggregate": "git" },
+          ),
+        [WS_METHODS.gitDiscardFile]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.gitDiscardFile,
+            gitWorkflow.discardFile(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
+            { "rpc.aggregate": "git" },
+          ),
         [WS_METHODS.gitResolvePullRequest]: (input) =>
           observeRpcEffect(
             WS_METHODS.gitResolvePullRequest,

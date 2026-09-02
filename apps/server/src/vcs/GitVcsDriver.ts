@@ -12,6 +12,8 @@ import { ChildProcessSpawner } from "effect/unstable/process";
 import {
   GitCommandError,
   VcsProcessExitError,
+  type GitFilePathInput,
+  type GitFilePathResult,
   type VcsSwitchRefInput,
   type VcsSwitchRefResult,
   type VcsCreateRefInput,
@@ -274,6 +276,23 @@ export class GitVcsDriver extends Context.Service<
       input: VcsListRefsInput,
     ) => Effect.Effect<VcsListRefsResult, GitCommandError>;
     readonly pullCurrentBranch: (cwd: string) => Effect.Effect<VcsPullResult, GitCommandError>;
+    readonly stageFile: (
+      input: GitFilePathInput,
+    ) => Effect.Effect<GitFilePathResult, GitCommandError>;
+    readonly unstageFile: (
+      input: GitFilePathInput,
+    ) => Effect.Effect<GitFilePathResult, GitCommandError>;
+    /**
+     * Reverts `input.path` to its committed state (or deletes it, if it was
+     * never committed), regardless of whether it's currently staged,
+     * unstaged, or both -- see the implementation for why a single scope-
+     * independent behavior is the correct one. Stashes the file's current
+     * state first as an unrecoverable-data safety net; the stash is left in
+     * place, not popped.
+     */
+    readonly discardFile: (
+      input: GitFilePathInput,
+    ) => Effect.Effect<GitFilePathResult, GitCommandError>;
     readonly createWorktree: (
       input: VcsCreateWorktreeInput,
     ) => Effect.Effect<VcsCreateWorktreeResult, GitCommandError>;
