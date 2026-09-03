@@ -269,7 +269,9 @@ function ProjectRow({
         <ProjectFavicon
           environmentId={group.environmentId}
           cwd={group.workspaceRoot}
+          projectName={group.title}
           faviconPath={group.faviconPath}
+          projectIcon={group.projectIcon}
           className="size-8 shrink-0"
         />
         <div className="flex min-w-0 flex-1 flex-col">
