@@ -2,7 +2,7 @@ import type { ModelSelection, ScopedThreadRef, ServerProvider } from "@t3tools/c
 import type { UnifiedSettings } from "@t3tools/contracts/settings";
 import { createModelSelection } from "@t3tools/shared/model";
 import { MessageCirclePlus, Minimize2Icon, XIcon } from "lucide-react";
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { composerSubmissionIntentForEnter } from "../composer-logic";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -48,8 +48,25 @@ export function SideQuestionPanel(props: {
   readonly onModelSelectionChange: (selection: ModelSelection) => void;
   readonly onStop: () => void;
   readonly onSubmit: (question: string, modelSelection: ModelSelection) => void;
+  /**
+   * Text to prepend to the draft, e.g. from "Ask in side chat" on a message
+   * selection. Bump `nonce` to seed again — the panel stays mounted across a
+   * thread's whole side-chat session, so a changed prop value alone wouldn't
+   * otherwise distinguish a repeat request from the one already applied.
+   */
+  readonly draftSeed?: { readonly text: string; readonly nonce: number } | undefined;
 }) {
   const [draft, setDraft] = useState("");
+  const appliedDraftSeedNonceRef = useRef<number | null>(null);
+  useEffect(() => {
+    const seed = props.draftSeed;
+    if (!seed || appliedDraftSeedNonceRef.current === seed.nonce) return;
+    appliedDraftSeedNonceRef.current = seed.nonce;
+    setDraft((current) => {
+      const trimmed = current.trimStart();
+      return trimmed.length === 0 ? `${seed.text} ` : `${seed.text}\n\n${trimmed}`;
+    });
+  }, [props.draftSeed]);
   const isMobileViewport = useMediaQuery("max-sm");
   const pending = props.turns.at(-1)?.status === "loading";
   const providerEntries = useMemo(

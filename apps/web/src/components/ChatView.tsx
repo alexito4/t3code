@@ -99,6 +99,7 @@ import {
   canAskComposerSideQuestion,
   collapseExpandedComposerCursor,
   type ComposerSubmissionIntent,
+  formatAssistantCitationForComposer,
   parseComposerSideQuestion,
   parseStandaloneComposerSlashCommand,
 } from "../composer-logic";
@@ -1312,6 +1313,8 @@ type SideQuestionState = {
   readonly mode: "panel" | "minimized" | "hidden";
   readonly turns: ReadonlyArray<SideQuestionTurn>;
   readonly modelSelection: ModelSelection;
+  /** Text queued for the side chat's draft, e.g. from "Ask in side chat" on a selection. */
+  readonly draftSeed?: { readonly text: string; readonly nonce: number } | undefined;
 };
 
 function chatActionErrorMessage(error: unknown): string {
@@ -3731,6 +3734,30 @@ function ChatViewContent(props: ChatViewProps) {
     sideQuestionAvailable,
     sideQuestionState,
   ]);
+  const askSelectionInSideChat = useCallback(
+    (citation: AssistantCitation) => {
+      if (!activeThreadRef || !activeThread || !sideQuestionAvailable) return false;
+      const draftText = formatAssistantCitationForComposer(citation, citation.comment).trim();
+      setSideQuestionsByThread((current) => {
+        const existing = current[routeThreadKey];
+        const nonce = (existing?.draftSeed?.nonce ?? 0) + 1;
+        return {
+          ...current,
+          [routeThreadKey]: existing
+            ? { ...existing, mode: "panel", draftSeed: { text: draftText, nonce } }
+            : {
+                mode: "panel",
+                modelSelection: activeThread.modelSelection,
+                turns: [],
+                draftSeed: { text: draftText, nonce },
+              },
+        };
+      });
+      useRightPanelStore.getState().open(activeThreadRef, "side-question");
+      return true;
+    },
+    [activeThread, activeThreadRef, routeThreadKey, sideQuestionAvailable],
+  );
   const openFileSurface = useCallback(
     (relativePath: string) => {
       if (!activeThreadRef || !activeProject) return;
@@ -7665,6 +7692,7 @@ function ChatViewContent(props: ChatViewProps) {
         providers={providerStatuses}
         settings={settings}
         modelSelection={sideQuestionState.modelSelection}
+        draftSeed={sideQuestionState.draftSeed}
         onMinimize={() => {
           setSideQuestionMode("minimized");
           useRightPanelStore.getState().closeSurface(activeThreadRef, "side-question");
@@ -7917,6 +7945,8 @@ function ChatViewContent(props: ChatViewProps) {
                 citationRequest={citationRequest}
                 citationHistoryLoading={threadDetailLoading}
                 onCiteAssistantText={citeAssistantText}
+                onAskInSideChat={askSelectionInSideChat}
+                askInSideChatAvailable={sideQuestionAvailable}
                 agentPanelModel={agentPanelModel}
                 onOpenAgents={addAgentsSurface}
                 key={activeThread.id}

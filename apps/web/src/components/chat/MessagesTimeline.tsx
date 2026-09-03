@@ -290,6 +290,8 @@ interface MessagesTimelineProps {
     citation: AssistantCitation,
     sourceAnchor: AssistantCitationSourceAnchor,
   ) => boolean;
+  onAskInSideChat?: (citation: AssistantCitation) => boolean;
+  askInSideChatAvailable?: boolean;
   agentPanelModel?: AgentPanelModel;
   onOpenAgents?: () => void;
   isWorking: boolean;
@@ -341,6 +343,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   citationRequest = null,
   citationHistoryLoading = false,
   onCiteAssistantText,
+  onAskInSideChat,
+  askInSideChatAvailable = false,
   isWorking,
   isPreparingWorktree = false,
   activeTurnStartedAt,
@@ -727,6 +731,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
               viewport={timelineViewportElement}
               threadRef={citationThreadRef}
               onCite={onCiteAssistantText}
+              {...(onAskInSideChat ? { onAskInSideChat, askInSideChatAvailable } : {})}
             />
           ) : null}
           <LegendList<MessagesTimelineRow>
