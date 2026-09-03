@@ -128,6 +128,16 @@ FETCH_HEAD`, `git range-diff` against the old tip to see what changed, then merg
       with an empty turn list ready for a first question instead of requiring `/btw` typed in
       the main composer. Reuses the existing `submitSideQuestion`/`askSideQuestion` path, no new
       server-side plumbing. Already merged into `patch/pr8296-side-questions`.
+    - "Ask in side chat" on the assistant text-selection toolbar (2026-09-03) — a second button
+      next to "Cite" (`AssistantSelectionToolbar.tsx`, now a two-button glass pill instead of a
+      single button) that opens/reuses the side chat and seeds its draft with the same citation
+      token "Cite" inserts into the main composer (`ChatView.tsx`'s `askSelectionInSideChat`,
+      `SideQuestionPanel.tsx`'s nonce-gated `draftSeed` prop so repeat clicks prepend a fresh
+      citation instead of wiping the conversation). Committed straight onto
+      `patch/pr8296-side-questions` rather than a dedicated `upstream-pr-8296`-based branch like
+      the entry above — this one isn't meant to go back to `Bil0000:feat/btw-side-questions`, so
+      skip hunting for a separate `improve/pr8296-*` branch for it if the mirror pattern above
+      doesn't turn it up.
   - **To drop this feature**: remove `patch/pr8296-side-questions` from `PATCH_BRANCHES` in
     `alex.sh` and run `rebuild`. That's it — isolation was the entire point of moving to
     branches.
