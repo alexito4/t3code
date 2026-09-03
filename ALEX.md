@@ -46,7 +46,17 @@ buildable/runnable for personal use (see Fork infrastructure below).
     one-click UX matches Codex exactly. Web + desktop only, deliberately no mobile UI.
   - `patch/review-diff-file-tree` — a collapsible file-tree sidebar in the diff panel using
     `@pierre/trees`' `gitStatus` option (installed, unused elsewhere in the codebase before this)
-    for added/modified/deleted/renamed/untracked badges.
+    for added/modified/deleted/renamed/untracked badges. **Dropped 2026-09-03**: upstream shipped
+    its own diff-panel/PR-code-view file tree the same way
+    (`1aa44a071 feat(web): add a file tree to the diff panel and pull request code view`), and
+    after comparing the two, upstream's is a strict superset (expand/collapse-all, incremental
+    path diffing instead of full resets, ancestor auto-expand on reveal, header/footer accessory
+    slots that also power the PR code view). Removed from `PATCH_BRANCHES` and dropped via
+    `rebuild` rather than merged forward — maintaining a parallel, permanently-conflicting
+    implementation of something upstream now does natively and better wasn't worth it. The branch
+    itself (`patch/review-diff-file-tree`) is left in place, unmerged with upstream, only as a
+    historical reference; do not revive it without re-checking upstream hasn't since covered
+    whatever gap prompted reviving it.
   - Built for personal use first; not yet sent upstream as PRs. Revisit upstreaming once lived
     with for a while — see the "personal first, upstream later" call in the planning
     conversation that produced these.
