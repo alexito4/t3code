@@ -21,6 +21,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import {
   GitCommandError,
+  type ReviewBranchCommit,
   type ReviewDiffFileContentsInput,
   type ReviewDiffPreviewInput,
   type ReviewDiffPreviewSource,
@@ -53,6 +54,8 @@ const RANGE_DIFF_PATCH_MAX_OUTPUT_BYTES = 59_000;
 const REVIEW_DIFF_PATCH_MAX_OUTPUT_BYTES = 120_000;
 const REVIEW_UNTRACKED_DIFF_MAX_OUTPUT_BYTES = 80_000;
 const REVIEW_DIFF_FILE_MAX_OUTPUT_BYTES = 1024 * 1024;
+const REVIEW_BRANCH_COMMIT_LIMIT = 100;
+const REVIEW_BRANCH_COMMIT_MAX_OUTPUT_BYTES = 256_000;
 // Patches the clients render are parsed against git's default a/ and b/ path
 // prefixes. A repository or global diff.noprefix or diff.mnemonicPrefix would
 // otherwise leak into the patch and leave every parsed file unnamed.
@@ -293,6 +296,23 @@ export function splitNullSeparatedGitStdoutPaths(
   result: Pick<GitVcsDriver.ExecuteGitResult, "stdout" | "stdoutTruncated">,
 ): string[] {
   return splitNullSeparatedPaths(result.stdout, result.stdoutTruncated);
+}
+
+const GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+
+/** Reads the `%H%x00%cI%x00%s` records emitted by `git log -z`, dropping any truncated tail. */
+function parseReviewBranchCommits(stdout: string): ReviewBranchCommit[] {
+  const fields = stdout.split("\0");
+  const commits: ReviewBranchCommit[] = [];
+  for (let index = 0; index + 2 < fields.length; index += 3) {
+    const sha = fields[index];
+    const committedAt = DateTime.make(fields[index + 1] ?? "");
+    const subject = fields[index + 2];
+    if (!sha || !GIT_OBJECT_ID_PATTERN.test(sha)) continue;
+    if (subject === undefined || Option.isNone(committedAt)) continue;
+    commits.push({ sha, subject, committedAt: committedAt.value });
+  }
+  return commits;
 }
 
 function sanitizeRemoteName(value: string): string {
@@ -2241,6 +2261,96 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         cwd: input.cwd,
         generatedAt: yield* DateTime.now,
         sources: [],
+        branchCommits: [],
+        branchCommitsTruncated: false,
+      };
+    }
+
+    const hashDiff = (diff: string) =>
+      crypto.digest("SHA-256", new TextEncoder().encode(diff)).pipe(
+        Effect.map(Encoding.encodeHex),
+        Effect.mapError(
+          (cause) =>
+            new GitCommandError({
+              operation: "GitVcsDriver.getReviewDiffPreview.hash",
+              command: "crypto.digest SHA-256",
+              cwd: input.cwd,
+              detail: "Failed to hash review diff.",
+              cause,
+            }),
+        ),
+      );
+
+    if (input.commitSha) {
+      const parentsResult = yield* executeGit(
+        "GitVcsDriver.getReviewDiffPreview.commitParents",
+        input.cwd,
+        ["rev-list", "--parents", "--max-count=1", input.commitSha, "--"],
+      );
+      const [commitSha, firstParentSha] = parentsResult.stdout.trim().split(/\s+/);
+      if (!commitSha) {
+        return yield* new GitCommandError({
+          operation: "GitVcsDriver.getReviewDiffPreview.commitParents",
+          command: "git rev-list",
+          cwd: input.cwd,
+          detail: `Commit '${input.commitSha}' is no longer in this repository.`,
+        });
+      }
+
+      const whitespaceArgs = input.ignoreWhitespace ? ["--ignore-all-space"] : [];
+      const commitResult = yield* executeGit(
+        "GitVcsDriver.getReviewDiffPreview.commit",
+        input.cwd,
+        firstParentSha
+          ? [
+              "diff",
+              "--patch",
+              "--no-color",
+              "--no-ext-diff",
+              "--no-textconv",
+              "--minimal",
+              ...whitespaceArgs,
+              firstParentSha,
+              commitSha,
+              "--",
+            ]
+          : // A root commit has no parent to diff against, so compare it to the empty tree.
+            [
+              "diff-tree",
+              "--root",
+              "--patch",
+              "--no-commit-id",
+              "--no-color",
+              "--no-ext-diff",
+              "--no-textconv",
+              "--minimal",
+              ...whitespaceArgs,
+              commitSha,
+              "--",
+            ],
+        {
+          maxOutputBytes: REVIEW_DIFF_PATCH_MAX_OUTPUT_BYTES,
+          appendTruncationMarker: true,
+        },
+      );
+
+      return {
+        cwd: input.cwd,
+        generatedAt: yield* DateTime.now,
+        sources: [
+          {
+            id: `commit:${commitSha}`,
+            kind: "commit" as const,
+            title: `Commit ${commitSha.slice(0, 7)}`,
+            baseRef: firstParentSha ?? null,
+            headRef: commitSha,
+            diff: commitResult.stdout,
+            diffHash: yield* hashDiff(commitResult.stdout),
+            truncated: commitResult.stdoutTruncated,
+          },
+        ],
+        branchCommits: [],
+        branchCommitsTruncated: false,
       };
     }
 
@@ -2252,6 +2362,43 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
             Effect.orElseSucceed(() => null),
           )
         : null);
+
+    const branchCommitResult =
+      baseRef && branch
+        ? yield* executeGit(
+            "GitVcsDriver.getReviewDiffPreview.branchCommits",
+            input.cwd,
+            [
+              "log",
+              "-z",
+              `--max-count=${REVIEW_BRANCH_COMMIT_LIMIT + 1}`,
+              "--format=%H%x00%cI%x00%s",
+              `${baseRef}..HEAD`,
+              "--",
+            ],
+            {
+              maxOutputBytes: REVIEW_BRANCH_COMMIT_MAX_OUTPUT_BYTES,
+              appendTruncationMarker: true,
+            },
+          ).pipe(Effect.orElseSucceed(() => ({ stdout: "", stdoutTruncated: false })))
+        : null;
+    const parsedBranchCommits = parseReviewBranchCommits(branchCommitResult?.stdout ?? "");
+    const branchCommitsTruncated =
+      parsedBranchCommits.length > REVIEW_BRANCH_COMMIT_LIMIT ||
+      (branchCommitResult?.stdoutTruncated ?? false);
+    const branchCommits = parsedBranchCommits.slice(0, REVIEW_BRANCH_COMMIT_LIMIT);
+
+    // The listing is the whole response for a caller that only needs to know which commits
+    // the range holds, so none of the patches below are built.
+    if (input.commitsOnly) {
+      return {
+        cwd: input.cwd,
+        generatedAt: yield* DateTime.now,
+        sources: [],
+        branchCommits,
+        branchCommitsTruncated,
+      };
+    }
 
     const dirtyTrackedResult = yield* executeGit(
       "GitVcsDriver.getReviewDiffPreview.dirtyTracked",
@@ -2377,20 +2524,6 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
           )
         : null;
     const baseDiff = baseResult?.stdout ?? "";
-    const hashDiff = (diff: string) =>
-      crypto.digest("SHA-256", new TextEncoder().encode(diff)).pipe(
-        Effect.map(Encoding.encodeHex),
-        Effect.mapError(
-          (cause) =>
-            new GitCommandError({
-              operation: "GitVcsDriver.getReviewDiffPreview.hash",
-              command: "crypto.digest SHA-256",
-              cwd: input.cwd,
-              detail: "Failed to hash review diff.",
-              cause,
-            }),
-        ),
-      );
     const [dirtyDiffHash, baseDiffHash, stagedDiffHash, unstagedDiffHash] = yield* Effect.all([
       hashDiff(dirtyDiff),
       hashDiff(baseDiff),
@@ -2445,6 +2578,8 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       cwd: input.cwd,
       generatedAt: yield* DateTime.now,
       sources,
+      branchCommits,
+      branchCommitsTruncated,
     };
   });
 
@@ -2609,6 +2744,25 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
           input.changeType === "deleted"
             ? Effect.succeed("")
             : readWorkingTreeReviewFile(input, repositoryRoot),
+        ],
+        { concurrency: 2 },
+      );
+      return { oldContents, newContents };
+    }
+
+    if (input.sourceKind === "commit") {
+      if (!input.headRef) {
+        return yield* reviewDiffFileError(input, "Commit diff file expansion requires a commit.");
+      }
+      const [oldContents, newContents] = yield* Effect.all(
+        [
+          // A root commit has no parent, so every file it introduces starts empty.
+          input.changeType === "new" || !input.baseRef
+            ? Effect.succeed("")
+            : readReviewFileAtRevision(input, input.baseRef, input.oldPath),
+          input.changeType === "deleted"
+            ? Effect.succeed("")
+            : readReviewFileAtRevision(input, input.headRef, input.newPath),
         ],
         { concurrency: 2 },
       );

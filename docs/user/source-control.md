@@ -82,6 +82,9 @@ supports approving waiting fork workflows and opening a revert pull request for 
 For Azure DevOps, use the host website to view diffs or change comments. Bitbucket does not support
 reopening a declined pull request.
 
+In the Diff pane, open the scope menu and pick a commit under **Commits** to review local branch
+changes one commit at a time, scoped to the current branch comparison (up to the 100 most recent).
+
 ## Troubleshooting
 
 - **Not authenticated:** run the provider's login command on the server, then rescan. For Bitbucket,
