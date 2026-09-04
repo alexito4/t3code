@@ -2157,6 +2157,131 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     };
   });
 
+  const validateWorkspaceRelativeFilePath = Effect.fn("validateWorkspaceRelativeFilePath")(
+    function* (operation: string, cwd: string, relativePath: string) {
+      const repositoryRoot = yield* runGitStdout(operation, cwd, [
+        "rev-parse",
+        "--show-toplevel",
+      ]).pipe(Effect.map((value) => value.trim()));
+      if (repositoryRoot.length === 0) {
+        return yield* new GitCommandError({
+          ...gitCommandContext({ operation, cwd, args: ["rev-parse", "--show-toplevel"] }),
+          detail: "Could not resolve the Git repository root.",
+        });
+      }
+      const requestedPath = path.resolve(repositoryRoot, relativePath);
+      if (!isPathWithinRoot(repositoryRoot, requestedPath)) {
+        return yield* new GitCommandError({
+          ...gitCommandContext({ operation, cwd, args: [relativePath] }),
+          detail: `Path '${relativePath}' resolves outside the repository root.`,
+        });
+      }
+    },
+  );
+
+  const stageFile: GitVcsDriver.GitVcsDriver["Service"]["stageFile"] = Effect.fn("stageFile")(
+    function* (input) {
+      yield* validateWorkspaceRelativeFilePath("GitVcsDriver.stageFile", input.cwd, input.path);
+      yield* runGit("GitVcsDriver.stageFile", input.cwd, [
+        "--literal-pathspecs",
+        "add",
+        "--",
+        input.path,
+      ]);
+      return { path: input.path };
+    },
+  );
+
+  const unstageFile: GitVcsDriver.GitVcsDriver["Service"]["unstageFile"] = Effect.fn("unstageFile")(
+    function* (input) {
+      yield* validateWorkspaceRelativeFilePath("GitVcsDriver.unstageFile", input.cwd, input.path);
+      yield* runGit("GitVcsDriver.unstageFile", input.cwd, [
+        "--literal-pathspecs",
+        "reset",
+        "--",
+        input.path,
+      ]);
+      return { path: input.path };
+    },
+  );
+
+  // Discarding a file always reverts it to the same end state regardless of
+  // which scope (Uncommitted / Unstaged / Staged) the caller looked at it
+  // from: fully matching HEAD, or gone if it was never committed. A discard
+  // that only cleared the "staged" or "unstaged" half of a change would
+  // silently leave the other half in place -- surprising, and easy to miss
+  // in a one-click action with no confirmation.
+  const discardFile: GitVcsDriver.GitVcsDriver["Service"]["discardFile"] = Effect.fn("discardFile")(
+    function* (input) {
+      yield* validateWorkspaceRelativeFilePath("GitVcsDriver.discardFile", input.cwd, input.path);
+
+      // Safety net: checkpoints are turn-scoped snapshots, not continuous, so
+      // without this an accidental discard click is permanently unrecoverable.
+      // Left in place on purpose -- not popped, not part of the user-visible
+      // flow, just a way out via `git stash list` / `git stash pop`.
+      const timestamp = DateTime.formatIso(yield* DateTime.now);
+      yield* runGit("GitVcsDriver.discardFile.safetyStash", input.cwd, [
+        "stash",
+        "push",
+        "--quiet",
+        "--include-untracked",
+        "-m",
+        `t3code-pre-discard:${timestamp}`,
+        "--",
+        input.path,
+      ]);
+
+      const inIndex = yield* runGitStdout("GitVcsDriver.discardFile.lsFiles", input.cwd, [
+        "--literal-pathspecs",
+        "ls-files",
+        "--",
+        input.path,
+      ]).pipe(Effect.map((stdout) => stdout.trim().length > 0));
+      const inHead = yield* executeGit(
+        "GitVcsDriver.discardFile.lsTree",
+        input.cwd,
+        ["--literal-pathspecs", "ls-tree", "--name-only", "HEAD", "--", input.path],
+        { allowNonZeroExit: true },
+      ).pipe(Effect.map((result) => result.exitCode === 0 && result.stdout.trim().length > 0));
+
+      if (inHead) {
+        // Committed before: reset both the index and the working tree to
+        // HEAD's version in one shot, which is correct whether the file was
+        // staged, unstaged, or both.
+        yield* runGit("GitVcsDriver.discardFile.restore", input.cwd, [
+          "--literal-pathspecs",
+          "restore",
+          "--staged",
+          "--worktree",
+          "--source=HEAD",
+          "--",
+          input.path,
+        ]);
+      } else {
+        // Never committed: unstage it if needed, then delete it, so the
+        // working tree ends up as if it had never been created.
+        if (inIndex) {
+          yield* runGit("GitVcsDriver.discardFile.unstage", input.cwd, [
+            "--literal-pathspecs",
+            "restore",
+            "--staged",
+            "--",
+            input.path,
+          ]);
+        }
+        yield* runGit("GitVcsDriver.discardFile.clean", input.cwd, [
+          "--literal-pathspecs",
+          "clean",
+          "-f",
+          "--",
+          input.path,
+        ]);
+      }
+
+      return { path: input.path };
+    },
+  );
+
   const readRangeContext: GitVcsDriver.GitVcsDriver["Service"]["readRangeContext"] = Effect.fn(
     "readRangeContext",
   )(function* (cwd, baseRef) {
@@ -3586,6 +3711,9 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     pushCurrentBranch: (cwd, fallbackBranch, options) =>
       withListRefsInvalidation(cwd, pushCurrentBranch(cwd, fallbackBranch, options)),
     pullCurrentBranch: (cwd) => withListRefsInvalidation(cwd, pullCurrentBranch(cwd)),
+    stageFile,
+    unstageFile,
+    discardFile,
     readRangeContext,
     getReviewDiffPreview,
     getReviewDiffFileContents,
