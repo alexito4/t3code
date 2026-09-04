@@ -4,6 +4,7 @@ import { memo, useMemo } from "react";
 import type { EnvironmentOption } from "./BranchToolbar.logic";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { EnvironmentMachineIcon } from "./EnvironmentMachineIcon";
+import { composerFloatingLayerProps } from "./chat/composerEventScope";
 import {
   Select,
   SelectGroup,
@@ -84,7 +85,7 @@ export const BranchToolbarEnvironmentSelector = memo(function BranchToolbarEnvir
           <SelectValue />
         </ComposerContextLabel>
       </SelectTrigger>
-      <SelectPopup>
+      <SelectPopup alignItemWithTrigger={false} {...composerFloatingLayerProps}>
         <SelectGroup>
           <SelectGroupLabel>Run on</SelectGroupLabel>
           {availableEnvironments.map((env) => (

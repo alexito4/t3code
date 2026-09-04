@@ -8,6 +8,7 @@ import {
   type EnvMode,
 } from "./BranchToolbar.logic";
 import { ComposerContextLabel } from "./ComposerContextLabel";
+import { composerFloatingLayerProps } from "./chat/composerEventScope";
 import {
   Select,
   SelectGroup,
@@ -98,7 +99,7 @@ export const BranchToolbarEnvModeSelector = memo(function BranchToolbarEnvModeSe
           <SelectValue />
         </ComposerContextLabel>
       </SelectTrigger>
-      <SelectPopup>
+      <SelectPopup alignItemWithTrigger={false} {...composerFloatingLayerProps}>
         <SelectGroup>
           <SelectGroupLabel>Workspace</SelectGroupLabel>
           <SelectItem value="local">
