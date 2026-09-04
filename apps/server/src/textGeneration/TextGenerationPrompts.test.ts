@@ -4,7 +4,12 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildSideQuestionPrompt,
   buildThreadTitlePrompt,
+  formatSideQuestionContext,
+  formatSideQuestionConversation,
+  isSideQuestionContextWithinLimit,
+  SIDE_QUESTION_CONTEXT_MAX_BYTES,
 } from "./TextGenerationPrompts.ts";
 import { normalizeCliError, sanitizeThreadTitle } from "./TextGenerationUtils.ts";
 import { TextGenerationError } from "@t3tools/contracts";
@@ -251,6 +256,88 @@ describe("buildThreadTitlePrompt", () => {
       `Thread contents:\n[Earlier content truncated]\n\n${retainedContext}`,
     );
     expect(result.prompt.match(/\[Earlier content truncated\]/g)).toHaveLength(1);
+  });
+});
+
+describe("side questions", () => {
+  it("rejects context above the provider-safe limit", () => {
+    expect(isSideQuestionContextWithinLimit("a".repeat(SIDE_QUESTION_CONTEXT_MAX_BYTES))).toBe(
+      true,
+    );
+    expect(isSideQuestionContextWithinLimit("a".repeat(SIDE_QUESTION_CONTEXT_MAX_BYTES + 1))).toBe(
+      false,
+    );
+  });
+
+  it("uses completed messages and tool results without exposing streaming assistant text", () => {
+    const context = formatSideQuestionContext({
+      messages: [
+        {
+          role: "user",
+          text: "Find the reconnect bug",
+          streaming: false,
+          createdAt: "2026-08-26T10:00:00.000Z",
+        },
+        {
+          role: "assistant",
+          text: "The stable finding",
+          streaming: false,
+          createdAt: "2026-08-26T10:00:01.000Z",
+        },
+        {
+          role: "assistant",
+          text: "unfinished reply",
+          streaming: true,
+          createdAt: "2026-08-26T10:00:03.000Z",
+        },
+      ],
+      activities: [
+        {
+          kind: "tool.started",
+          summary: "Read started",
+          payload: { path: "session.ts" },
+          createdAt: "2026-08-26T10:00:01.500Z",
+        },
+        {
+          kind: "tool.completed",
+          summary: "Read session.ts",
+          payload: { detail: "stale token found" },
+          createdAt: "2026-08-26T10:00:02.000Z",
+        },
+      ],
+    });
+
+    expect(context).toContain("USER:\nFind the reconnect bug");
+    expect(context).toContain("ASSISTANT:\nThe stable finding");
+    expect(context).toContain("TOOL:\nRead session.ts");
+    expect(context).toContain("stale token found");
+    expect(context).not.toContain("unfinished reply");
+    expect(context).not.toContain("Read started");
+  });
+
+  it("asks for a tool-free answer that stays outside the main conversation", () => {
+    const result = buildSideQuestionPrompt({
+      question: "What did we learn?",
+      context: "USER:\nInvestigate reconnects",
+    });
+
+    expect(result.prompt).toContain("Do not use tools");
+    expect(result.prompt).toContain("Do not continue or influence the main coding task");
+    expect(result.prompt).toContain("What did we learn?");
+    expect(result.prompt).toContain("Investigate reconnects");
+  });
+
+  it("formats earlier side turns with distinct roles", () => {
+    expect(
+      formatSideQuestionConversation([
+        {
+          question: "What caused the reconnect bug?",
+          answer: "The stored token was stale.",
+        },
+      ]),
+    ).toBe(
+      "SIDE USER:\nWhat caused the reconnect bug?\n\nSIDE ASSISTANT:\nThe stored token was stale.",
+    );
   });
 });
 

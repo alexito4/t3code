@@ -217,6 +217,50 @@ describe("rightPanelStore", () => {
     expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refB)).toBeNull();
   });
 
+  it("opens a side question as a native singleton surface", () => {
+    useRightPanelStore.getState().open(refA, "side-question");
+    useRightPanelStore.getState().open(refA, "side-question");
+
+    expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBe(
+      "side-question",
+    );
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces,
+    ).toEqual([{ id: "side-question", kind: "side-question" }]);
+  });
+
+  it("does not persist view-local side question surfaces", () => {
+    useRightPanelStore.getState().open(refA, "diff");
+    useRightPanelStore.getState().open(refA, "side-question");
+    useRightPanelStore.getState().open(refB, "side-question");
+
+    const partialize = useRightPanelStore.persist.getOptions().partialize;
+    expect(partialize?.(useRightPanelStore.getState())).toEqual({
+      byThreadKey: {
+        "env-1:thread-A": {
+          isOpen: true,
+          activeSurfaceId: "diff",
+          surfaces: [{ id: "diff", kind: "diff" }],
+        },
+      },
+    });
+  });
+
+  it("persists an open panel with no surfaces", () => {
+    useRightPanelStore.getState().show(refA);
+
+    const partialize = useRightPanelStore.persist.getOptions().partialize;
+    expect(partialize?.(useRightPanelStore.getState())).toEqual({
+      byThreadKey: {
+        "env-1:thread-A": {
+          isOpen: true,
+          activeSurfaceId: null,
+          surfaces: [],
+        },
+      },
+    });
+  });
+
   it("opening a different kind keeps both surfaces and activates the new one", () => {
     useRightPanelStore.getState().open(refA, "agents");
     useRightPanelStore.getState().open(refA, "preview");

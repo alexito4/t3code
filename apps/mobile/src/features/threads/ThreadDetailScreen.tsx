@@ -3,11 +3,18 @@ import {
   appendCodexArtifactTemplateUsePrompt,
   type CodexArtifactTemplate,
 } from "@t3tools/client-runtime/codex-artifact-templates";
+import {
+  parseSideQuestion,
+  sideQuestionCancellationSucceeded,
+  sideQuestionPreviousTurns,
+} from "@t3tools/client-runtime/state/orchestration";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentThreadStatus } from "@t3tools/client-runtime/state/threads";
 import { useKeyboardChatComposerInset, useKeyboardScrollToEnd } from "@legendapp/list/keyboard";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
 import type { LegendListRef } from "@legendapp/list/react-native";
 import { HeaderHeightContext } from "@react-navigation/elements";
+import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
 import type {
   ApprovalRequestId,
   EnvironmentId,
@@ -33,10 +40,13 @@ import {
   useState,
 } from "react";
 import {
+  ActivityIndicator,
   AppState,
   Keyboard,
   Platform,
+  Pressable,
   useWindowDimensions,
+  ScrollView,
   View,
   type GestureResponderEvent,
 } from "react-native";
@@ -56,13 +66,25 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AppText as Text, AppTextInput as TextInput } from "../../components/AppText";
+import { ControlPill } from "../../components/ControlPill";
+import { ComposerInlineControl } from "../../components/ComposerToolbar";
+import { ProviderIcon } from "../../components/ProviderIcon";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import type { ComposerEditorHandle } from "../../components/ComposerEditor";
 import type { StatusTone } from "../../components/StatusPill";
-import type { DraftComposerAttachment } from "../../lib/composerImages";
+import type {
+  DraftComposerAttachment,
+  DraftComposerImageAttachment,
+} from "../../lib/composerImages";
+import { orchestrationEnvironment } from "../../state/orchestration";
+import { useAtomCommand } from "../../state/use-atom-command";
 import { CHAT_CONTENT_MAX_WIDTH, type LayoutVariant } from "../../lib/layout";
 import { IOS_NAV_BAR_HEIGHT } from "../../lib/layoutMetrics";
 import { scopedThreadKey } from "../../lib/scopedEntities";
+import { buildModelOptions, groupByProvider } from "../../lib/modelOptions";
+import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
+import { randomHex } from "../../lib/uuid";
 import type {
   PendingApproval,
   PendingUserInput,
@@ -91,6 +113,10 @@ import {
 import { ThreadFeed } from "./ThreadFeed";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
 import { resolveThreadFeedSubmissionAnchor } from "./thread-feed-live-follow";
+import {
+  type ExistingThreadSettingsRouteSession,
+  useExistingThreadSettingsRoutePresentation,
+} from "./ThreadSettingsSheet";
 
 export interface ThreadDetailScreenProps {
   readonly selectedThread: OrchestrationThreadShell;
@@ -227,6 +253,20 @@ const USER_INPUT_TOGGLE_TIMING = {
   easing: Easing.out(Easing.cubic),
 };
 
+type SideQuestionTurn = {
+  readonly question: string;
+  readonly id: string;
+  readonly answer: string;
+  readonly status: "loading" | "success" | "error" | "stopped";
+};
+
+type SideQuestionState = {
+  readonly mode: "expanded" | "minimized" | "hidden";
+  readonly turns: ReadonlyArray<SideQuestionTurn>;
+  readonly draft: string;
+  readonly modelSelection: ModelSelection;
+};
+
 export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: ThreadDetailScreenProps) {
   const insets = useSafeAreaInsets();
   const isKeyboardVisible = useKeyboardState((state) => state.isVisible);
@@ -264,12 +304,110 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   }, []);
   const windowHeight = useWindowDimensions().height;
   const navigationHeaderHeight = useContext(HeaderHeightContext) || insets.top + IOS_NAV_BAR_HEIGHT;
+  const askSideQuestion = useAtomCommand(orchestrationEnvironment.askSideQuestion, {
+    reportFailure: false,
+  });
+  const cancelSideQuestion = useAtomCommand(orchestrationEnvironment.cancelSideQuestion, {
+    reportFailure: false,
+  });
+  const navigation = useNavigation();
+  const { present: presentSideSettings, clear: clearSideSettings } =
+    useExistingThreadSettingsRoutePresentation();
   const agentLabel = `${props.selectedThread.modelSelection.instanceId} agent`;
   const selectedThreadKey = scopedThreadKey(props.environmentId, props.selectedThread.id);
+  const sideQuestionRequestRef = useRef<Record<string, string>>({});
+  const [sideQuestionsByThread, setSideQuestionsByThread] = useState<
+    Record<string, SideQuestionState>
+  >({});
+  const sideQuestionState = sideQuestionsByThread[selectedThreadKey] ?? null;
+  const setSideQuestionMode = useCallback(
+    (mode: SideQuestionState["mode"]) =>
+      setSideQuestionsByThread((current) => {
+        const state = current[selectedThreadKey];
+        return state ? { ...current, [selectedThreadKey]: { ...state, mode } } : current;
+      }),
+    [selectedThreadKey],
+  );
+  const draftMessagesByThreadRef = useRef<Record<string, string>>({});
+  draftMessagesByThreadRef.current[selectedThreadKey] = props.draftMessage;
   const composerEditorRef = useRef<ComposerEditorHandle>(null);
   const draftMessageRef = useRef(props.draftMessage);
   draftMessageRef.current = props.draftMessage;
+  const sideSettingsPresentedRef = useRef(false);
   const composerOverlayRef = useRef<View>(null);
+  const sideModelSelection =
+    sideQuestionState?.modelSelection ?? props.selectedThread.modelSelection;
+  const sideModelOptions = useMemo(
+    () => buildModelOptions(props.serverConfig, sideModelSelection),
+    [props.serverConfig, sideModelSelection],
+  );
+  const sideCurrentModelOption =
+    sideModelOptions.find(
+      (option) =>
+        option.selection.instanceId === sideModelSelection.instanceId &&
+        option.selection.model === sideModelSelection.model,
+    ) ?? null;
+  const sideProviderGroups = useMemo(
+    () =>
+      groupByProvider(sideModelOptions).filter(
+        (group) => group.providerKey === sideModelSelection.instanceId,
+      ),
+    [sideModelOptions, sideModelSelection.instanceId],
+  );
+  const sideOptionDescriptors = useMemo(
+    () =>
+      resolveProviderOptionDescriptors({
+        capabilities: sideCurrentModelOption?.capabilities,
+        selections: sideModelSelection.options,
+      }),
+    [sideCurrentModelOption?.capabilities, sideModelSelection.options],
+  );
+  const updateSideModelSelection = useCallback(
+    (modelSelection: ModelSelection) =>
+      setSideQuestionsByThread((current) => {
+        const state = current[selectedThreadKey];
+        return state ? { ...current, [selectedThreadKey]: { ...state, modelSelection } } : current;
+      }),
+    [selectedThreadKey],
+  );
+  const sideSettingsSession = useMemo<ExistingThreadSettingsRouteSession>(
+    () => ({
+      ownerId: `${selectedThreadKey}:side-question`,
+      environmentId: props.environmentId,
+      title: "Side chat settings",
+      showRuntime: false,
+      providerGroups: sideProviderGroups,
+      selectedModel: sideModelSelection,
+      onSelectModel: (option) => updateSideModelSelection(option.selection),
+      optionDescriptors: sideOptionDescriptors,
+      onUpdateOptionSelections: (options) =>
+        updateSideModelSelection({ ...sideModelSelection, options }),
+      runtimeMode: props.selectedThread.runtimeMode,
+      onUpdateRuntimeMode: () => undefined,
+    }),
+    [
+      props.environmentId,
+      props.selectedThread.runtimeMode,
+      selectedThreadKey,
+      sideModelSelection,
+      sideOptionDescriptors,
+      sideProviderGroups,
+      updateSideModelSelection,
+    ],
+  );
+  const openSideSettings = useCallback(() => {
+    Keyboard.dismiss();
+    presentSideSettings(sideSettingsSession);
+    sideSettingsPresentedRef.current = true;
+    navigation.dispatch(StackActions.push("ThreadSettingsSheet"));
+  }, [navigation, presentSideSettings, sideSettingsSession]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!sideSettingsPresentedRef.current) return;
+      sideSettingsPresentedRef.current = false;
+      clearSideSettings(sideSettingsSession.ownerId);
+    }, [clearSideSettings, sideSettingsSession.ownerId]),
+  );
   const listRef = useRef<LegendListRef>(null);
   const feedTouchStartRef = useRef<{ pageX: number; pageY: number } | null>(null);
   const selectedThreadKeyRef = useRef(selectedThreadKey);
@@ -613,7 +751,196 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     selectedThreadKey,
   ]);
 
+  const submitSideQuestion = useCallback(
+    async (question: string, mode: "new" | "follow-up") => {
+      if (sideQuestionState?.turns.at(-1)?.status === "loading") return;
+
+      const previousTurns =
+        mode === "new" ? [] : sideQuestionPreviousTurns(sideQuestionState?.turns ?? []);
+      const retainedTurns = mode === "new" ? [] : (sideQuestionState?.turns ?? []);
+      const requestId = randomHex(16);
+      const modelSelection =
+        mode === "new"
+          ? props.selectedThread.modelSelection
+          : (sideQuestionState?.modelSelection ?? props.selectedThread.modelSelection);
+      sideQuestionRequestRef.current[selectedThreadKey] = requestId;
+      setSideQuestionsByThread((current) => ({
+        ...current,
+        [selectedThreadKey]: {
+          mode: "expanded",
+          modelSelection,
+          turns: [...retainedTurns, { id: requestId, question, answer: "", status: "loading" }],
+          draft: "",
+        },
+      }));
+
+      const result = await askSideQuestion({
+        environmentId: props.environmentId,
+        input: {
+          threadId: props.selectedThread.id,
+          requestId,
+          question,
+          modelSelection,
+          previousTurns,
+        },
+      });
+      if (sideQuestionRequestRef.current[selectedThreadKey] !== requestId) return;
+
+      if (result._tag === "Success") {
+        setSideQuestionsByThread((current) => {
+          const state = current[selectedThreadKey];
+          if (!state) return current;
+          return {
+            ...current,
+            [selectedThreadKey]: {
+              ...state,
+              turns: [
+                ...state.turns.slice(0, -1),
+                { id: requestId, question, answer: result.value.answer, status: "success" },
+              ],
+            },
+          };
+        });
+        return;
+      }
+
+      const error = squashAtomCommandFailure(result);
+      if (mode === "new" && !draftMessagesByThreadRef.current[selectedThreadKey]) {
+        props.onChangeDraftMessage(`/btw ${question}`);
+      }
+      setSideQuestionsByThread((current) => {
+        const state = current[selectedThreadKey];
+        if (!state) return current;
+        return {
+          ...current,
+          [selectedThreadKey]: {
+            ...state,
+            turns: [
+              ...state.turns.slice(0, -1),
+              {
+                question,
+                id: requestId,
+                answer:
+                  error instanceof Error ? error.message : "The side chat could not be answered.",
+                status: "error",
+              },
+            ],
+          },
+        };
+      });
+    },
+    [
+      askSideQuestion,
+      props.environmentId,
+      props.onChangeDraftMessage,
+      props.selectedThread.id,
+      props.selectedThread.modelSelection,
+      selectedThreadKey,
+      sideQuestionState,
+    ],
+  );
+
+  const stopSideQuestion = useCallback(async () => {
+    const requestId = sideQuestionState?.turns.at(-1)?.id;
+    if (!requestId || sideQuestionState?.turns.at(-1)?.status !== "loading") return;
+    const result = await cancelSideQuestion({
+      environmentId: props.environmentId,
+      input: { threadId: props.selectedThread.id, requestId },
+    });
+    if (
+      !sideQuestionCancellationSucceeded(result) ||
+      sideQuestionRequestRef.current[selectedThreadKey] !== requestId
+    ) {
+      return;
+    }
+    sideQuestionRequestRef.current[selectedThreadKey] = `stopped:${requestId}`;
+    setSideQuestionsByThread((current) => {
+      const state = current[selectedThreadKey];
+      if (
+        !state ||
+        state.turns.at(-1)?.id !== requestId ||
+        state.turns.at(-1)?.status !== "loading"
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        [selectedThreadKey]: {
+          ...state,
+          turns: [
+            ...state.turns.slice(0, -1),
+            { ...state.turns.at(-1)!, answer: "", status: "stopped" },
+          ],
+        },
+      };
+    });
+  }, [
+    cancelSideQuestion,
+    props.environmentId,
+    props.selectedThread.id,
+    selectedThreadKey,
+    sideQuestionState,
+  ]);
+
   const handleSendMessage = useCallback(async () => {
+    const sideQuestion = parseSideQuestion(props.draftMessage.trim());
+    if (sideQuestion !== null) {
+      if (sideQuestion.length === 0) {
+        setSideQuestionsByThread((current) => ({
+          ...current,
+          [selectedThreadKey]: current[selectedThreadKey]
+            ? { ...current[selectedThreadKey], mode: "expanded" }
+            : {
+                mode: "expanded",
+                modelSelection: props.selectedThread.modelSelection,
+                turns: [
+                  {
+                    question: "",
+                    id: randomHex(16),
+                    answer: "Add a question after /btw.",
+                    status: "error",
+                  },
+                ],
+                draft: "",
+              },
+        }));
+        return null;
+      }
+      if (sideQuestionState?.turns.at(-1)?.status === "loading") {
+        return null;
+      }
+      if (props.draftAttachments.length > 0) {
+        const errorId = randomHex(16);
+        sideQuestionRequestRef.current[selectedThreadKey] = errorId;
+        setSideQuestionsByThread((current) => {
+          const state = current[selectedThreadKey];
+          return {
+            ...current,
+            [selectedThreadKey]: {
+              mode: "expanded",
+              modelSelection: state?.modelSelection ?? props.selectedThread.modelSelection,
+              turns: [
+                ...(state?.turns ?? []),
+                {
+                  id: errorId,
+                  question: sideQuestion,
+                  answer: "Side chats are text only. Remove draft images and try again.",
+                  status: "error",
+                },
+              ],
+              draft: "",
+            },
+          };
+        });
+        return null;
+      }
+
+      props.onChangeDraftMessage("");
+      draftMessagesByThreadRef.current[selectedThreadKey] = "";
+      void submitSideQuestion(sideQuestion, "new");
+      return null;
+    }
+
     const targetThreadKey = selectedThreadKey;
     const hasUserMessage = selectedThreadFeed.some(
       (entry) => entry.type === "message" && entry.message.role === "user",
@@ -637,11 +964,16 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     return messageId;
   }, [
     anchorMessageId,
+    props.draftAttachments.length,
+    props.draftMessage,
+    props.onChangeDraftMessage,
     props.onSendMessage,
     props.selectedThread.latestTurn,
     props.selectedThreadQueueCount,
     selectedThreadFeed,
     selectedThreadKey,
+    sideQuestionState,
+    submitSideQuestion,
   ]);
 
   const collapseComposer = useCallback(() => {
@@ -672,6 +1004,8 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   }, [freeze, scrollMessageToEnd]);
 
   const showScrollToEndButton = contentPresentationKind === "ready" && !endFollowEnabled;
+  const latestSideQuestionTurn = sideQuestionState?.turns.at(-1) ?? null;
+  const sideQuestionPending = latestSideQuestionTurn?.status === "loading";
   const { themeAppearance } = useAppearancePreferences();
   const isDarkMode = themeAppearance === "dark";
 
@@ -778,6 +1112,176 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                 onScrollToEnd={handleScrollToEnd}
               />
               <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
+                {sideQuestionState &&
+                sideQuestionState.mode !== "hidden" &&
+                latestSideQuestionTurn ? (
+                  <Animated.View
+                    className="mx-4 mb-3 rounded-2xl border border-border bg-card"
+                    entering={FadeInDown.duration(220)}
+                    exiting={FadeOut.duration(140)}
+                  >
+                    {sideQuestionState.mode === "minimized" ? (
+                      <View className="flex-row items-center gap-3 px-4 py-3">
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Open side chat"
+                          className="min-w-0 flex-1"
+                          onPress={() => setSideQuestionMode("expanded")}
+                        >
+                          <Text className="text-2xs font-t3-bold uppercase tracking-wide text-foreground-muted">
+                            Side chat
+                          </Text>
+                          <Text
+                            className="mt-0.5 text-sm text-foreground-secondary"
+                            numberOfLines={1}
+                          >
+                            {latestSideQuestionTurn.question}
+                          </Text>
+                        </Pressable>
+                        {sideQuestionPending ? (
+                          <ControlPill
+                            accessibilityLabel="Stop side chat"
+                            className="h-9 w-9"
+                            icon="stop.fill"
+                            variant="danger"
+                            onPress={stopSideQuestion}
+                          />
+                        ) : null}
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Dismiss side chat"
+                          onPress={() => setSideQuestionMode("hidden")}
+                        >
+                          <Text className="text-sm text-foreground-muted">Close</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <View className="p-4">
+                        <View className="mb-3 flex-row items-start justify-between gap-3">
+                          <View className="min-w-0 flex-1">
+                            <Text className="text-2xs font-t3-bold uppercase tracking-wide text-foreground-muted">
+                              Side chat
+                            </Text>
+                            <Text className="mt-1 text-sm text-foreground-secondary">
+                              Ask without interrupting the main agent.
+                            </Text>
+                          </View>
+                          <View className="flex-row gap-3">
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="Minimize side chat"
+                              onPress={() => setSideQuestionMode("minimized")}
+                            >
+                              <Text className="text-sm text-foreground-muted">Minimize</Text>
+                            </Pressable>
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="Dismiss side chat"
+                              onPress={() => setSideQuestionMode("hidden")}
+                            >
+                              <Text className="text-sm text-foreground-muted">Close</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                        <ScrollView
+                          style={{ maxHeight: windowHeight * 0.35 }}
+                          contentContainerStyle={{ gap: 12 }}
+                          keyboardShouldPersistTaps="handled"
+                        >
+                          {sideQuestionState.turns.map((turn) => (
+                            <View key={turn.id} className="gap-2">
+                              {turn.question ? (
+                                <View className="ml-8 self-end rounded-xl bg-background px-3 py-2">
+                                  <Text className="text-sm text-foreground">{turn.question}</Text>
+                                </View>
+                              ) : null}
+                              {turn.status === "loading" ? (
+                                <View className="flex-row items-center gap-2">
+                                  <ActivityIndicator size="small" />
+                                  <Text className="text-sm text-foreground-muted">
+                                    Answering without interrupting…
+                                  </Text>
+                                </View>
+                              ) : turn.status === "stopped" ? (
+                                <Text className="text-sm text-foreground-muted">Stopped</Text>
+                              ) : (
+                                <Text
+                                  selectable
+                                  className={
+                                    turn.status === "error"
+                                      ? "text-sm text-rose-700 dark:text-rose-300"
+                                      : "text-sm text-foreground"
+                                  }
+                                >
+                                  {turn.answer}
+                                </Text>
+                              )}
+                            </View>
+                          ))}
+                        </ScrollView>
+                        <View className="mt-3 flex-row items-center justify-between gap-2">
+                          <ComposerInlineControl
+                            accessibilityLabel="Side chat model and reasoning settings"
+                            emphasized
+                            iconNode={
+                              <ProviderIcon
+                                provider={sideCurrentModelOption?.providerDriver}
+                                size={16}
+                              />
+                            }
+                            label={sideCurrentModelOption?.label ?? sideModelSelection.model}
+                            maxWidth={180}
+                            onPress={openSideSettings}
+                          />
+                          {sideQuestionPending ? (
+                            <ControlPill
+                              accessibilityLabel="Stop side chat"
+                              icon="stop.fill"
+                              variant="danger"
+                              onPress={stopSideQuestion}
+                            />
+                          ) : null}
+                        </View>
+                        <View className="mt-2 flex-row items-end gap-2">
+                          <TextInput
+                            multiline
+                            submitBehavior="submit"
+                            value={sideQuestionState.draft}
+                            accessibilityLabel="Continue the side chat"
+                            placeholder="Ask a follow-up…"
+                            onSubmitEditing={() => {
+                              const question = sideQuestionState.draft.trim();
+                              if (!question) return;
+                              void submitSideQuestion(question, "follow-up");
+                            }}
+                            className="min-h-11 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
+                            onChangeText={(draft) =>
+                              setSideQuestionsByThread((current) => {
+                                const state = current[selectedThreadKey];
+                                return state
+                                  ? { ...current, [selectedThreadKey]: { ...state, draft } }
+                                  : current;
+                              })
+                            }
+                          />
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Ask follow-up"
+                            disabled={
+                              sideQuestionPending || sideQuestionState.draft.trim().length === 0
+                            }
+                            className="rounded-xl bg-blue-500 px-3 py-2.5 disabled:opacity-40"
+                            onPress={() =>
+                              void submitSideQuestion(sideQuestionState.draft.trim(), "follow-up")
+                            }
+                          >
+                            <Text className="font-t3-bold text-sm text-white">Ask</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    )}
+                  </Animated.View>
+                ) : null}
                 {props.activePendingApproval || props.activePendingUserInput ? (
                   <Animated.View
                     className="shrink-0 gap-3 px-4 pb-3"

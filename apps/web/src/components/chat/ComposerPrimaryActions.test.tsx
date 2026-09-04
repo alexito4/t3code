@@ -15,9 +15,10 @@ vi.mock("../SidebarStageBackdrop", () => ({
   useSidebarStageBackdropVariant: (enabled = true) => (enabled ? stageArtworkState.variant : null),
 }));
 
+import { parseComposerSideQuestion } from "../../composer-logic";
 import { ComposerPrimaryActions, formatPendingPrimaryActionLabel } from "./ComposerPrimaryActions";
 
-function renderPendingActions(isRunning: boolean) {
+function renderPendingActions(isRunning: boolean, isSideQuestion = false) {
   return renderToStaticMarkup(
     createElement(ComposerPrimaryActions, {
       compact: true,
@@ -29,6 +30,7 @@ function renderPendingActions(isRunning: boolean) {
         isComplete: true,
       },
       isRunning,
+      isSideQuestion,
       showPlanFollowUpPrompt: false,
       promptHasText: false,
       isSendBusy: false,
@@ -66,13 +68,18 @@ function renderRunningActions(showSendWhileRunning: boolean, hasSendableContent:
   );
 }
 
-function renderSendButton(sendDisabledReason: string | null = null) {
+function renderSendButton(
+  sendDisabledReason: string | null = null,
+  isSideQuestion = false,
+  showPlanFollowUpPrompt = false,
+) {
   return renderToStaticMarkup(
     createElement(ComposerPrimaryActions, {
       compact: true,
       pendingAction: null,
       isRunning: false,
-      showPlanFollowUpPrompt: false,
+      isSideQuestion,
+      showPlanFollowUpPrompt,
       promptHasText: true,
       isSendBusy: false,
       sendDisabledReason,
@@ -188,6 +195,25 @@ describe("ComposerPrimaryActions", () => {
 
     expect(markup).toContain("disabled");
     expect(markup).toContain('aria-label="Sending feedback"');
+  });
+
+  it("labels side questions as Ask even when a plan is active", () => {
+    const markup = renderSendButton(null, true, true);
+
+    expect(markup).toContain('aria-label="Ask in side chat"');
+    expect(markup).not.toContain("Refine");
+  });
+
+  it("keeps pending-answer controls when the custom answer starts with /btw", () => {
+    const isSideQuestion =
+      parseComposerSideQuestion("/btw custom answer", {
+        isServerThread: true,
+        hasPendingUserInput: true,
+      }) !== null;
+    const markup = renderPendingActions(true, isSideQuestion);
+
+    expect(markup).toContain("Submit");
+    expect(markup).not.toContain('aria-label="Ask in side chat"');
   });
 
   it("offers Stop generation while a running turn is waiting for user input", () => {

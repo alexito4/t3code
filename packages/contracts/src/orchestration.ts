@@ -26,6 +26,8 @@ import { ProviderInstanceId } from "./providerInstance.ts";
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
+  askSideQuestion: "orchestration.askSideQuestion",
+  cancelSideQuestion: "orchestration.cancelSideQuestion",
   getWorkflowScript: "orchestration.getWorkflowScript",
   getTurnDiff: "orchestration.getTurnDiff",
   getFullThreadDiff: "orchestration.getFullThreadDiff",
@@ -1717,6 +1719,44 @@ export const DispatchResult = Schema.Struct({
 });
 export type DispatchResult = typeof DispatchResult.Type;
 
+export const OrchestrationSideQuestionTurn = Schema.Struct({
+  question: TrimmedNonEmptyString.check(Schema.isMaxLength(20_000)),
+  answer: Schema.String.check(Schema.isMaxLength(20_000)),
+});
+export type OrchestrationSideQuestionTurn = typeof OrchestrationSideQuestionTurn.Type;
+
+export const ORCHESTRATION_SIDE_QUESTION_MAX_PREVIOUS_TURNS = 50;
+
+export const OrchestrationAskSideQuestionInput = Schema.Struct({
+  threadId: ThreadId,
+  requestId: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(100))),
+  question: TrimmedNonEmptyString.check(Schema.isMaxLength(20_000)),
+  modelSelection: Schema.optional(ModelSelection),
+  previousTurns: Schema.optional(
+    Schema.Array(OrchestrationSideQuestionTurn).check(
+      Schema.isMaxLength(ORCHESTRATION_SIDE_QUESTION_MAX_PREVIOUS_TURNS),
+    ),
+  ),
+});
+export type OrchestrationAskSideQuestionInput = typeof OrchestrationAskSideQuestionInput.Type;
+
+export const OrchestrationCancelSideQuestionInput = Schema.Struct({
+  threadId: ThreadId,
+  requestId: TrimmedNonEmptyString.check(Schema.isMaxLength(100)),
+});
+export type OrchestrationCancelSideQuestionInput = typeof OrchestrationCancelSideQuestionInput.Type;
+
+export const OrchestrationCancelSideQuestionResult = Schema.Struct({
+  cancelled: Schema.Boolean,
+});
+export type OrchestrationCancelSideQuestionResult =
+  typeof OrchestrationCancelSideQuestionResult.Type;
+
+export const OrchestrationAskSideQuestionResult = Schema.Struct({
+  answer: Schema.String,
+});
+export type OrchestrationAskSideQuestionResult = typeof OrchestrationAskSideQuestionResult.Type;
+
 export const OrchestrationGetTurnDiffInput = TurnCountRange.mapFields(
   Struct.assign({
     threadId: ThreadId,
@@ -1816,6 +1856,14 @@ export const OrchestrationRpcSchemas = {
   dispatchCommand: {
     input: ClientOrchestrationCommand,
     output: DispatchResult,
+  },
+  askSideQuestion: {
+    input: OrchestrationAskSideQuestionInput,
+    output: OrchestrationAskSideQuestionResult,
+  },
+  cancelSideQuestion: {
+    input: OrchestrationCancelSideQuestionInput,
+    output: OrchestrationCancelSideQuestionResult,
   },
   getWorkflowScript: {
     input: OrchestrationGetWorkflowScriptInput,

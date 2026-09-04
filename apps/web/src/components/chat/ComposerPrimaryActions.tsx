@@ -20,6 +20,7 @@ interface ComposerPrimaryActionsProps {
   compact: boolean;
   pendingAction: PendingActionState | null;
   isRunning: boolean;
+  isSideQuestion?: boolean;
   showPlanFollowUpPrompt: boolean;
   promptHasText: boolean;
   isSendBusy: boolean;
@@ -59,10 +60,37 @@ const preventPointerFocus: PointerEventHandler<HTMLElement> = (event) => {
   event.preventDefault();
 };
 
+export function ComposerStopButton(props: {
+  readonly ariaLabel?: string;
+  readonly className?: string;
+  readonly preserveComposerFocusOnPointerDown?: boolean;
+  readonly onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex cursor-pointer items-center justify-center rounded-full bg-destructive/90 text-white shadow-xs shadow-destructive/24 inset-shadow-[0_1px_--theme(--color-white/16%)] transition-all duration-150 hover:bg-destructive hover:scale-105 active:inset-shadow-[0_1px_--theme(--color-black/8%)] active:shadow-none",
+        props.className ?? "size-8",
+      )}
+      {...(props.preserveComposerFocusOnPointerDown
+        ? { onPointerDown: preventPointerFocus }
+        : undefined)}
+      onClick={props.onClick}
+      aria-label={props.ariaLabel ?? "Stop generation"}
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+        <rect x="2" y="2" width="8" height="8" rx="1.5" />
+      </svg>
+    </button>
+  );
+}
+
 export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   compact,
   pendingAction,
   isRunning,
+  isSideQuestion = false,
   showPlanFollowUpPrompt,
   promptHasText,
   isSendBusy,
@@ -87,27 +115,20 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   );
 
   const renderStopGenerationButton = (insidePendingAction: boolean) => (
-    <button
-      type="button"
-      className={cn(
-        "flex cursor-pointer items-center justify-center rounded-full bg-destructive/90 text-white shadow-xs shadow-destructive/24 inset-shadow-[0_1px_--theme(--color-white/16%)] transition-all duration-150 hover:bg-destructive hover:scale-105 active:inset-shadow-[0_1px_--theme(--color-black/8%)] active:shadow-none",
+    <ComposerStopButton
+      className={
         insidePendingAction
           ? "size-8 sm:size-7"
           : showSendWhileRunning && hasSendableContent
             ? "size-9 sm:size-8"
-            : "size-8 sm:h-8 sm:w-8",
-      )}
-      {...pointerFocusProps}
+            : "size-8 sm:h-8 sm:w-8"
+      }
+      preserveComposerFocusOnPointerDown={preserveComposerFocusOnPointerDown}
       onClick={onInterrupt}
-      aria-label="Stop generation"
-    >
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
-        <rect x="2" y="2" width="8" height="8" rx="1.5" />
-      </svg>
-    </button>
+    />
   );
 
-  if (pendingAction) {
+  if (pendingAction && !isSideQuestion) {
     return (
       <div className={cn("flex items-center justify-end", compact ? "gap-1.5" : "gap-2")}>
         {isRunning ? renderStopGenerationButton(true) : null}
@@ -162,7 +183,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     );
   }
 
-  if (showPlanFollowUpPrompt) {
+  if (showPlanFollowUpPrompt && !isSideQuestion) {
     if (promptHasText) {
       return (
         <Button
@@ -247,7 +268,9 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
                 ? "Preparing worktree"
                 : isSendBusy
                   ? "Sending"
-                  : "Send message"
+                  : isSideQuestion
+                    ? "Ask in side chat"
+                    : "Send message"
       }
     >
       {stageBackdropVariant ? (

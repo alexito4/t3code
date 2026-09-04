@@ -762,6 +762,8 @@ describe("MessagesTimeline", () => {
 
     expect(markup).not.toContain("Show full message");
     expect(markup).toContain('data-user-message-collapsible="false"');
+    expect(markup).toContain('data-user-message-bubble="true"');
+    expect(markup).toContain('data-user-message-actions="true"');
     expect(markup).toContain("rounded-2xl bg-message p-3");
   });
 
