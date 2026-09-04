@@ -27,12 +27,15 @@ export default defineConfig({
   },
   staged: {
     // Formatter only for now — no lint or typecheck on commit.
+    // --no-error-on-unmatched-pattern: don't fail commits whose staged
+    // files are all covered by fmt.ignorePatterns (e.g. alex.sh alone).
     "*": "vp fmt --no-error-on-unmatched-pattern",
   },
   fmt: {
     ignorePatterns: [
       ".repos/**",
       ".alchemy",
+      "alex.sh",
       "dist",
       "dist-electron",
       "node_modules",

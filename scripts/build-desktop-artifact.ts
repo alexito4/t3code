@@ -53,7 +53,24 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
 const DESKTOP_APP_ID = "com.t3tools.t3code";
+const PERSONAL_DESKTOP_APP_ID = "com.t3tools.t3code.personal";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
+
+// Official channels all share DESKTOP_APP_ID (see resolveDesktopProductName's
+// nightly/alpha split for why that's fine — only one channel runs at a time).
+// A personal fork build sits alongside an official install instead of
+// replacing it, and macOS's LaunchServices/single-instance handling is keyed
+// off the bundle identifier, not productName: two .app bundles sharing one
+// appId get treated as the same running app, so the one launched second is
+// redirected into the first instead of opening. A distinct appId is required
+// for the personal build to actually run side by side.
+function isPersonalDesktopBuild(): boolean {
+  return process.env.T3CODE_DESKTOP_PERSONAL_BUILD === "1";
+}
+
+function resolveDesktopAppId(): string {
+  return isPersonalDesktopBuild() ? PERSONAL_DESKTOP_APP_ID : DESKTOP_APP_ID;
+}
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
 const BuildArch = Schema.Literals(["arm64", "x64", "universal"]);
@@ -2524,6 +2541,14 @@ export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
 }
 
 export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
+  if (isPersonalDesktopBuild()) {
+    return {
+      macIconPng: BRAND_ASSET_PATHS.personalMacIconPng,
+      linuxIconPng: BRAND_ASSET_PATHS.personalLinuxIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.personalWindowsIconIco,
+    };
+  }
+
   if (resolveDesktopUpdateChannel(version) === "nightly") {
     return {
       macIconPng: BRAND_ASSET_PATHS.nightlyMacIconPng,
@@ -2557,6 +2582,10 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 }
 
 export function resolveDesktopProductName(version: string): string {
+  if (isPersonalDesktopBuild()) {
+    return "T3 Code (Personal)";
+  }
+
   return resolveDesktopUpdateChannel(version) === "nightly"
     ? "T3 Code (Nightly)"
     : (desktopPackageJson.productName ?? "T3 Code");
@@ -2582,7 +2611,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   arch?: typeof BuildArch.Type,
 ) {
   const buildConfig: Record<string, unknown> = {
-    appId: DESKTOP_APP_ID,
+    appId: resolveDesktopAppId(),
     productName: resolveDesktopProductName(version),
     artifactName: "T3-Code-${version}-${arch}.${ext}",
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
