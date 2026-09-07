@@ -1,3 +1,4 @@
+import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { useAtomValue } from "@effect/atom-react";
 import type { FileDiffContentsLoader } from "@pierre/diffs";
 import { useParams } from "@tanstack/react-router";
@@ -18,7 +19,6 @@ import {
   Columns2Icon,
   FolderTreeIcon,
   PilcrowIcon,
-  RefreshCwIcon,
   Rows3Icon,
   SearchIcon,
   TextWrapIcon,
@@ -131,8 +131,6 @@ interface DiffPanelProps {
   initialGitScope: "branch" | "uncommitted";
   workspaceMutationId: string | null;
 }
-
-export { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 
 export default function DiffPanel({
   mode = "inline",
@@ -899,7 +897,7 @@ export default function DiffPanel({
                 />
               }
             >
-              <RefreshCwIcon className={cn("size-3.5", isLoadingSelectedPatch && "animate-spin")} />
+              <RefreshIcon className="size-3.5" refreshing={isLoadingSelectedPatch} />
             </TooltipTrigger>
             <TooltipPopup side="top">
               {isLoadingSelectedPatch ? "Refreshing diff…" : "Refresh diff"}
