@@ -8,6 +8,7 @@
  * @module ClaudeTextGeneration
  */
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
@@ -76,6 +77,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
   modelCatalog: Effect.Effect<ClaudeModelCatalog> = Effect.succeed(BUNDLED_CLAUDE_MODEL_CATALOG),
 ) {
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const fileSystem = yield* FileSystem.FileSystem;
   const claudeEnvironment = yield* makeClaudeEnvironment(claudeSettings, environment);
   const scopedModelCatalog = modelCatalog.pipe(
     Effect.map((catalog) => scopeClaudeModelCatalog(catalog, claudeSettings.customModels)),
@@ -127,7 +129,6 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     prompt,
     outputSchemaJson,
     modelSelection,
-    disableTools,
   }: {
     operation:
       | "generateCommitMessage"
@@ -139,7 +140,6 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     prompt: string;
     outputSchemaJson: S;
     modelSelection: ModelSelection;
-    disableTools?: boolean;
   }): Effect.fn.Return<S["Type"], TextGenerationError, S["DecodingServices"]> {
     const catalog = yield* scopedModelCatalog;
     const resolvedModelSelection = {
@@ -176,20 +176,29 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
     const fastMode =
       fastModeDescriptor?.type === "boolean" ? fastModeDescriptor.currentValue : undefined;
     const settings = {
+      disableAllHooks: true,
       ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),
       ...(fastMode ? { fastMode: true } : {}),
       ...(ultracode ? { ultracode: true } : {}),
     };
-    const settingsJson =
-      Object.keys(settings).length > 0
-        ? yield* encodeJsonForOperation(
-            operation,
-            settings,
-            "Failed to encode Claude CLI settings.",
-          )
-        : undefined;
+    const settingsJson = yield* encodeJsonForOperation(
+      operation,
+      settings,
+      "Failed to encode Claude CLI settings.",
+    );
 
     const runClaudeCommand = Effect.fn("runClaudeJson.runClaudeCommand")(function* () {
+      // Titles need only the supplied prompt, not configuration from the checkout.
+      const workingDirectory =
+        operation === "generateThreadTitle"
+          ? yield* fileSystem
+              .makeTempDirectoryScoped({ prefix: "t3code-claude-title-" })
+              .pipe(
+                Effect.mapError((cause) =>
+                  normalizeCliError("claude", operation, cause, "Failed to create title directory"),
+                ),
+              )
+          : cwd;
       const spawnCommand = yield* resolveSpawnCommand(
         claudeSettings.binaryPath || "claude",
         [
@@ -201,15 +210,21 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
           "--model",
           resolveClaudeCatalogApiModelId(catalog, resolvedModelSelection),
           ...(cliEffort ? ["--effort", cliEffort] : []),
-          ...(settingsJson ? ["--settings", settingsJson] : []),
-          "--dangerously-skip-permissions",
-          ...(disableTools ? ["--tools", "", "--disallowedTools", "mcp__*"] : []),
+          "--settings",
+          settingsJson,
+          // Metadata prompts need no executable capabilities, even when they contain a skill name.
+          "--tools",
+          "",
+          "--disable-slash-commands",
+          "--strict-mcp-config",
+          "--permission-mode",
+          "dontAsk",
         ],
         { env: claudeEnvironment },
       );
       const command = ChildProcess.make(spawnCommand.command, spawnCommand.args, {
         env: claudeEnvironment,
-        cwd,
+        cwd: workingDirectory,
         shell: spawnCommand.shell,
         stdin: {
           stream: Stream.encodeText(Stream.make(prompt)),
@@ -408,7 +423,6 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
         prompt,
         outputSchemaJson: outputSchema,
         modelSelection: input.modelSelection,
-        disableTools: true,
       });
 
       return { answer: generated.answer.trim() };
