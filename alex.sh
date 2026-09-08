@@ -24,6 +24,7 @@ PATCH_BRANCHES=(
     patch/review-diff-staged-unstaged
     patch/review-diff-committed-mode
     patch/review-diff-file-actions
+    feat/thread-share
 )
 
 usage() {

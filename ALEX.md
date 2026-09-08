@@ -91,6 +91,19 @@ buildable/runnable for personal use (see Fork infrastructure below).
   `PATCH_BRANCHES`. Sent upstream: https://github.com/pingdotgg/t3code/pull/9238 (open). Once
   merged, drop the branch from `PATCH_BRANCHES` and `rebuild`.
 
+- **Export a thread** — no existing way to show a colleague what happened in a thread without
+  giving them access to the environment (confirmed by checking upstream: nothing solves this,
+  and open PR #7902 "copy a link to a thread" explicitly isn't a share link — the recipient still
+  needs pairing). Adds "Export thread…" to the thread context menu (sidebar row and chat header,
+  same shared `buildThreadActionMenuItems` list PR #7902 would also extend) that saves the full
+  transcript, tool activity, and code changes as one self-contained Markdown file: human/agent
+  readable prose plus an embedded JSON block carrying the thread's own read-model shape (reusing
+  `OrchestrationThread` as-is) and a full-thread diff, for a future T3-native re-import. No
+  redaction — export is exactly what's in the thread. Read-only "learn from it" only for now;
+  resuming a thread from an export is deliberately out of scope, though the embedded diff makes
+  that a follow-up, not a redesign, when it's wanted. On branch `feat/thread-share` (based on
+  `upstream/main`) and composed into `main` via `PATCH_BRANCHES`. Not yet sent upstream.
+
 ## Merged early from open upstream PRs
 
 Features from someone else's still-open, unmerged upstream PR, pulled onto `main` ahead of
