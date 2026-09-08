@@ -266,14 +266,7 @@ function ProjectRow({
         onClick={onOpen}
         className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-hidden"
       >
-        <ProjectFavicon
-          environmentId={group.environmentId}
-          cwd={group.workspaceRoot}
-          projectName={group.title}
-          faviconPath={group.faviconPath}
-          projectIcon={group.projectIcon}
-          className="size-8 shrink-0"
-        />
+        <ProjectFavicon project={group} className="size-8 shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-sm font-medium">{group.displayName}</span>
