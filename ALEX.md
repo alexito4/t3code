@@ -102,7 +102,10 @@ buildable/runnable for personal use (see Fork infrastructure below).
   redaction — export is exactly what's in the thread. Read-only "learn from it" only for now;
   resuming a thread from an export is deliberately out of scope, though the embedded diff makes
   that a follow-up, not a redesign, when it's wanted. On branch `feat/thread-share` (based on
-  `upstream/main`) and composed into `main` via `PATCH_BRANCHES`. Not yet sent upstream.
+  `upstream/main`) and composed into `main` via `PATCH_BRANCHES`. Built for personal use first;
+  not yet sent upstream. CONTRIBUTING.md is explicit that unsolicited feature PRs are unlikely to
+  be accepted without an Ideas discussion first — revisit once lived with for a while, and open
+  that discussion before a PR if it still seems worth sending.
 
 ## Merged early from open upstream PRs
 
