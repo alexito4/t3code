@@ -27,12 +27,14 @@ import {
   useProjects,
 } from "../state/entities";
 import { usePrimaryEnvironmentId } from "../state/environments";
+import { downloadTextFile } from "../lib/downloadTextFile";
 import { readLocalApi } from "../localApi";
 import {
   deriveLogicalProjectKeyFromSettings,
   derivePhysicalProjectKey,
   selectProjectGroupingSettings,
 } from "../logicalProject";
+import { orchestrationEnvironment } from "../state/orchestration";
 import { buildPhysicalToLogicalProjectKeyMap } from "../sidebarProjectGrouping";
 import { useUiStateStore } from "../uiStateStore";
 import { useCopyToClipboard } from "./useCopyToClipboard";
@@ -91,6 +93,9 @@ export function useThreadActionMenu(input: {
     deleteThread,
   } = useThreadActions();
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
+    reportFailure: false,
+  });
+  const exportThread = useAtomCommand(orchestrationEnvironment.exportThread, {
     reportFailure: false,
   });
   const handleNewThread = useNewThreadHandler();
@@ -276,6 +281,20 @@ export function useThreadActionMenu(input: {
           case "copy-thread-id":
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
+          case "export": {
+            const result = await exportThread({
+              environmentId: threadRef.environmentId,
+              input: { threadId: threadRef.threadId },
+            });
+            if (result._tag === "Failure") {
+              if (!isAtomCommandInterrupted(result)) {
+                failureToast("Failed to export thread", squashAtomCommandFailure(result));
+              }
+              return;
+            }
+            downloadTextFile(result.value.suggestedFileName, result.value.markdown);
+            return;
+          }
           case "archive": {
             if (confirmThreadArchive) {
               const confirmed = await settlePromise(() =>
@@ -337,6 +356,7 @@ export function useThreadActionMenu(input: {
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
+      exportThread,
       handleNewThread,
       logicalProjectKeyByPhysicalKey,
       markThreadUnread,
