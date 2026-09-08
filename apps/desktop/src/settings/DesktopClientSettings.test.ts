@@ -2,6 +2,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import {
   ClientSettingsSchema,
+  DEFAULT_CLIENT_SETTINGS,
   DEFAULT_PULL_REQUEST_REVIEW_INSTRUCTIONS,
   type ClientSettings,
 } from "@t3tools/contracts";
@@ -17,6 +18,7 @@ import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopClientSettings from "./DesktopClientSettings.ts";
 
 const clientSettings: ClientSettings = {
+  ...DEFAULT_CLIENT_SETTINGS,
   appearanceContrast: 100,
   browserDefaultViewport: { _tag: "preset", width: 1024, height: 600, presetId: "nest-hub" },
   browserDefaultZoomFactor: 1.25,
@@ -64,6 +66,7 @@ const clientSettings: ClientSettings = {
   legacySidebarEnabled: false,
   loadBalancingEnabled: false,
   loadBalancingWeights: { "environment-1": 75, "environment-2": 0 },
+  pullRequestMergeMethodOverrides: {},
   timestampFormat: "24-hour",
   wordWrap: true,
 };
