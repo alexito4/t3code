@@ -1,6 +1,14 @@
+import { useAtomValue } from "@effect/atom-react";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
-import { scopedThreadKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import {
+  scopedThreadKey,
+  scopeProjectRef,
+  scopeThreadRef,
+} from "@t3tools/client-runtime/environment";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
 import {
   type EnvironmentId,
   type PullRequestAction,
@@ -10,6 +18,8 @@ import {
   type PullRequestRef,
   resolveEnvironmentMachineKind,
   type ScopedThreadRef,
+  type ThreadId,
+  type ThreadLinkedPullRequest,
 } from "@t3tools/contracts";
 import {
   ArrowDownUpIcon,
@@ -76,8 +86,11 @@ import {
   usePullRequestTurnRefresh,
   useSharedPullRequestSummary,
 } from "~/state/pullRequests";
+import { serverEnvironment } from "~/state/server";
+import { threadEnvironment } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { vcsEnvironment } from "~/state/vcs";
+import { waitForStartedServerThread } from "~/components/ChatView.logic";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
 import { useUiStateStore } from "~/uiStateStore";
 
@@ -835,6 +848,58 @@ export function PullRequestDetailPanel({
   const acting =
     pickableEnvironments.find((entry) => entry.environmentId === chosenEnvironmentId) ?? null;
   const actingEnvironmentId = acting?.environmentId ?? environmentId;
+  const actingServerConfig = useAtomValue(serverEnvironment.configValueAtom(actingEnvironmentId));
+  const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
+    reportFailure: false,
+  });
+  // "Ask"/"Explain"/"Review" leave a thread on whatever branch it already started on — checking
+  // it out is what the other two hand-offs are for — so the server's own branch-to-PR detection
+  // never fires for these. Linking explicitly, the same way a reader could by hand from a
+  // rendered link's context menu (see externalLinkContextMenu.ts), gets threads opened this way
+  // the same PR-aware features (auto-settlement, etc.) without asking the reader to find and
+  // right-click a link buried in a chat message.
+  const resolveLinkedPullRequestForActingProject = (): ThreadLinkedPullRequest | null => {
+    if (!detail || actingServerConfig?.environment.capabilities.threadPullRequestLinking !== true) {
+      return null;
+    }
+    const project = projects.find(
+      (candidate) =>
+        candidate.environmentId === actingEnvironmentId &&
+        candidate.id === (acting?.projectId ?? detail.projectId),
+    );
+    const repository = project?.repositoryIdentity?.displayName ?? reference.repository;
+    return {
+      projectId: acting?.projectId ?? detail.projectId,
+      repository,
+      number: detail.number,
+      url: detail.url,
+    };
+  };
+  const linkThreadToPullRequestWhenStarted = useCallback(
+    async (
+      targetEnvironmentId: EnvironmentId,
+      threadId: ThreadId,
+      linkedPullRequest: ThreadLinkedPullRequest,
+    ) => {
+      // A reader may sit on the composer a while before sending — the thread this draft will
+      // become does not exist on the server yet, so there is nothing to link until it starts. A
+      // long, bounded wait covers a normal "read it over, then send" delay without hanging onto
+      // the subscription forever if the draft is abandoned instead.
+      const started = await waitForStartedServerThread(
+        scopeThreadRef(targetEnvironmentId, threadId),
+        15 * 60 * 1000,
+      );
+      if (!started) return;
+      const result = await updateThreadMetadata({
+        environmentId: targetEnvironmentId,
+        input: { threadId, linkedPullRequest },
+      });
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        console.warn("Failed to link thread to pull request", squashAtomCommandFailure(result));
+      }
+    },
+    [updateThreadMetadata],
+  );
   // The checklist "Review this PR" hands the agent: the reader's own device-local preference,
   // not a property of whichever server happens to host this pull request — a PR can belong to
   // any connected environment, and the checklist should read the same regardless of which one.
@@ -988,8 +1053,8 @@ export function PullRequestDetailPanel({
   const openThreadWithTask = async (
     projectRef: ReturnType<typeof scopeProjectRef>,
     task: ThreadTask | null,
-    opened?: { draftId: DraftId },
-  ): Promise<{ draftId: DraftId } | null> => {
+    opened?: { draftId: DraftId; threadId: ThreadId },
+  ): Promise<{ draftId: DraftId; threadId: ThreadId } | null> => {
     const session =
       opened ??
       (await newThread(projectRef).then(
@@ -1023,6 +1088,7 @@ export function PullRequestDetailPanel({
     }
     setHandoff(kind);
     const projectRef = scopeProjectRef(actingEnvironmentId, acting?.projectId ?? detail.projectId);
+    const linkedPullRequest = resolveLinkedPullRequestForActingProject();
     const opened = await openThreadWithTask(projectRef, task);
     setHandoff(null);
     if (opened === null) {
@@ -1032,6 +1098,13 @@ export function PullRequestDetailPanel({
         description: "Try again from the project, or open a thread first.",
       });
       return;
+    }
+    if (linkedPullRequest !== null) {
+      void linkThreadToPullRequestWhenStarted(
+        actingEnvironmentId,
+        opened.threadId,
+        linkedPullRequest,
+      );
     }
     toastManager.add({
       type: "success",
