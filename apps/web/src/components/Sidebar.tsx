@@ -2114,6 +2114,9 @@ export default function Sidebar() {
   const exportThread = useAtomCommand(orchestrationEnvironment.exportThread, {
     reportFailure: false,
   });
+  const exportThreadFallback = useAtomCommand(orchestrationEnvironment.exportThreadFallback, {
+    reportFailure: false,
+  });
   const { copyToClipboard: copyPathToClipboard } = useCopyToClipboard<{ path: string }>({
     onCopy: ({ path }) => {
       toastManager.add({
@@ -3981,7 +3984,6 @@ export default function Sidebar() {
                 snooze: supportsSnooze,
                 pinning: supportsPinning,
                 titleRegeneration: supportsTitleRegeneration,
-                threadExport: supportsThreadExport,
               },
               snoozePresets,
             }),
@@ -4092,10 +4094,15 @@ export default function Sidebar() {
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
           case "export": {
-            const result = await exportThread({
-              environmentId: threadRef.environmentId,
-              input: { threadId: threadRef.threadId },
-            });
+            const result = supportsThreadExport
+              ? await exportThread({
+                  environmentId: threadRef.environmentId,
+                  input: { threadId: threadRef.threadId },
+                })
+              : await exportThreadFallback({
+                  environmentId: threadRef.environmentId,
+                  input: { threadId: threadRef.threadId },
+                });
             if (result._tag === "Failure") {
               if (!isAtomCommandInterrupted(result)) {
                 const error = squashAtomCommandFailure(result);
@@ -4187,6 +4194,7 @@ export default function Sidebar() {
       copyThreadIdToClipboard,
       deleteThread,
       exportThread,
+      exportThreadFallback,
       handleMultiSelectContextMenu,
       markThreadUnread,
       openProjectSettings,

@@ -41,7 +41,6 @@ export interface ThreadActionMenuState {
     readonly snooze: boolean;
     readonly pinning: boolean;
     readonly titleRegeneration: boolean;
-    readonly threadExport: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
 }
@@ -122,9 +121,10 @@ export function buildThreadActionMenuItems(
         { id: "copy-thread-id", label: "Thread ID", icon: "hash" },
       ],
     },
-    ...(state.supports.threadExport
-      ? [{ id: "export" as const, label: "Export thread…", icon: "download" }]
-      : []),
+    // Always offered: the caller picks the fast RPC path or the client-only
+    // fallback (any official server already supports the fallback's
+    // underlying requests), so there's no server capability to gate this on.
+    { id: "export", label: "Export thread…", icon: "download" },
     { id: "project-settings", label: "Project settings", icon: "settings" },
     // Archive removes the thread from the sidebar while keeping its
     // conversation under Settings > Archived threads — distinct from Settle

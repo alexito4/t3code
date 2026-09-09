@@ -99,6 +99,9 @@ export function useThreadActionMenu(input: {
   const exportThread = useAtomCommand(orchestrationEnvironment.exportThread, {
     reportFailure: false,
   });
+  const exportThreadFallback = useAtomCommand(orchestrationEnvironment.exportThreadFallback, {
+    reportFailure: false,
+  });
   const handleNewThread = useNewThreadHandler();
   const markThreadUnread = useUiStateStore((s) => s.markThreadUnread);
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
@@ -140,8 +143,8 @@ export function useThreadActionMenu(input: {
           snooze: readEnvironmentSupportsSnooze(threadRef.environmentId),
           pinning: readEnvironmentSupportsPinning(threadRef.environmentId),
           titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
-          threadExport: readEnvironmentSupportsThreadExport(threadRef.environmentId),
         };
+        const supportsThreadExport = readEnvironmentSupportsThreadExport(threadRef.environmentId);
         const isRegeneratingTitle = thread.titleRegeneration != null;
         const snoozePresets = resolveSnoozePresets(now, timestampFormat);
         const items = buildThreadActionMenuItems({
@@ -284,10 +287,15 @@ export function useThreadActionMenu(input: {
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
           case "export": {
-            const result = await exportThread({
-              environmentId: threadRef.environmentId,
-              input: { threadId: threadRef.threadId },
-            });
+            const result = supportsThreadExport
+              ? await exportThread({
+                  environmentId: threadRef.environmentId,
+                  input: { threadId: threadRef.threadId },
+                })
+              : await exportThreadFallback({
+                  environmentId: threadRef.environmentId,
+                  input: { threadId: threadRef.threadId },
+                });
             if (result._tag === "Failure") {
               if (!isAtomCommandInterrupted(result)) {
                 failureToast("Failed to export thread", squashAtomCommandFailure(result));
@@ -359,6 +367,7 @@ export function useThreadActionMenu(input: {
       copyThreadIdToClipboard,
       deleteThread,
       exportThread,
+      exportThreadFallback,
       handleNewThread,
       logicalProjectKeyByPhysicalKey,
       markThreadUnread,

@@ -11,7 +11,7 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildThreadExportMarkdown } from "./threadExportQuery.ts";
+import { buildThreadExportMarkdown } from "./threadExport.ts";
 
 const CREATED_AT = "2026-01-01T00:00:00.000Z";
 const EXPORTED_AT = "2026-01-02T00:00:00.000Z";
