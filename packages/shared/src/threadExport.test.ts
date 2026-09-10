@@ -40,6 +40,7 @@ function makeThread(overrides: Partial<OrchestrationThread> = {}): Orchestration
     proposedPlans: [],
     activities: [],
     checkpoints: [],
+    pullRequests: [],
     session: {
       threadId: ThreadId.make("thread-1"),
       status: "idle",
