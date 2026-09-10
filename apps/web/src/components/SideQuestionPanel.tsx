@@ -224,7 +224,7 @@ export function SideQuestionPanel(props: {
                     {activeEntry ? (
                       <>
                         <ProviderModelPicker
-                          compact
+                          size="xs"
                           activeInstanceId={activeModelSelection.instanceId}
                           model={activeModelSelection.model}
                           lockedProvider={null}

@@ -26,6 +26,7 @@ const RIGHT_PANEL_KINDS = [
   "preview",
   "terminal",
   "pull-request",
+  "pull-requests",
   "agents",
   "side-question",
 ] as const;
@@ -69,10 +70,13 @@ export type RightPanelSurface =
        */
       environmentId?: string;
       projectId: string;
+      host?: string;
       repository: string;
       number: number;
       url?: string;
     }
+  /** The thread's linked pull requests, one singleton tab beside any number of `pull-request` tabs. */
+  | { id: "pull-requests"; kind: "pull-requests" }
   | { id: "agents"; kind: "agents" }
   | { id: "side-question"; kind: "side-question" };
 
@@ -126,6 +130,7 @@ interface RightPanelStoreState {
     target: {
       environmentId?: string;
       projectId: string;
+      host?: string;
       repository: string;
       number: number;
       url?: string;
@@ -180,6 +185,8 @@ const singletonSurface = (
       return { id: "diff", kind };
     case "files":
       return { id: "files", kind };
+    case "pull-requests":
+      return { id: "pull-requests", kind };
     case "agents":
       return { id: "agents", kind };
     case "side-question":
@@ -226,6 +233,7 @@ export type PullRequestSurface = Extract<RightPanelSurface, { kind: "pull-reques
 export function pullRequestSurfaceId(target: {
   environmentId?: string;
   projectId: string;
+  host?: string;
   repository: string;
   number: number;
 }): PullRequestSurface["id"] {
@@ -233,12 +241,14 @@ export function pullRequestSurfaceId(target: {
   // servers is two tabs rather than one tab that changes its mind about which server it is on.
   const scope =
     target.environmentId === undefined ? "" : `${encodeURIComponent(target.environmentId)}:`;
-  return `pull-request:${scope}${encodeURIComponent(target.projectId)}:${encodeURIComponent(target.repository)}:${target.number}`;
+  const host = target.host === undefined ? "" : `${encodeURIComponent(target.host.toLowerCase())}:`;
+  return `pull-request:${scope}${encodeURIComponent(target.projectId)}:${host}${encodeURIComponent(target.repository)}:${target.number}`;
 }
 
 export function pullRequestSurface(target: {
   environmentId?: string;
   projectId: string;
+  host?: string;
   repository: string;
   number: number;
   url?: string;
@@ -248,6 +258,7 @@ export function pullRequestSurface(target: {
     kind: "pull-request",
     ...(target.environmentId === undefined ? {} : { environmentId: target.environmentId }),
     projectId: target.projectId,
+    ...(typeof target.host === "string" ? { host: target.host.toLowerCase() } : {}),
     repository: target.repository,
     number: target.number,
     ...(typeof target.url === "string" ? { url: target.url } : {}),

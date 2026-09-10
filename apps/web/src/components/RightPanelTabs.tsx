@@ -1,3 +1,10 @@
+import { pullRequestHostOf, type SourceControlProviderKind } from "@t3tools/contracts";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import { useProjects, useServerConfigs, useThreadShells } from "~/state/entities";
+import {
+  threadPullRequestKeysEqual,
+  visibleThreadPullRequests,
+} from "@t3tools/shared/threadPullRequests";
 import type {
   ContextMenuItem,
   EnvironmentId,
@@ -14,6 +21,7 @@ import {
   FileDiff,
   Files,
   GitPullRequest,
+  GitPullRequestArrow,
   Globe2,
   MessageCirclePlus,
   Plus,
@@ -105,6 +113,7 @@ interface RightPanelTabsProps {
   onAddDiff: () => void;
   onAddFiles: () => void;
   onAddPullRequest: () => void;
+  onAddPullRequests: () => void;
   onAddAgents: () => void;
   onAddSideQuestion: () => void;
   browserAvailable: boolean;
@@ -112,6 +121,7 @@ interface RightPanelTabsProps {
   diffAvailable: boolean;
   filesAvailable: boolean;
   pullRequestAvailable: boolean;
+  pullRequestsAvailable: boolean;
   agentsAvailable: boolean;
   sideQuestionAvailable: boolean;
   pullRequestStatusSeeds?: Readonly<Record<string, PullRequestTabStatusSeed>>;
@@ -142,6 +152,7 @@ const SURFACE_DISABLED_REASONS = {
   files: "Files are only available when a project is open.",
   diff: "Diff is only available for server threads in Git repositories.",
   pullRequest: "This thread's branch has no pull request yet.",
+  pullRequests: "Linked pull requests are only available for server threads.",
   agents: "Agents are only available from a thread.",
   sideQuestion: "Side chats need a running thread with no pending input.",
 } as const;
@@ -165,6 +176,7 @@ const SURFACE_UNAVAILABLE_HINTS = {
   files: "Available when a project is open.",
   diff: "Available for Git repositories.",
   pullRequest: "No pull request on this branch yet.",
+  pullRequests: "Available for server threads.",
   agents: "Available from a thread.",
   sideQuestion: "Needs a running thread with no pending input.",
 } as const;
@@ -303,6 +315,7 @@ function RightPanelEmptyState(props: {
   onAddDiff: () => void;
   onAddFiles: () => void;
   onAddPullRequest: () => void;
+  onAddPullRequests: () => void;
   onAddAgents: () => void;
   onAddSideQuestion: () => void;
   browserAvailable: boolean;
@@ -310,6 +323,7 @@ function RightPanelEmptyState(props: {
   diffAvailable: boolean;
   filesAvailable: boolean;
   pullRequestAvailable: boolean;
+  pullRequestsAvailable: boolean;
   agentsAvailable: boolean;
   sideQuestionAvailable: boolean;
   liveAgentCount: number;
@@ -366,6 +380,16 @@ function RightPanelEmptyState(props: {
       available: props.pullRequestAvailable,
       disabledReason: SURFACE_UNAVAILABLE_HINTS.pullRequest,
       onClick: props.onAddPullRequest,
+      badgeCount: 0,
+    },
+    {
+      label: "Linked pull requests",
+      description: "Every pull request this thread has linked, stacks included.",
+      icon: GitPullRequestArrow,
+      shortcut: "L",
+      available: props.pullRequestsAvailable,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.pullRequests,
+      onClick: props.onAddPullRequests,
       badgeCount: 0,
     },
     {
@@ -619,6 +643,8 @@ function surfaceTitle(
       );
     case "pull-request":
       return `#${surface.number}`;
+    case "pull-requests":
+      return "Pull requests";
     case "agents":
       return "Agents";
     case "side-question":
@@ -702,11 +728,42 @@ function SurfaceIcon({
           seed={pullRequestStatusSeeds?.[surface.id]}
         />
       );
+    case "pull-requests":
+      return <GitPullRequestArrow className="size-3 shrink-0" />;
     case "agents":
       return <Bot className="size-3 shrink-0" />;
     case "side-question":
       return <MessageCirclePlus className="size-3 shrink-0" />;
   }
+}
+
+export function resolvePullRequestTabLink(
+  threads: readonly Pick<EnvironmentThreadShell, "environmentId" | "pullRequests">[],
+  environmentId: EnvironmentId | null,
+  host: string | null,
+  reference: { repository: string; number: number },
+) {
+  if (environmentId === null || host === null) return undefined;
+  let newest: EnvironmentThreadShell["pullRequests"][number] | undefined;
+  for (const thread of threads) {
+    if (thread.environmentId !== environmentId) continue;
+    for (const link of visibleThreadPullRequests(thread.pullRequests)) {
+      if (
+        !threadPullRequestKeysEqual(link, {
+          host,
+          repository: reference.repository,
+          number: reference.number,
+        })
+      )
+        continue;
+      if (
+        newest === undefined ||
+        (link.snapshot?.syncedAt ?? "") > (newest.snapshot?.syncedAt ?? "")
+      )
+        newest = link;
+    }
+  }
+  return newest;
 }
 
 function PullRequestSurfaceIcon({
@@ -720,13 +777,36 @@ function PullRequestSurfaceIcon({
 }) {
   const resolvedEnvironmentId =
     (surface.environmentId as EnvironmentId | undefined) ?? environmentId;
-  const detail = useEnvironmentQuery(
+  const projects = useProjects();
+  const threads = useThreadShells();
+  const project = projects.find(
+    (entry) => entry.environmentId === resolvedEnvironmentId && entry.id === surface.projectId,
+  );
+  const identity = project?.repositoryIdentity;
+  const host =
+    surface.host ??
+    (identity?.provider
+      ? pullRequestHostOf(identity, identity.provider as SourceControlProviderKind)
+      : null);
+  const configs = useServerConfigs();
+  const capabilities =
     resolvedEnvironmentId === null
+      ? undefined
+      : configs.get(resolvedEnvironmentId)?.environment.capabilities;
+  const linkedSnapshot =
+    capabilities?.threadPullRequests === true
+      ? (resolvePullRequestTabLink(threads, resolvedEnvironmentId, host, surface)?.snapshot ?? null)
+      : null;
+  const detail = useEnvironmentQuery(
+    resolvedEnvironmentId === null || capabilities?.pullRequests !== true || linkedSnapshot !== null
       ? null
       : pullRequestEnvironment.detail({
           environmentId: resolvedEnvironmentId,
           input: {
             projectId: surface.projectId as ProjectId,
+            ...(capabilities?.threadPullRequests === true && surface.host !== undefined
+              ? { host: surface.host }
+              : {}),
             repository: surface.repository,
             number: surface.number,
           },
@@ -735,11 +815,15 @@ function PullRequestSurfaceIcon({
   // Only state and draft reach the tab. A list seed cannot know mergeability, so feeding the
   // full detail would flip an open tab to the conflict glyph the moment its read lands.
   const status =
-    detail === null ? (seed ?? null) : { state: detail.state, isDraft: detail.isDraft };
+    linkedSnapshot !== null
+      ? linkedSnapshot
+      : detail === null
+        ? (seed ?? null)
+        : { state: detail.state, isDraft: detail.isDraft };
   if (status === null) {
     return <GitPullRequest className="size-3 shrink-0 text-muted-foreground" />;
   }
-  const presentation = resolvePullRequestState(status);
+  const presentation = resolvePullRequestState({ state: status.state, isDraft: status.isDraft });
   return <presentation.Icon className={cn("size-3 shrink-0", presentation.toneClassName)} />;
 }
 
@@ -826,6 +910,14 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       available: props.pullRequestAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.pullRequest,
       onClick: props.onAddPullRequest,
+    },
+    {
+      label: "Linked pull requests",
+      icon: GitPullRequestArrow,
+      shortcut: "L",
+      available: props.pullRequestsAvailable,
+      disabledReason: SURFACE_DISABLED_REASONS.pullRequests,
+      onClick: props.onAddPullRequests,
     },
     {
       label: "Agents",
@@ -1279,6 +1371,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddDiff={props.onAddDiff}
             onAddFiles={props.onAddFiles}
             onAddPullRequest={props.onAddPullRequest}
+            onAddPullRequests={props.onAddPullRequests}
             onAddAgents={props.onAddAgents}
             onAddSideQuestion={props.onAddSideQuestion}
             browserAvailable={props.browserAvailable}
@@ -1286,6 +1379,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             diffAvailable={props.diffAvailable}
             filesAvailable={props.filesAvailable}
             pullRequestAvailable={props.pullRequestAvailable}
+            pullRequestsAvailable={props.pullRequestsAvailable}
             agentsAvailable={props.agentsAvailable}
             sideQuestionAvailable={props.sideQuestionAvailable}
             liveAgentCount={props.liveAgentCount}
