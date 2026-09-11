@@ -5,8 +5,8 @@ import { APP_STAGE_LABEL } from "../branding";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
 import { primaryServerConfigAtom } from "../state/server";
 
-export type SidebarStageBackdropVariant = "nightly" | "dev";
-export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly";
+export type SidebarStageBackdropVariant = "nightly" | "dev" | "personal";
+export type EnvironmentIdentificationPillLabel = "Dev" | "Nightly" | "Personal";
 
 // A wide viewBox keeps the 96-unit art height at a fixed scale while sidebar resizing reveals
 // more horizontal canvas instead of zooming the scene.
@@ -20,15 +20,16 @@ export function resolveSidebarStageBackdropVariant(
   const normalized = stageLabel.trim().toLowerCase();
   if (normalized === "nightly") return "nightly";
   if (normalized === "dev") return "dev";
+  if (normalized === "personal") return "personal";
   return null;
 }
 
 export function resolveSidebarStageFocusRingOffsetClass(
   variant: SidebarStageBackdropVariant,
 ): string {
-  return variant === "nightly"
-    ? "focus-visible:ring-offset-(--stage-night-bottom)"
-    : "focus-visible:ring-offset-(--stage-art-bottom)";
+  if (variant === "nightly") return "focus-visible:ring-offset-(--stage-night-bottom)";
+  if (variant === "personal") return "focus-visible:ring-offset-(--stage-sunset-bottom)";
+  return "focus-visible:ring-offset-(--stage-art-bottom)";
 }
 
 export function resolveEnvironmentIdentificationPillLabel(
@@ -37,6 +38,7 @@ export function resolveEnvironmentIdentificationPillLabel(
   const normalized = stageLabel.trim().toLowerCase();
   if (normalized === "dev") return "Dev";
   if (normalized === "nightly") return "Nightly";
+  if (normalized === "personal") return "Personal";
   return null;
 }
 
@@ -67,11 +69,15 @@ export function SidebarStageBackdrop({ variant }: { variant: SidebarStageBackdro
 }
 
 export function StageBackdropArt({ variant }: { variant: SidebarStageBackdropVariant }) {
-  return variant === "nightly" ? <NightlySkyArt /> : <DevBlueprintArt />;
+  if (variant === "nightly") return <NightlySkyArt />;
+  if (variant === "personal") return <SunsetHorizonArt />;
+  return <DevBlueprintArt />;
 }
 
 export function StageBackdropButtonArt({ variant }: { variant: SidebarStageBackdropVariant }) {
-  return variant === "nightly" ? <NightlySkyArt compact /> : <DevBlueprintArt compact />;
+  if (variant === "nightly") return <NightlySkyArt compact />;
+  if (variant === "personal") return <SunsetHorizonArt compact />;
+  return <DevBlueprintArt compact />;
 }
 
 const NIGHTLY_STARS: ReadonlyArray<{
@@ -198,6 +204,93 @@ function NightlySkyArt({ compact = false }: { compact?: boolean }) {
       <rect width="100%" height="96" fill={`url(#${skyId})`} />
       <rect width="100%" height="96" fill={`url(#${glowsId})`} />
       <rect width="100%" height="96" fill={`url(#${starsId})`} />
+
+      <g filter={`url(#${softId})`}>
+        <path
+          d="M-12 88C-12 74 0 63 14 63C18 50 30 41 44 41C58 41 70 49 74 62C79 57 86 54 94 54C110 54 123 66 124 82C132 83 138 88 141 96H-12V88Z"
+          fill={`url(#${cloudId})`}
+        />
+      </g>
+      <g filter={`url(#${softId})`}>
+        <path
+          d="M150 96C151 84 161 75 173 75C176 64 186 57 198 57C210 57 220 64 223 75C231 75 238 80 241 87C250 87 257 91 260 96H150Z"
+          fill={`url(#${cloudId})`}
+          fillOpacity="0.8"
+        />
+      </g>
+    </svg>
+  );
+}
+
+function SunsetHorizonArt({ compact = false }: { compact?: boolean }) {
+  const idPrefix = useId().replaceAll(":", "");
+  const skyId = `${idPrefix}-stage-sunset-sky`;
+  const sunId = `${idPrefix}-stage-sunset-sun`;
+  const cloudId = `${idPrefix}-stage-sunset-cloud`;
+  const softId = `${idPrefix}-stage-sunset-soft`;
+  const sunsId = `${idPrefix}-stage-sunset-suns`;
+
+  return (
+    <svg
+      className="stage-art stage-sunset h-full w-full"
+      fill="none"
+      preserveAspectRatio="xMinYMin slice"
+      viewBox={compact ? "96 0 8192 96" : STAGE_BACKDROP_VIEW_BOX}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient
+          id={skyId}
+          x1="24"
+          y1="0"
+          x2="264"
+          y2="96"
+          gradientUnits="userSpaceOnUse"
+          spreadMethod="reflect"
+        >
+          <stop style={{ stopColor: "var(--stage-sunset-bottom)" }} />
+          <stop offset="0.5" style={{ stopColor: "var(--stage-sunset-mid)" }} />
+          <stop offset="1" style={{ stopColor: "var(--stage-sunset-top)" }} />
+        </linearGradient>
+        <radialGradient
+          id={sunId}
+          cx="0"
+          cy="0"
+          r="1"
+          gradientTransform="translate(180 76) scale(150 108)"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop style={{ stopColor: "var(--stage-sunset-sun-highlight)" }} stopOpacity="0.85" />
+          <stop
+            offset="0.45"
+            style={{ stopColor: "var(--stage-sunset-sun-secondary)" }}
+            stopOpacity="0.4"
+          />
+          <stop offset="1" style={{ stopColor: "var(--stage-sunset-bottom)" }} stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id={cloudId} x1="0" y1="60" x2="288" y2="96" gradientUnits="userSpaceOnUse">
+          <stop style={{ stopColor: "var(--stage-sunset-highlight)" }} stopOpacity="0.5" />
+          <stop
+            offset="0.52"
+            style={{ stopColor: "var(--stage-sunset-secondary)" }}
+            stopOpacity="0.62"
+          />
+          <stop
+            offset="1"
+            style={{ stopColor: "var(--stage-sunset-tertiary)" }}
+            stopOpacity="0.5"
+          />
+        </linearGradient>
+        <filter id={softId} x="-24" y="-24" width="336" height="144" filterUnits="userSpaceOnUse">
+          <feGaussianBlur stdDeviation="4" />
+        </filter>
+        <pattern id={sunsId} width="640" height="96" patternUnits="userSpaceOnUse">
+          <rect width="640" height="96" fill={`url(#${sunId})`} />
+        </pattern>
+      </defs>
+
+      <rect width="100%" height="96" fill={`url(#${skyId})`} />
+      <rect width="100%" height="96" fill={`url(#${sunsId})`} />
 
       <g filter={`url(#${softId})`}>
         <path

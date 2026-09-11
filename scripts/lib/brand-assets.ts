@@ -23,6 +23,16 @@ export const BRAND_ASSET_PATHS = {
   nightlyWebFavicon32Png: "assets/nightly/nightly-web-favicon-32x32.png",
   nightlyWebAppleTouchIconPng: "assets/nightly/nightly-web-apple-touch-180.png",
 
+  personalIconComposerProject: "assets/personal/app-icon.icon",
+  personalIosIconPng: "assets/personal/personal-ios-1024.png",
+  personalMacIconPng: "assets/personal/personal-macos-1024.png",
+  personalLinuxIconPng: "assets/personal/personal-universal-1024.png",
+  personalWindowsIconIco: "assets/personal/personal-windows.ico",
+  personalWebFaviconIco: "assets/personal/personal-web-favicon.ico",
+  personalWebFavicon16Png: "assets/personal/personal-web-favicon-16x16.png",
+  personalWebFavicon32Png: "assets/personal/personal-web-favicon-32x32.png",
+  personalWebAppleTouchIconPng: "assets/personal/personal-web-apple-touch-180.png",
+
   developmentDesktopIconPng: "assets/dev/blueprint-macos-1024.png",
   developmentWindowsIconIco: "assets/dev/blueprint-windows.ico",
   developmentWebFaviconIco: "assets/dev/blueprint-web-favicon.ico",
