@@ -22,17 +22,20 @@ import {
   readEnvironmentSupportsPinning,
   readEnvironmentSupportsSettlement,
   readEnvironmentSupportsSnooze,
+  readEnvironmentSupportsThreadExport,
   readEnvironmentSupportsTitleRegeneration,
   readThreadShell,
   useProjects,
 } from "../state/entities";
 import { usePrimaryEnvironmentId } from "../state/environments";
+import { downloadTextFile } from "../lib/downloadTextFile";
 import { readLocalApi } from "../localApi";
 import {
   deriveLogicalProjectKeyFromSettings,
   derivePhysicalProjectKey,
   selectProjectGroupingSettings,
 } from "../logicalProject";
+import { orchestrationEnvironment } from "../state/orchestration";
 import { buildPhysicalToLogicalProjectKeyMap } from "../sidebarProjectGrouping";
 import { useUiStateStore } from "../uiStateStore";
 import { useCopyToClipboard } from "./useCopyToClipboard";
@@ -93,6 +96,12 @@ export function useThreadActionMenu(input: {
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
+  const exportThread = useAtomCommand(orchestrationEnvironment.exportThread, {
+    reportFailure: false,
+  });
+  const exportThreadFallback = useAtomCommand(orchestrationEnvironment.exportThreadFallback, {
+    reportFailure: false,
+  });
   const handleNewThread = useNewThreadHandler();
   const markThreadUnread = useUiStateStore((s) => s.markThreadUnread);
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
@@ -135,6 +144,7 @@ export function useThreadActionMenu(input: {
           pinning: readEnvironmentSupportsPinning(threadRef.environmentId),
           titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
         };
+        const supportsThreadExport = readEnvironmentSupportsThreadExport(threadRef.environmentId);
         const isRegeneratingTitle = thread.titleRegeneration != null;
         const snoozePresets = resolveSnoozePresets(now, timestampFormat);
         const items = buildThreadActionMenuItems({
@@ -276,6 +286,25 @@ export function useThreadActionMenu(input: {
           case "copy-thread-id":
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
+          case "export": {
+            const result = supportsThreadExport
+              ? await exportThread({
+                  environmentId: threadRef.environmentId,
+                  input: { threadId: threadRef.threadId },
+                })
+              : await exportThreadFallback({
+                  environmentId: threadRef.environmentId,
+                  input: { threadId: threadRef.threadId },
+                });
+            if (result._tag === "Failure") {
+              if (!isAtomCommandInterrupted(result)) {
+                failureToast("Failed to export thread", squashAtomCommandFailure(result));
+              }
+              return;
+            }
+            downloadTextFile(result.value.suggestedFileName, result.value.markdown);
+            return;
+          }
           case "archive": {
             if (confirmThreadArchive) {
               const confirmed = await settlePromise(() =>
@@ -337,6 +366,8 @@ export function useThreadActionMenu(input: {
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
+      exportThread,
+      exportThreadFallback,
       handleNewThread,
       logicalProjectKeyByPhysicalKey,
       markThreadUnread,
