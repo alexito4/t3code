@@ -3420,7 +3420,7 @@ export default function ChatView(props: ChatViewProps) {
     hostsRestingComposerControls: routeKind === "server" && restingComposerControlsVisible,
   });
   const initialDiffPanelGitScope =
-    gitStatusQuery.data?.hasWorkingTreeChanges === true ? "unstaged" : "branch";
+    gitStatusQuery.data?.hasWorkingTreeChanges === true ? "uncommitted" : "branch";
   const diffPanelGitStatusResolutionKey = gitStatusQuery.data ? "resolved" : "pending";
   const terminalShortcutLabelOptions = useMemo(
     () => ({
