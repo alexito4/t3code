@@ -215,6 +215,10 @@ import { RightPanelTabs } from "./RightPanelTabs";
 import { AgentsPanel } from "./AgentsPanel";
 import { LinkPullRequestDialogHost } from "./pullRequest/LinkPullRequestDialog";
 import { ThreadPullRequestsPanel } from "./pullRequest/ThreadPullRequestsPanel";
+import { useDeviceState } from "~/state/device";
+import { DeviceSetup } from "./device/DeviceSetup";
+import { Dialog } from "./ui/dialog";
+import { WizardPopup } from "./ui/wizard";
 import {
   SideQuestionMinimized,
   SideQuestionPanel,
@@ -572,6 +576,9 @@ const PreviewPanel = lazy(() =>
   import("./preview/PreviewPanel").then((module) => ({ default: module.PreviewPanel })),
 );
 const DiffPanel = lazy(() => import("./DiffPanel"));
+const DevicePanel = lazy(() =>
+  import("./device/DevicePanel").then((module) => ({ default: module.DevicePanel })),
+);
 const FilePreviewPanel = lazy(() => import("./files/FilePreviewPanel"));
 const EMPTY_PENDING_FILE_SURFACE_IDS: ReadonlySet<string> = new Set();
 const TYPE_TO_FOCUS_EDITABLE_SELECTOR = [
@@ -4243,6 +4250,65 @@ export default function ChatView(props: ChatViewProps) {
     if (!activeThreadRef || !supportsThreadPullRequests) return;
     useRightPanelStore.getState().open(activeThreadRef, "pull-requests");
   }, [activeThreadRef, supportsThreadPullRequests]);
+  const { state: deviceState, loaded: deviceStateLoaded } = useDeviceState(
+    activeThreadRef?.environmentId ?? null,
+  );
+  const [deviceSetupThread, setDeviceSetupThread] = useState<ScopedThreadRef | null>(null);
+  const addDeviceSurface = useCallback(() => {
+    if (!activeThreadRef) return;
+    if (!deviceState.onboardingCompleted || deviceState.hostStatus === "disabled") {
+      setDeviceSetupThread(activeThreadRef);
+      return;
+    }
+    useRightPanelStore.getState().open(activeThreadRef, "device");
+  }, [activeThreadRef, deviceState.onboardingCompleted, deviceState.hostStatus]);
+  // Reconcile new server sessions into separate tabs, including sessions opened
+  // by an agent or another client. The first snapshot is a baseline: persisted
+  // tabs restore themselves, and existing sessions must not resurrect closed tabs.
+  const previousDeviceSessions = useRef(new Map<string, Set<string>>());
+  useEffect(() => {
+    if (!activeThreadRef || !deviceStateLoaded) return;
+    const threadKey = `${activeThreadRef.environmentId}:${activeThreadRef.threadId}`;
+    const sessions = deviceState.sessions.filter(
+      (session) => session.threadId === activeThreadRef.threadId,
+    );
+    const key = (session: (typeof sessions)[number]) => `${session.hostId}:${session.deviceId}`;
+    const previous = previousDeviceSessions.current.get(threadKey);
+    previousDeviceSessions.current.set(threadKey, new Set(sessions.map(key)));
+    if (!previous || shouldUseRightPanelSheet) return;
+    for (const session of sessions) {
+      if (previous?.has(key(session))) continue;
+      const existing = useRightPanelStore
+        .getState()
+        .byThreadKey[scopedThreadKey(activeThreadRef)]?.surfaces.some(
+          (surface) =>
+            surface.kind === "device" &&
+            surface.target?.hostId === session.hostId &&
+            surface.target.deviceId === session.deviceId,
+        );
+      if (existing) continue;
+      const device = deviceState.devices.find(
+        (entry) => entry.hostId === session.hostId && entry.id === session.deviceId,
+      );
+      if (!device) continue;
+      useRightPanelStore.getState().openDevice(
+        activeThreadRef,
+        {
+          hostId: session.hostId,
+          deviceId: session.deviceId,
+          platform: device.platform,
+          name: device.name,
+        },
+        true,
+      );
+    }
+  }, [
+    activeThreadRef,
+    deviceStateLoaded,
+    shouldUseRightPanelSheet,
+    deviceState.sessions,
+    deviceState.devices,
+  ]);
   const openFileSurface = useCallback(
     (relativePath: string) => {
       if (!activeThreadRef || !activeProject) return;
@@ -4400,10 +4466,21 @@ export default function ChatView(props: ChatViewProps) {
     supportsPullRequests,
     threadDetailLoading,
   ]);
+  const closePreviewPanel = useCallback(() => {
+    if (activeThreadRef) {
+      if (activeRightPanelSurface?.kind === "preview" && activeRightPanelSurface.resourceId) {
+        usePreviewMiniPlayerStore
+          .getState()
+          .open(activeThreadRef, activeRightPanelSurface.resourceId);
+      }
+      setMaximizedRightPanelThreadKey(null);
+      useRightPanelStore.getState().close(activeThreadRef);
+    }
+  }, [activeRightPanelSurface, activeThreadRef]);
   const togglePreviewPanel = useCallback(() => {
     if (!activeThreadRef || !isPreviewSupportedInRuntime()) return;
     if (previewPanelOpen) {
-      useRightPanelStore.getState().close(activeThreadRef);
+      closePreviewPanel();
       return;
     }
     const activeTabId = activePreviewState.activeTabId;
@@ -4412,13 +4489,13 @@ export default function ChatView(props: ChatViewProps) {
     } else {
       createBrowserSurface();
     }
-  }, [activePreviewState.activeTabId, activeThreadRef, createBrowserSurface, previewPanelOpen]);
-  const closePreviewPanel = useCallback(() => {
-    if (activeThreadRef) {
-      setMaximizedRightPanelThreadKey(null);
-      useRightPanelStore.getState().close(activeThreadRef);
-    }
-  }, [activeThreadRef]);
+  }, [
+    activePreviewState.activeTabId,
+    activeThreadRef,
+    closePreviewPanel,
+    createBrowserSurface,
+    previewPanelOpen,
+  ]);
   const addTerminalSurface = useCallback(() => {
     if (!activeThreadRef || !activeThreadId || !activeProject) return;
     const cwd = gitCwd ?? activeProject.workspaceRoot;
@@ -5915,15 +5992,13 @@ export default function ChatView(props: ChatViewProps) {
     pendingApprovals.length > 0 ||
     pendingUserInputs.length > 0 ||
     showPlanFollowUpPrompt;
-  const compactDisabled = compactThreadUnavailable || composerHasUnsentContent;
+  const compactDisabled = compactThreadUnavailable;
   const compactDisabledReason = compactDisabled
-    ? composerHasUnsentContent
-      ? "Send or clear your draft before compacting"
-      : !activeProject
-        ? "Choose a project before compacting"
-        : !manualCompactionProviderAvailable
-          ? "Compaction is unavailable for this provider"
-          : "Compacting is unavailable right now"
+    ? !activeProject
+      ? "Choose a project before compacting"
+      : !manualCompactionProviderAvailable
+        ? "Compaction is unavailable for this provider"
+        : "Compacting is unavailable right now"
     : null;
   const resumeCompactionBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     if (
@@ -6640,6 +6715,78 @@ export default function ChatView(props: ChatViewProps) {
       };
     });
   }, [activeThread, cancelSideQuestion, environmentId, routeThreadKey, sideQuestionState]);
+
+  const onCompactContext = async () => {
+    if (compactDisabled || !activeThread || !clientSettingsHydrated || sendInFlightRef.current) {
+      return;
+    }
+    const context = composerRef.current?.getSendContext();
+    if (!context?.providerAvailable) return;
+
+    // Compaction is a standalone command; the draft and its attachments stay local.
+    const threadId = activeThread.id;
+    const messageId = newMessageId();
+    const createdAt = new Date().toISOString();
+    sendInFlightRef.current = true;
+    beginLocalDispatch();
+    setThreadError(threadId, null);
+    setOptimisticUserMessages((messages) => [
+      ...messages,
+      {
+        id: messageId,
+        role: "user",
+        text: "/compact",
+        turnId: null,
+        createdAt,
+        updatedAt: createdAt,
+        streaming: false,
+      },
+    ]);
+    scrollToEnd();
+    try {
+      const settingsResult = await persistThreadSettingsForNextTurn({
+        threadId,
+        createdAt,
+        modelSelection: context.selectedModelSelection,
+        ...(localCheckoutBranchMismatch
+          ? { branch: localCheckoutBranchMismatch.currentBranch }
+          : {}),
+        runtimeMode,
+        interactionMode: context.interactionMode,
+      });
+      const result =
+        settingsResult._tag === "Failure"
+          ? settingsResult
+          : await startThreadTurn({
+              environmentId,
+              input: {
+                threadId,
+                message: { messageId, role: "user", text: "/compact", attachments: [] },
+                modelSelection: context.selectedModelSelection,
+                runtimeMode,
+                interactionMode: context.interactionMode,
+                createdAt,
+              },
+            });
+      if (result._tag === "Failure") {
+        setOptimisticUserMessages((messages) =>
+          messages.filter((message) => message.id !== messageId),
+        );
+        resetLocalDispatch();
+        if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          setThreadError(
+            threadId,
+            error instanceof Error ? error.message : "Failed to compact context.",
+          );
+        }
+      } else {
+        clearUsageLimitsFor(routeThreadKey);
+      }
+    } finally {
+      sendInFlightRef.current = false;
+    }
+  };
 
   const onSend = async (
     e?: { preventDefault: () => void },
@@ -8417,6 +8564,20 @@ export default function ChatView(props: ChatViewProps) {
         environmentId={activeThreadRef?.environmentId ?? null}
         threadId={activeThreadRef?.threadId ?? null}
       />
+    ) : renderedRightPanelSurface?.kind === "device" ? (
+      <Suspense fallback={null}>
+        <DevicePanel
+          mode="embedded"
+          threadRef={activeThreadRef}
+          key={renderedRightPanelSurface.id}
+          surface={renderedRightPanelSurface}
+          visible={rightPanelOpen}
+          onDismissSetup={() => {
+            closeRightPanelSurface(renderedRightPanelSurface);
+            useRightPanelStore.getState().show(activeThreadRef);
+          }}
+        />
+      </Suspense>
     ) : (renderedRightPanelSurface?.kind === "files" ||
         renderedRightPanelSurface?.kind === "file") &&
       ((activeProject && activeWorkspaceRoot) ||
@@ -8472,6 +8633,29 @@ export default function ChatView(props: ChatViewProps) {
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
+      <Dialog
+        open={
+          deviceSetupThread !== null &&
+          deviceSetupThread.environmentId === activeThreadRef?.environmentId &&
+          deviceSetupThread.threadId === activeThreadRef?.threadId
+        }
+        onOpenChange={(open) => {
+          if (!open) setDeviceSetupThread(null);
+        }}
+      >
+        <WizardPopup>
+          {activeThreadRef ? (
+            <DeviceSetup
+              environmentId={activeThreadRef.environmentId}
+              state={deviceState}
+              onComplete={() => {
+                useRightPanelStore.getState().open(activeThreadRef, "device");
+                setDeviceSetupThread(null);
+              }}
+            />
+          ) : null}
+        </WizardPopup>
+      </Dialog>
       {rightPanelControlsAtRoot ? panelLayoutControls : null}
       <div
         className={cn(
@@ -8791,6 +8975,7 @@ export default function ChatView(props: ChatViewProps) {
                             onPageScrollKeyDown={onComposerPageScrollKeyDown}
                             onPageScrollKeyUp={onComposerPageScrollKeyUp}
                             onPageScrollRelease={onComposerPageScrollRelease}
+                            onCompactContext={onCompactContext}
                             onSend={onSend}
                             onInterrupt={onInterrupt}
                             onImplementPlanInNewThread={onImplementPlanInNewThread}
@@ -8973,6 +9158,10 @@ export default function ChatView(props: ChatViewProps) {
           terminalLabelsById={activeTerminalLabelsById}
           onActivate={activateRightPanelSurface}
           onCloseSurface={closeRightPanelSurface}
+          onRenameDevice={(surfaceId, title) => {
+            if (activeThreadRef)
+              useRightPanelStore.getState().renameDevice(activeThreadRef, surfaceId, title);
+          }}
           onCloseOtherSurfaces={closeOtherRightPanelSurfaces}
           onCloseSurfacesToRight={closeRightPanelSurfacesToRight}
           onCloseAllSurfaces={closeAllRightPanelSurfaces}
@@ -8986,6 +9175,7 @@ export default function ChatView(props: ChatViewProps) {
           onAddPullRequests={addPullRequestsSurface}
           onAddAgents={addAgentsSurface}
           onAddSideQuestion={addSideQuestionSurface}
+          onAddDevice={addDeviceSurface}
           browserAvailable={isPreviewSupportedInRuntime()}
           terminalAvailable={activeProject !== null}
           diffAvailable={isServerThread && isGitRepo}
@@ -8994,6 +9184,7 @@ export default function ChatView(props: ChatViewProps) {
           pullRequestsAvailable={isServerThread && supportsThreadPullRequests}
           agentsAvailable
           sideQuestionAvailable={sideQuestionAvailable}
+          deviceAvailable={activeThreadRef !== null}
           liveAgentCount={agentPanelModel.liveCount}
         >
           {rightPanelContent}
@@ -9027,6 +9218,10 @@ export default function ChatView(props: ChatViewProps) {
             terminalLabelsById={activeTerminalLabelsById}
             onActivate={activateRightPanelSurface}
             onCloseSurface={closeRightPanelSurface}
+            onRenameDevice={(surfaceId, title) => {
+              if (activeThreadRef)
+                useRightPanelStore.getState().renameDevice(activeThreadRef, surfaceId, title);
+            }}
             onCloseOtherSurfaces={closeOtherRightPanelSurfaces}
             onCloseSurfacesToRight={closeRightPanelSurfacesToRight}
             onCloseAllSurfaces={closeAllRightPanelSurfaces}
@@ -9040,6 +9235,7 @@ export default function ChatView(props: ChatViewProps) {
             onAddPullRequests={addPullRequestsSurface}
             onAddAgents={addAgentsSurface}
             onAddSideQuestion={addSideQuestionSurface}
+            onAddDevice={addDeviceSurface}
             browserAvailable={isPreviewSupportedInRuntime()}
             terminalAvailable={activeProject !== null}
             diffAvailable={isServerThread && isGitRepo}
@@ -9048,6 +9244,7 @@ export default function ChatView(props: ChatViewProps) {
             pullRequestsAvailable={isServerThread && supportsThreadPullRequests}
             agentsAvailable
             sideQuestionAvailable={sideQuestionAvailable}
+            deviceAvailable={activeThreadRef !== null}
             liveAgentCount={agentPanelModel.liveCount}
           >
             {rightPanelContent}
