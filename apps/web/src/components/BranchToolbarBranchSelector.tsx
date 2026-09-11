@@ -50,6 +50,7 @@ import {
   sanitizeNewRefName,
   shouldIncludeBranchPickerItem,
 } from "./BranchToolbar.logic";
+import { ComposerContextLabel } from "./ComposerContextLabel";
 import {
   ThreadPullRequestBadgeControl,
   prStatusIndicator,
@@ -779,17 +780,7 @@ export function BranchToolbarBranchSelector({
             disabled={isInitialBranchesLoadPending || isBranchActionPending}
           >
             <GitBranchIcon className="size-3 shrink-0 opacity-70" />
-            <span
-              data-composer-label
-              className="min-w-0 max-w-[240px] group-data-[compact]/composer-context:max-w-0"
-            >
-              <span
-                data-composer-label-motion
-                className="block w-full min-w-0 max-w-[240px] truncate transition-opacity duration-180 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[compact]/composer-context:opacity-0 motion-reduce:transition-none"
-              >
-                {triggerLabel}
-              </span>
-            </span>
+            <ComposerContextLabel>{triggerLabel}</ComposerContextLabel>
             <ChevronDownIcon className="size-3 shrink-0 opacity-50" />
           </ComboboxTrigger>
         </span>

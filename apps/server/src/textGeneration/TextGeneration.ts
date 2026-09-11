@@ -73,6 +73,17 @@ export interface ThreadTitleGenerationResult {
   title: string;
 }
 
+export interface SideQuestionGenerationInput {
+  cwd: string;
+  question: string;
+  context: string;
+  modelSelection: ModelSelection;
+}
+
+export interface SideQuestionGenerationResult {
+  answer: string;
+}
+
 /**
  * TextGeneration - Service tag for commit and change request text generation.
  */
@@ -104,6 +115,10 @@ export class TextGeneration extends Context.Service<
     readonly generateThreadTitle: (
       input: ThreadTitleGenerationInput,
     ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
+
+    readonly answerSideQuestion: (
+      input: SideQuestionGenerationInput,
+    ) => Effect.Effect<SideQuestionGenerationResult, TextGenerationError>;
   }
 >()("t3/textGeneration/TextGeneration") {}
 
@@ -111,7 +126,8 @@ type TextGenerationOp =
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
-  | "generateThreadTitle";
+  | "generateThreadTitle"
+  | "answerSideQuestion";
 
 const resolveInstance = (
   registry: ProviderInstanceRegistry.ProviderInstanceRegistry["Service"],
@@ -150,6 +166,10 @@ export const makeTextGenerationFromRegistry = (
     generateThreadTitle: (input) =>
       resolveInstance(registry, "generateThreadTitle", input.modelSelection.instanceId).pipe(
         Effect.flatMap((textGeneration) => textGeneration.generateThreadTitle(input)),
+      ),
+    answerSideQuestion: (input) =>
+      resolveInstance(registry, "answerSideQuestion", input.modelSelection.instanceId).pipe(
+        Effect.flatMap((textGeneration) => textGeneration.answerSideQuestion(input)),
       ),
   });
 

@@ -318,6 +318,8 @@ type ThreadSettingsSubmenuPage =
 
 type ThreadSettingsSessionProps = {
   readonly environmentId: EnvironmentId | null;
+  readonly title?: string;
+  readonly showRuntime?: boolean;
   readonly providerInstanceId?: ProviderInstanceId;
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
   readonly selectedModel: ModelSelection | null;
@@ -371,6 +373,8 @@ export function useExistingThreadSettingsRoutePresentation() {
 
 type ThreadSettingsSessionValue = {
   readonly environmentId: EnvironmentId | null;
+  readonly title: string;
+  readonly showRuntime: boolean;
   readonly providerInstanceId?: ProviderInstanceId;
   readonly providerGroups: ReadonlyArray<ProviderGroup>;
   readonly runtimeMode: RuntimeMode;
@@ -499,6 +503,8 @@ function ThreadSettingsSessionProvider(
   const value = useMemo<ThreadSettingsSessionValue>(
     () => ({
       environmentId: props.environmentId,
+      title: props.title ?? "Thread settings",
+      showRuntime: props.showRuntime ?? true,
       providerInstanceId: props.providerInstanceId,
       providerGroups: props.providerGroups,
       runtimeMode: props.runtimeMode,
@@ -536,6 +542,8 @@ function ThreadSettingsSessionProvider(
       props.onUpdateRuntimeMode,
       props.providerGroups,
       props.runtimeMode,
+      props.showRuntime,
+      props.title,
       searchQuery,
       showLegacyToggle,
       toggleProvider,
@@ -755,16 +763,18 @@ function ThreadSettingsOptionsItem(props: {
             </Animated.View>
           );
         })}
-        <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
-          <DisclosureRow
-            isLast
-            label="Runtime"
-            value={
-              RUNTIME_MODE_CHOICES.find((choice) => choice.mode === session.runtimeMode)?.label
-            }
-            onPress={() => props.onOpenSubmenu({ kind: "runtime" })}
-          />
-        </Animated.View>
+        {session.showRuntime ? (
+          <Animated.View layout={THREAD_SETTINGS_OPTIONS_LAYOUT_TRANSITION}>
+            <DisclosureRow
+              isLast
+              label="Runtime"
+              value={
+                RUNTIME_MODE_CHOICES.find((choice) => choice.mode === session.runtimeMode)?.label
+              }
+              onPress={() => props.onOpenSubmenu({ kind: "runtime" })}
+            />
+          </Animated.View>
+        ) : null}
       </Animated.View>
 
       {Platform.OS !== "ios" && session.hasLegacyModels ? (
@@ -1075,7 +1085,7 @@ function ThreadSettingsModelsScreen() {
             },
           ]}
           onBack={presentation.onClose}
-          title="Thread settings"
+          title={session.title}
         />
       ) : null}
       <NativeStackScreenOptions
@@ -1206,7 +1216,9 @@ function ThreadSettingsChoiceScreen() {
   );
 }
 
-function ThreadSettingsPickerNavigator(props: ThreadSettingsPickerPresentation) {
+function ThreadSettingsPickerNavigator(
+  props: ThreadSettingsPickerPresentation & { readonly title?: string },
+) {
   const theme = useUniwindTheme();
   const solidSheetBackground = theme["--color-sheet-solid"];
   const foreground = theme["--color-foreground"];
@@ -1242,7 +1254,7 @@ function ThreadSettingsPickerNavigator(props: ThreadSettingsPickerPresentation) 
         <ThreadSettingsPickerStack.Screen
           name="ThreadSettingsModels"
           component={ThreadSettingsModelsScreen}
-          options={{ headerBackVisible: false, title: "Thread settings" }}
+          options={{ headerBackVisible: false, title: props.title ?? "Thread settings" }}
         />
         <ThreadSettingsPickerStack.Screen
           name="ThreadSettingsChoice"
@@ -1276,7 +1288,7 @@ export function ExistingThreadSettingsRouteScreen() {
 
   return (
     <ThreadSettingsSessionProvider {...settings}>
-      <ThreadSettingsPickerNavigator onClose={() => navigation.goBack()} />
+      <ThreadSettingsPickerNavigator title={session.title} onClose={() => navigation.goBack()} />
     </ThreadSettingsSessionProvider>
   );
 }

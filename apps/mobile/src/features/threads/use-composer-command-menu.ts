@@ -57,6 +57,13 @@ export function buildComposerSlashCommandItems(input: {
       description: "Switch model",
     },
     {
+      id: "cmd:btw",
+      type: "slash-command",
+      command: "btw",
+      label: "/btw",
+      description: "Ask without interrupting the agent",
+    },
+    {
       id: "cmd:plan",
       type: "slash-command",
       command: "plan",
@@ -72,7 +79,9 @@ export function buildComposerSlashCommandItems(input: {
     },
   ] satisfies ComposerCommandItem[];
   const items: ComposerCommandItem[] = builtIn.filter(
-    (item) => item.command.includes(query) && (item.command === "model" || allowInteractionMode),
+    (item) =>
+      item.command.includes(query) &&
+      (item.command === "model" || item.command === "btw" || allowInteractionMode),
   );
 
   // Providers expand commands only at the start of a message. T3 commands

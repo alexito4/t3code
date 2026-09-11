@@ -304,6 +304,10 @@ function createTextGeneration(
       Effect.succeed({
         title: "Update workflow",
       }),
+    answerSideQuestion: () =>
+      Effect.succeed({
+        answer: "Side answer",
+      }),
     ...overrides,
   };
 
@@ -352,6 +356,7 @@ function createTextGeneration(
             }),
         ),
       ),
+    answerSideQuestion: implementation.answerSideQuestion,
   };
 }
 

@@ -7,6 +7,8 @@ import {
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  canAskComposerSideQuestion,
+  canOfferComposerSideQuestionCommand,
   clampCollapsedComposerCursor,
   collapseExpandedComposerCursor,
   composerSubmissionIntentForEnter,
@@ -14,6 +16,7 @@ import {
   expandCollapsedComposerCursor,
   formatAssistantCitationForComposer,
   isCollapsedCursorAdjacentToInlineToken,
+  parseComposerSideQuestion,
   parseStandaloneComposerSlashCommand,
   replaceTextRange,
 } from "./composer-logic";
@@ -106,6 +109,54 @@ describe("composerSubmissionIntentForEnter", () => {
         isDraftThread: false,
       }),
     ).toBe("foreground");
+  });
+});
+
+describe("side-question composer state", () => {
+  it("hides side-question actions while pending user input owns the composer", () => {
+    expect(canAskComposerSideQuestion({ isServerThread: true, hasPendingUserInput: true })).toBe(
+      false,
+    );
+    expect(canAskComposerSideQuestion({ isServerThread: true, hasPendingUserInput: false })).toBe(
+      true,
+    );
+  });
+
+  it("keeps /btw text on the pending user-input response path", () => {
+    expect(
+      parseComposerSideQuestion("/btw custom answer", {
+        isServerThread: true,
+        hasPendingUserInput: true,
+      }),
+    ).toBeNull();
+    expect(
+      parseComposerSideQuestion("/btw side question", {
+        isServerThread: true,
+        hasPendingUserInput: false,
+      }),
+    ).toBe("side question");
+  });
+
+  it("offers /btw only from a slash trigger at the prompt start", () => {
+    const promptStartTrigger = detectComposerTrigger("/bt", 3);
+    const laterLineTrigger = detectComposerTrigger("Keep this\n/bt", 13);
+
+    expect(promptStartTrigger).not.toBeNull();
+    expect(laterLineTrigger).not.toBeNull();
+    expect(
+      canOfferComposerSideQuestionCommand({
+        trigger: promptStartTrigger!,
+        isServerThread: true,
+        hasPendingUserInput: false,
+      }),
+    ).toBe(true);
+    expect(
+      canOfferComposerSideQuestionCommand({
+        trigger: laterLineTrigger!,
+        isServerThread: true,
+        hasPendingUserInput: false,
+      }),
+    ).toBe(false);
   });
 });
 
