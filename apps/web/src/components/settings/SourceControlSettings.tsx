@@ -55,6 +55,7 @@ import {
   JujutsuIcon,
   type Icon,
 } from "../Icons";
+import { PullRequestReviewSettingsSection } from "./PullRequestReviewSettings";
 import { RedactedSensitiveText } from "./RedactedSensitiveText";
 import { SourceControlWritingSettingsSection } from "./SourceControlWritingSettings";
 import {
@@ -590,6 +591,7 @@ export function SourceControlSettingsPanel() {
       {/* Its rows are serverScoped: without a primary they render inert with
           an explanation, which beats disappearing. */}
       <SourceControlWritingSettingsSection />
+      {isPrimaryEnvironment ? <PullRequestReviewSettingsSection /> : null}
     </SettingsPageContainer>
   );
 }
