@@ -24,6 +24,7 @@ import {
   GitPullRequest,
   GitPullRequestArrow,
   Globe2,
+  NotebookPen,
   Plus,
   TerminalSquare,
   Volume2,
@@ -118,6 +119,7 @@ interface RightPanelTabsProps {
   onAddPullRequests: () => void;
   onAddAgents: () => void;
   onAddDevice: () => void;
+  onAddScratchpad: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -126,6 +128,7 @@ interface RightPanelTabsProps {
   pullRequestsAvailable: boolean;
   agentsAvailable: boolean;
   deviceAvailable: boolean;
+  scratchpadAvailable: boolean;
   pullRequestStatusSeeds?: Readonly<Record<string, PullRequestTabStatusSeed>>;
   /** Running + waiting subagents; badges the Agents card in the empty state. */
   liveAgentCount: number;
@@ -157,6 +160,7 @@ const SURFACE_DISABLED_REASONS = {
   pullRequests: "No linked pull requests are available for this thread.",
   agents: "Agents are only available from a thread.",
   device: "Devices are only available from a thread.",
+  scratchpad: "Scratchpad is only available from a thread on a server with this fork's changes.",
 } as const;
 
 /** Overlays that must win over the launcher's letter shortcuts. */
@@ -181,6 +185,7 @@ const SURFACE_UNAVAILABLE_HINTS = {
   pullRequests: "No linked pull requests available.",
   agents: "Available from a thread.",
   device: "Available from a thread.",
+  scratchpad: "Available from a thread on a server with this fork's changes.",
 } as const;
 
 type TabContextMenuAction =
@@ -321,6 +326,7 @@ function RightPanelEmptyState(props: {
   onAddPullRequests: () => void;
   onAddAgents: () => void;
   onAddDevice: () => void;
+  onAddScratchpad: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -329,6 +335,7 @@ function RightPanelEmptyState(props: {
   pullRequestsAvailable: boolean;
   agentsAvailable: boolean;
   deviceAvailable: boolean;
+  scratchpadAvailable: boolean;
   liveAgentCount: number;
 }) {
   // -1 means no highlight: it only appears on hover or arrow use.
@@ -406,6 +413,16 @@ function RightPanelEmptyState(props: {
       available: props.deviceAvailable,
       disabledReason: SURFACE_UNAVAILABLE_HINTS.device,
       onClick: props.onAddDevice,
+      badgeCount: 0,
+    },
+    {
+      label: "Scratchpad",
+      description: "Keep notes about this thread.",
+      icon: NotebookPen,
+      shortcut: "S",
+      available: props.scratchpadAvailable,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.scratchpad,
+      onClick: props.onAddScratchpad,
       badgeCount: 0,
     },
   ] as const;
@@ -632,6 +649,8 @@ function surfaceTitle(
       return "Agents";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
+    case "scratchpad":
+      return "Scratchpad";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -723,6 +742,8 @@ function SurfaceIcon({
       ) : (
         <Smartphone className="size-3 shrink-0" />
       );
+    case "scratchpad":
+      return <NotebookPen className="size-3 shrink-0" />;
   }
 }
 
@@ -924,6 +945,14 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       available: props.deviceAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.device,
       onClick: props.onAddDevice,
+    },
+    {
+      label: "Scratchpad",
+      icon: NotebookPen,
+      shortcut: "S",
+      available: props.scratchpadAvailable,
+      disabledReason: SURFACE_DISABLED_REASONS.scratchpad,
+      onClick: props.onAddScratchpad,
     },
   ] as const;
 
@@ -1397,6 +1426,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddPullRequests={props.onAddPullRequests}
             onAddAgents={props.onAddAgents}
             onAddDevice={props.onAddDevice}
+            onAddScratchpad={props.onAddScratchpad}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}
             diffAvailable={props.diffAvailable}
@@ -1405,6 +1435,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             pullRequestsAvailable={props.pullRequestsAvailable}
             agentsAvailable={props.agentsAvailable}
             deviceAvailable={props.deviceAvailable}
+            scratchpadAvailable={props.scratchpadAvailable}
             liveAgentCount={props.liveAgentCount}
           />
         ) : (
