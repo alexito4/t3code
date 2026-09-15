@@ -23,7 +23,7 @@ describe("diffPanelStore", () => {
   it("defaults each thread to working changes when the working tree is dirty", () => {
     expect(
       selectThreadDiffPanelSelection(useDiffPanelStore.getState().byThreadKey, THREAD_REF, true),
-    ).toEqual({ kind: "unstaged" });
+    ).toEqual({ kind: "uncommitted" });
   });
 
   it("preserves an explicit scope selection when the working tree state changes", () => {
@@ -37,16 +37,32 @@ describe("diffPanelStore", () => {
   it("clears incompatible selection fields when changing scopes", () => {
     const store = useDiffPanelStore.getState();
     store.selectTurn(THREAD_REF, TurnId.make("turn-1"), "src/app.ts");
-    store.selectGitScope(THREAD_REF, "unstaged");
+    store.selectGitScope(THREAD_REF, "uncommitted");
 
     expect(
       selectThreadDiffPanelSelection(useDiffPanelStore.getState().byThreadKey, THREAD_REF),
-    ).toEqual({ kind: "unstaged" });
+    ).toEqual({ kind: "uncommitted" });
 
     useDiffPanelStore.getState().selectBranchBaseRef(THREAD_REF, " origin/main ");
     expect(
       selectThreadDiffPanelSelection(useDiffPanelStore.getState().byThreadKey, THREAD_REF),
     ).toEqual({ kind: "branch", baseRef: "origin/main" });
+  });
+
+  it("selects the unstaged scope", () => {
+    useDiffPanelStore.getState().selectGitScope(THREAD_REF, "unstaged");
+
+    expect(
+      selectThreadDiffPanelSelection(useDiffPanelStore.getState().byThreadKey, THREAD_REF),
+    ).toEqual({ kind: "unstaged" });
+  });
+
+  it("selects the staged scope", () => {
+    useDiffPanelStore.getState().selectGitScope(THREAD_REF, "staged");
+
+    expect(
+      selectThreadDiffPanelSelection(useDiffPanelStore.getState().byThreadKey, THREAD_REF),
+    ).toEqual({ kind: "staged" });
   });
 
   it("increments the reveal request when opening the same turn file again", () => {
@@ -61,7 +77,7 @@ describe("diffPanelStore", () => {
 
   it("restores the selected branch base after visiting another scope", () => {
     useDiffPanelStore.getState().selectBranchBaseRef(THREAD_REF, "origin/main");
-    useDiffPanelStore.getState().selectGitScope(THREAD_REF, "unstaged");
+    useDiffPanelStore.getState().selectGitScope(THREAD_REF, "uncommitted");
     useDiffPanelStore.getState().selectGitScope(THREAD_REF, "branch");
 
     expect(
