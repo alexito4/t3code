@@ -18,6 +18,15 @@ import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePat
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
 import type { OtlpProtocol } from "@t3tools/shared/observability";
 
+// Personal fork builds get their own Electron userData dir (and therefore
+// their own single-instance lock) so a locally-built app can run alongside
+// an official install instead of silently deferring to it. The shared T3
+// state dir (resolveDesktopBaseDir/resolveDesktopStateDir) is untouched by
+// this, so projects/threads keep being shared as normal.
+declare const __T3CODE_DESKTOP_PERSONAL_BUILD__: boolean | undefined;
+const isPersonalBuild =
+  typeof __T3CODE_DESKTOP_PERSONAL_BUILD__ !== "undefined" && __T3CODE_DESKTOP_PERSONAL_BUILD__;
+
 export interface MakeDesktopEnvironmentInput {
   readonly dirname: string;
   readonly homeDirectory: string;
@@ -99,6 +108,10 @@ function resolveDesktopAppStageLabel(input: {
 }): DesktopAppStageLabel {
   if (input.isDevelopment) {
     return "Dev";
+  }
+
+  if (isPersonalBuild) {
+    return "Personal";
   }
 
   return isNightlyDesktopVersion(input.appVersion) ? "Nightly" : "Alpha";
@@ -184,8 +197,16 @@ const make = Effect.fn("desktop.environment.make")(function* (
     joinPath: path.join,
     t3Home: config.t3Home,
   });
-  const userDataDirName = isDevelopment ? "t3code-dev" : "t3code";
-  const legacyUserDataDirName = isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)";
+  const userDataDirName = isDevelopment
+    ? "t3code-dev"
+    : isPersonalBuild
+      ? "t3code-personal"
+      : "t3code";
+  const legacyUserDataDirName = isDevelopment
+    ? "T3 Code (Dev)"
+    : isPersonalBuild
+      ? "T3 Code (Personal)"
+      : "T3 Code (Alpha)";
   const linuxApplicationsDir = path.join(
     Option.getOrElse(config.xdgDataHome, () => path.join(homeDirectory, ".local", "share")),
     "applications",
