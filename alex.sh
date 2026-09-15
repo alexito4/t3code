@@ -25,6 +25,7 @@ PATCH_BRANCHES=(
     patch/review-diff-committed-mode
     patch/review-diff-file-actions
     feat/thread-share
+    feat/scratchpad-panel
 )
 
 usage() {

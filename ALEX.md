@@ -107,6 +107,23 @@ buildable/runnable for personal use (see Fork infrastructure below).
   be accepted without an Ideas discussion first — revisit once lived with for a while, and open
   that discussion before a PR if it still seems worth sending.
 
+- **Scratchpad panel** — a new right-side panel, alongside Browser/Review/Files/Terminal, for
+  freeform personal notes tied to a specific thread — there was no way to jot down ideas about a
+  thread without polluting the actual conversation. Uses the same `@pierre/diffs` editor as the
+  Files panel, including its exact line-selection → inline-comment-box → cite flow (reusing
+  `buildFileReviewComment`'s sibling `buildScratchpadReviewComment`, which shapes a cited excerpt
+  as a `ReviewCommentContext` with `sectionId: "scratchpad:<threadId>"` — no new
+  `ComposerContextRecord` kind needed). Content persists server-side in its own projection table
+  (`projection_thread_scratchpads`, a `thread.scratchpad.set` command/event pair) fetched on
+  demand via `orchestration.getThreadScratchpad`, deliberately never added to the in-memory
+  `OrchestrationThread` snapshot or thread-shell broadcast, so a large scratchpad never slows down
+  the thread list. Since this only works against a server built from this fork, it's gated behind
+  a new `scratchpad` server capability flag (`ExecutionEnvironmentCapabilities`) — clients hide
+  the tab entirely when connected to an unpatched/upstream server (e.g. a remote machine running
+  the official nightly) instead of offering one that would fail. On branch
+  `feat/scratchpad-panel` (based on `upstream/main`) and composed into `main` via
+  `PATCH_BRANCHES`. Built for personal use first; not yet sent upstream.
+
 ## Merged early from open upstream PRs
 
 Features from someone else's still-open, unmerged upstream PR, pulled onto `main` ahead of
