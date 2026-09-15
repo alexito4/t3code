@@ -4625,6 +4625,33 @@ export default function ChatView(props: ChatViewProps) {
     if (!activeThreadRef || !scratchpadAvailable) return;
     useRightPanelStore.getState().open(activeThreadRef, "scratchpad");
   }, [activeThreadRef, scratchpadAvailable]);
+  const appendScratchpad = useAtomCommand(threadEnvironment.appendScratchpad, {
+    reportFailure: false,
+  });
+  const addSelectionToScratchpad = useCallback(
+    (citation: AssistantCitation) => {
+      if (!activeThreadRef || !scratchpadAvailable) return false;
+      void appendScratchpad({
+        environmentId: activeThreadRef.environmentId,
+        input: { threadId: activeThreadRef.threadId, text: citation.text },
+      }).then((result) => {
+        if (result._tag === "Success") {
+          toastManager.add({ type: "success", title: "Added to scratchpad" });
+        } else if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not add to scratchpad",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
+      });
+      return true;
+    },
+    [activeThreadRef, appendScratchpad, scratchpadAvailable],
+  );
   const supportsThreadPullRequests =
     serverConfig?.environment.capabilities.threadPullRequests === true;
   const visiblePullRequestCount = visibleThreadPullRequests(
@@ -9725,6 +9752,8 @@ export default function ChatView(props: ChatViewProps) {
                       onCiteAssistantText: citeAssistantText,
                       onAskInSideChat: askSelectionInSideChat,
                       askInSideChatAvailable: sideQuestionAvailable,
+                      onAddToScratchpad: addSelectionToScratchpad,
+                      addToScratchpadAvailable: scratchpadAvailable,
                       agentPanelModel,
                       onOpenAgents: addAgentsSurface,
                       onUseArtifactTemplate: useArtifactTemplate,

@@ -4,7 +4,7 @@ import {
   type AssistantCitation,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
-import { MessageCirclePlus, QuoteIcon } from "lucide-react";
+import { MessageCirclePlus, NotebookPen, QuoteIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -24,12 +24,16 @@ export function AssistantSelectionToolbar({
   onCite,
   onAskInSideChat,
   askInSideChatAvailable = true,
+  onAddToScratchpad,
+  addToScratchpadAvailable = true,
 }: {
   viewport: HTMLElement | null;
   threadRef: ScopedThreadRef;
   onCite: (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) => boolean;
   onAskInSideChat?: (citation: AssistantCitation) => boolean;
   askInSideChatAvailable?: boolean;
+  onAddToScratchpad?: (citation: AssistantCitation) => boolean;
+  addToScratchpadAvailable?: boolean;
 }) {
   const [selection, setSelection] = useState<{
     citation: AssistantCitation;
@@ -139,6 +143,14 @@ export function AssistantSelectionToolbar({
     dismiss();
     return true;
   };
+  const addToScratchpad = () => {
+    if (tooLong || !addToScratchpadAvailable || !onAddToScratchpad?.(selection.citation)) {
+      return false;
+    }
+    window.getSelection()?.removeAllRanges();
+    dismiss();
+    return true;
+  };
   return createPortal(
     <div
       ref={toolbarRef}
@@ -184,6 +196,27 @@ export function AssistantSelectionToolbar({
           >
             <MessageCirclePlus aria-hidden="true" className="size-3.5" />
             Ask in side chat
+          </Button>
+        </>
+      ) : null}
+      {onAddToScratchpad ? (
+        <>
+          <div aria-hidden="true" className="h-4 w-px shrink-0 bg-border/60" />
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            disabled={tooLong || !addToScratchpadAvailable}
+            aria-label={
+              addToScratchpadAvailable
+                ? "Add selection to scratchpad"
+                : "Scratchpad is not available for this thread"
+            }
+            className="rounded-none px-2.5"
+            onClick={addToScratchpad}
+          >
+            <NotebookPen aria-hidden="true" className="size-3.5" />
+            Add to scratchpad
           </Button>
         </>
       ) : null}

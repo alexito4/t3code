@@ -26,6 +26,23 @@ import { installFileEditorDismissal } from "../files/fileEditorDismissal";
 import { fileContentRevision } from "../files/fileContentRevision";
 import { useScratchpadSaveCoordinator } from "./useScratchpadSaveCoordinator";
 
+// Reusing the same cache-key identity trick as `projectFileEditorCacheKey`:
+// a fresh key on every keystroke makes @pierre/diffs treat the field as a
+// brand-new file and remount its contentEditable, dropping focus after each
+// character. Keeping the prior key when the editor already holds this exact
+// content (i.e. the change came from the editor itself, not an external
+// load) keeps the DOM node -- and focus -- stable while typing.
+function scratchpadEditorCacheKey(
+  threadId: string,
+  contents: string,
+  editorFile: { cacheKey?: string; contents: string } | undefined,
+): string {
+  if (editorFile?.contents === contents && editorFile.cacheKey) {
+    return editorFile.cacheKey;
+  }
+  return `scratchpad:${threadId}:${fileContentRevision(contents)}`;
+}
+
 interface ScratchpadPanelProps {
   threadRef: ScopedThreadRef;
   composerDraftTarget: ScopedThreadRef | DraftId;
@@ -238,7 +255,7 @@ function ScratchpadEditor({
             file={{
               name: "Scratchpad",
               contents,
-              cacheKey: `scratchpad:${threadRef.threadId}:${fileContentRevision(contents)}`,
+              cacheKey: scratchpadEditorCacheKey(threadRef.threadId, contents, editor.getFile()),
             }}
             options={{
               disableFileHeader: true,

@@ -382,6 +382,8 @@ interface MessagesTimelineProps {
   ) => boolean;
   onAskInSideChat?: (citation: AssistantCitation) => boolean;
   askInSideChatAvailable?: boolean;
+  onAddToScratchpad?: (citation: AssistantCitation) => boolean;
+  addToScratchpadAvailable?: boolean;
   agentPanelModel?: AgentPanelModel;
   onOpenAgents?: () => void;
   isWorking: boolean;
@@ -457,6 +459,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onCiteAssistantText,
   onAskInSideChat,
   askInSideChatAvailable = false,
+  onAddToScratchpad,
+  addToScratchpadAvailable = false,
   isWorking,
   worktreeSetup = null,
   onCancelWorktreeSetup,
@@ -1029,6 +1033,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
               threadRef={citationThreadRef}
               onCite={onCiteAssistantText}
               {...(onAskInSideChat ? { onAskInSideChat, askInSideChatAvailable } : {})}
+              {...(onAddToScratchpad ? { onAddToScratchpad, addToScratchpadAvailable } : {})}
             />
           ) : null}
           <LegendList<MessagesTimelineRow>
