@@ -7,7 +7,7 @@ import { isElectron } from "../../env";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { useThreadShells } from "../../state/entities";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
-import { useSettingsProjectGroups } from "../settings/ProjectSettingsPanel";
+import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
 import { ProjectActivityChart, type ProjectActivitySeries } from "./ProjectActivityChart";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../ui/empty";
