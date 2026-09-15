@@ -8,6 +8,7 @@ import {
 
 import { createOptimisticThreadLifecycle } from "./threadLifecycle.ts";
 import { canSnooze } from "./threadSettled.ts";
+import { appendToThreadScratchpad } from "./scratchpadAppend.ts";
 
 import {
   createAtomCommandScheduler,
@@ -188,6 +189,13 @@ export function createThreadEnvironmentAtoms<R, E>(
     setScratchpad: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:set-scratchpad",
       execute: (input: SetThreadScratchpadInput) => setThreadScratchpad(input),
+      scheduler,
+      concurrency,
+    }),
+    appendScratchpad: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:append-scratchpad",
+      execute: (input: { readonly threadId: SetThreadScratchpadInput["threadId"]; text: string }) =>
+        appendToThreadScratchpad(input),
       scheduler,
       concurrency,
     }),
