@@ -43,6 +43,10 @@
       "types": "./src/git.ts",
       "import": "./src/git.ts"
     },
+    "./threadExport": {
+      "types": "./src/threadExport.ts",
+      "import": "./src/threadExport.ts"
+    },
     "./sourceControl": {
       "types": "./src/sourceControl.ts",
       "import": "./src/sourceControl.ts"
