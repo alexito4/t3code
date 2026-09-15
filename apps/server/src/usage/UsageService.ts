@@ -279,15 +279,26 @@ export const make = Effect.gen(function* () {
             environment.GROK_HOME?.trim() || path.join(NodeOS.homedir(), ".grok"),
           );
         }
-        const directory = path.resolve(home, provider === "claude" ? "projects" : "sessions");
-        // Account aliases and Codex auth overlays can share the same history.
-        const dir = yield* fileSystem
-          .realPath(directory)
-          .pipe(Effect.orElseSucceed(() => directory));
-        const key = `${provider}\0${dir}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        dirs.push({ provider, dir, ...(provider === "grok" ? { fileName: "updates.jsonl" } : {}) });
+        // Codex CLI rotates completed rollouts out of `sessions` into
+        // `archived_sessions`; usage that has aged into it is otherwise invisible.
+        const directories =
+          provider === "codex"
+            ? [path.resolve(home, "sessions"), path.resolve(home, "archived_sessions")]
+            : [path.resolve(home, provider === "claude" ? "projects" : "sessions")];
+        for (const directory of directories) {
+          // Account aliases and Codex auth overlays can share the same history.
+          const dir = yield* fileSystem
+            .realPath(directory)
+            .pipe(Effect.orElseSucceed(() => directory));
+          const key = `${provider}\0${dir}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          dirs.push({
+            provider,
+            dir,
+            ...(provider === "grok" ? { fileName: "updates.jsonl" } : {}),
+          });
+        }
       }
     }
     return dirs;
