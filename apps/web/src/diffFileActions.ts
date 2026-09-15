@@ -98,3 +98,49 @@ export function openDiffFilePrimaryAction({
 
   openInEditor(activeCwd ? resolvePathLinkTarget(workspaceFilePath, activeCwd) : workspaceFilePath);
 }
+
+export type DiffFileGitScope = "uncommitted" | "unstaged" | "staged" | "branch";
+
+export interface DiffFileStagingActions {
+  readonly canStage: boolean;
+  readonly canUnstage: boolean;
+  readonly canDiscard: boolean;
+}
+
+const NO_STAGING_ACTIONS: DiffFileStagingActions = {
+  canStage: false,
+  canUnstage: false,
+  canDiscard: false,
+};
+
+/**
+ * Decides which per-file stage/unstage/discard buttons the diff panel shows
+ * for the active Git scope. Only the live-tree scopes (Uncommitted, Unstaged,
+ * Staged) get any buttons -- Branch and historical (turn/commit) diffs are
+ * read-only.
+ *
+ * Judgment call: the combined "Uncommitted" scope (`git diff HEAD`) doesn't
+ * tell us, per file, whether its change is staged, unstaged, or both, so
+ * there's no unambiguous "unstage" action to offer there. "Stage" is still
+ * offered because `git add` on an already-staged file is a harmless no-op,
+ * and "discard" is well-defined regardless (see `discardFile` below): it
+ * always reverts the file to HEAD (or deletes it if never committed) rather
+ * than clearing only the staged or only the unstaged half of a change.
+ */
+export function resolveDiffFileStagingActions(
+  gitScope: DiffFileGitScope,
+  isHistoricalSelection: boolean,
+): DiffFileStagingActions {
+  if (isHistoricalSelection) return NO_STAGING_ACTIONS;
+
+  switch (gitScope) {
+    case "staged":
+      return { canStage: false, canUnstage: true, canDiscard: true };
+    case "unstaged":
+      return { canStage: true, canUnstage: false, canDiscard: true };
+    case "uncommitted":
+      return { canStage: true, canUnstage: false, canDiscard: true };
+    case "branch":
+      return NO_STAGING_ACTIONS;
+  }
+}
