@@ -4,7 +4,7 @@ import {
   type AssistantCitation,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
-import { QuoteIcon } from "lucide-react";
+import { MessageCirclePlus, QuoteIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -22,17 +22,22 @@ export function AssistantSelectionToolbar({
   viewport,
   threadRef,
   onCite,
+  onAskInSideChat,
+  askInSideChatAvailable = true,
 }: {
   viewport: HTMLElement | null;
   threadRef: ScopedThreadRef;
   onCite: (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) => boolean;
+  onAskInSideChat?: (citation: AssistantCitation) => boolean;
+  askInSideChatAvailable?: boolean;
 }) {
   const [selection, setSelection] = useState<{
     citation: AssistantCitation;
     position: SelectionActionPoint;
     sourceAnchor: AssistantCitationSourceAnchor;
   } | null>(null);
-  const toolbarRef = useRef<HTMLButtonElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const citeActionRef = useRef<HTMLButtonElement>(null);
   const actionsRef = useRef<ReturnType<typeof observeSelectionActions> | null>(null);
 
   useLayoutEffect(() => {
@@ -86,6 +91,7 @@ export function AssistantSelectionToolbar({
     actionsRef.current = actions;
     const focusActions = (event: KeyboardEvent) => {
       const toolbar = toolbarRef.current;
+      const firstAction = citeActionRef.current;
       if (
         event.key !== "Tab" ||
         event.shiftKey ||
@@ -95,14 +101,15 @@ export function AssistantSelectionToolbar({
         event.isComposing ||
         event.defaultPrevented ||
         !toolbar ||
+        !firstAction ||
         toolbar.contains(event.target as Node)
       ) {
         return;
       }
-      if (toolbar.disabled) return;
+      if (firstAction.disabled) return;
       event.preventDefault();
       event.stopPropagation();
-      toolbar.focus({ preventScroll: true });
+      firstAction.focus({ preventScroll: true });
     };
     document.addEventListener("keydown", focusActions, true);
     document.addEventListener("selectionchange", actions.selectionChanged);
@@ -126,18 +133,18 @@ export function AssistantSelectionToolbar({
     dismiss();
     return true;
   };
+  const askInSideChat = () => {
+    if (tooLong || !askInSideChatAvailable || !onAskInSideChat?.(selection.citation)) return false;
+    window.getSelection()?.removeAllRanges();
+    dismiss();
+    return true;
+  };
   return createPortal(
-    <Button
+    <div
       ref={toolbarRef}
-      type="button"
-      size="xs"
-      variant="glass"
-      disabled={tooLong}
-      aria-label={tooLong ? "Selection is too long to cite" : "Cite selection in composer"}
-      className="fixed z-50 max-w-[calc(100vw-1rem)] rounded-full px-2.5"
+      className="surface-glass fixed z-50 flex max-w-[calc(100vw-1rem)] items-center overflow-hidden rounded-full border border-border/60 shadow-sm"
       style={{ left: selection.position.x, top: selection.position.y }}
       onPointerDown={(event) => event.preventDefault()}
-      onClick={cite}
       onKeyDown={(event) => {
         event.stopPropagation();
         if (event.key === "Escape" && !event.nativeEvent.isComposing) {
@@ -146,9 +153,41 @@ export function AssistantSelectionToolbar({
         }
       }}
     >
-      <QuoteIcon aria-hidden="true" className="size-3.5" />
-      {tooLong ? "Shorten selection" : "Cite"}
-    </Button>,
+      <Button
+        ref={citeActionRef}
+        type="button"
+        size="xs"
+        variant="ghost"
+        disabled={tooLong}
+        aria-label={tooLong ? "Selection is too long to cite" : "Cite selection in composer"}
+        className="rounded-none px-2.5"
+        onClick={cite}
+      >
+        <QuoteIcon aria-hidden="true" className="size-3.5" />
+        {tooLong ? "Shorten selection" : "Cite"}
+      </Button>
+      {onAskInSideChat ? (
+        <>
+          <div aria-hidden="true" className="h-4 w-px shrink-0 bg-border/60" />
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            disabled={tooLong || !askInSideChatAvailable}
+            aria-label={
+              askInSideChatAvailable
+                ? "Ask about selection in a side chat"
+                : "Side chats need a running thread with no pending input"
+            }
+            className="rounded-none px-2.5"
+            onClick={askInSideChat}
+          >
+            <MessageCirclePlus aria-hidden="true" className="size-3.5" />
+            Ask in side chat
+          </Button>
+        </>
+      ) : null}
+    </div>,
     document.body,
   );
 }

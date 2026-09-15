@@ -65,6 +65,7 @@ import {
 } from "react";
 import { createPortal, flushSync } from "react-dom";
 import {
+  canOfferComposerSideQuestionCommand,
   clampCollapsedComposerCursor,
   type ComposerSubmissionIntent,
   type ComposerTrigger,
@@ -73,6 +74,7 @@ import {
   detectComposerTrigger,
   expandCollapsedComposerCursor,
   formatAssistantCitationForComposer,
+  parseComposerSideQuestion,
   replaceTextRange,
 } from "../../composer-logic";
 import { DISCONNECTED_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
@@ -245,6 +247,7 @@ import { ComposerPendingApprovalActions } from "./ComposerPendingApprovalActions
 import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
 import { ComposerImageThumbnail } from "./ComposerImageThumbnail";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
+import { ComposerGlassMainSurface, ComposerGlassSurface } from "./ComposerGlass";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
 import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
@@ -1158,6 +1161,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
     isComplete: boolean;
   } | null;
   isRunning: boolean;
+  isSideQuestion: boolean;
   showPlanFollowUpPrompt: boolean;
   promptHasText: boolean;
   isSendBusy: boolean;
@@ -1190,6 +1194,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         compact={props.compact}
         pendingAction={props.pendingAction}
         isRunning={props.isRunning}
+        isSideQuestion={props.isSideQuestion}
         showPlanFollowUpPrompt={props.showPlanFollowUpPrompt}
         promptHasText={props.promptHasText}
         isSendBusy={props.isSendBusy}
@@ -1444,8 +1449,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeThreadId,
     activeThreadEnvironmentId: _activeThreadEnvironmentId,
     activeThread,
+    isServerThread,
     promptHistoryMessages,
-    isServerThread: _isServerThread,
     isLocalDraftThread: _isLocalDraftThread,
     forceExpandedOnMobile,
     projectSelectionRequired,
@@ -2292,11 +2297,26 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       const builtInSlashCommandItems = [
         {
           id: "slash:model",
-          type: "slash-command",
-          command: "model",
+          type: "slash-command" as const,
+          command: "model" as const,
           label: "/model",
           description: "Switch response model for this thread",
         },
+        ...(canOfferComposerSideQuestionCommand({
+          trigger: composerTrigger,
+          isServerThread,
+          hasPendingUserInput: activePendingProgress !== null,
+        })
+          ? [
+              {
+                id: "slash:btw",
+                type: "slash-command" as const,
+                command: "btw" as const,
+                label: "/btw",
+                description: "Ask a side question without interrupting the agent",
+              },
+            ]
+          : []),
         ...(planModeUiEnabled
           ? ([
               {
@@ -2418,8 +2438,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
     return [];
   }, [
+    activePendingProgress,
     compactSlashCommandAvailable,
     composerTrigger,
+    isServerThread,
     exactPullRequestLookup.data,
     planModeUiEnabled,
     pullRequestLookup.data,
@@ -2613,8 +2635,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       attachmentTargetKey,
     ],
   );
+  const isSideQuestionDraft =
+    parseComposerSideQuestion(prompt.trim(), {
+      isServerThread,
+      hasPendingUserInput: activePendingProgress !== null,
+    }) !== null;
   const collapsedComposerPrimaryActionDisabled =
-    phase === "running" ||
+    (phase === "running" && !isSideQuestionDraft) ||
     isSendBusy ||
     isSendDisabled ||
     isConnecting ||
@@ -2622,7 +2649,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     projectSelectionRequired ||
     environmentUnavailable !== null ||
     !composerSendState.hasSendableContent;
-  const collapsedComposerPrimaryActionLabel = "Send message";
+  const collapsedComposerPrimaryActionLabel = isSideQuestionDraft
+    ? "Ask side question"
+    : "Send message";
   const showMobilePendingAnswerActions =
     isMobileViewport && !isComposerCollapsedMobile && pendingPrimaryAction !== null;
 
@@ -3544,6 +3573,26 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           if (applied) {
             setComposerHighlightedItemId(null);
             setIsComposerModelPickerOpen(true);
+          }
+          return;
+        }
+        if (item.command === "btw") {
+          const replacement = "/btw ";
+          const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
+            snapshot.value,
+            trigger.rangeEnd,
+            replacement,
+          );
+          const applied = applyPromptReplacement(
+            trigger.rangeStart,
+            replacementRangeEnd,
+            replacement,
+            {
+              expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd),
+            },
+          );
+          if (applied) {
+            setComposerHighlightedItemId(null);
           }
           return;
         }
@@ -6828,6 +6877,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     activeThreadModelDisplayName={activeThreadModelDisplayName}
                     pendingAction={pendingPrimaryAction}
                     isRunning={phase === "running"}
+                    isSideQuestion={isSideQuestionDraft}
                     showPlanFollowUpPrompt={
                       pendingUserInputs.length === 0 && showPlanFollowUpPrompt
                     }
