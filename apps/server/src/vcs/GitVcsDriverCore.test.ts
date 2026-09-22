@@ -1118,7 +1118,11 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
             const scoped = yield* driver.getReviewDiffPreview({
               cwd: nestedCwd,
               baseRef: initialBranch,
-              file: { path: file.path, previousPath: file.previousPath, sourceKind: source.kind },
+              file: {
+                path: file.path,
+                previousPath: file.previousPath,
+                sourceKind: source.kind === "branch-range" ? "branch-range" : "working-tree",
+              },
             });
             const patch = scoped.sources.find((item) => item.kind === source.kind)!;
             assert.deepStrictEqual(patch.files, [file]);
@@ -1565,7 +1569,11 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
             const individual = yield* driver.getReviewDiffPreview({
               cwd,
               baseRef: initialBranch,
-              file: { path: file.path, previousPath: file.previousPath, sourceKind: source.kind },
+              file: {
+                path: file.path,
+                previousPath: file.previousPath,
+                sourceKind: source.kind === "branch-range" ? "branch-range" : "working-tree",
+              },
             });
             const patch = individual.sources.find((candidate) => candidate.kind === source.kind)!;
             assert.isFalse(patch.truncated);
