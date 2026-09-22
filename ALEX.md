@@ -219,7 +219,10 @@ the official one. Never meant to merge upstream.
     infrastructure, only for features or merged-early upstream PRs (see the sections above).
 
 Run `./alex.sh` with no args for the current subcommand list (`dev`, `connect`, `sync`,
-`rebuild`, `dist`, `pair`).
+`rebuild`, `dist`, `pair`). `./alex.sh dist` is the local desktop update workflow: it builds the
+personal arm64 app, replaces `/Applications/T3 Code (Personal).app`, and removes its temporary
+packaging artifacts. Close the installed app before reopening it to use the new build; do not use
+the generated DMG or ZIP for local updates.
 
 ## Adding a new entry
 

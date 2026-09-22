@@ -117,10 +117,21 @@ case "$cmd" in
         done
         ;;
     dist)
-        export PNPM_CONFIG_MINIMUM_RELEASE_AGE=0
+        # The current upstream lockfile can contain dependencies within pnpm's
+        # release-age window. Bypass it only for this local personal build,
+        # then restore the user's normal policy even if the build fails.
+        minimum_release_age="$(pnpm config get minimumReleaseAge)"
+        build_dir="$(mktemp -d)"
+        cleanup_dist() {
+            pnpm config set minimumReleaseAge "$minimum_release_age" --location user
+            rm -rf "$build_dir"
+        }
+        trap cleanup_dist EXIT
+        pnpm config set minimumReleaseAge 0 --location user
+
         export T3CODE_DESKTOP_PERSONAL_BUILD=1
         pnpm build:desktop
-        pnpm dist:desktop:dmg:arm64
+        T3CODE_DESKTOP_OUTPUT_DIR="$build_dir" pnpm dist:desktop:dmg:arm64
 
         # electron-builder skips codesigning entirely for unsigned local
         # builds, leaving Electron's stock ad-hoc signature (with no
@@ -129,7 +140,7 @@ case "$cmd" in
         # the app silently exits within its first second. Re-sign ad-hoc with
         # the entitlements the official notarized build gets for free, using
         # the zip artifact (a plain .app) rather than the dmg.
-        zip_path="$(ls -t release/*-arm64.zip | head -1)"
+        zip_path="$(ls -t "$build_dir"/*-arm64.zip | head -1)"
         stage_dir="$(mktemp -d)"
         ditto -x -k "$zip_path" "$stage_dir"
         app_path="$(find "$stage_dir" -maxdepth 1 -iname "*.app")"
@@ -157,6 +168,7 @@ PLIST
         rm -rf "$stage_dir" "$entitlements_path"
 
         echo "Installed $install_path"
+        echo "Packaging artifacts were kept temporary and removed."
         echo "First launch needs one Finder double-click to clear Gatekeeper's unsigned-app approval (open/exec from a terminal won't trigger or satisfy it)."
         ;;
     pair)
