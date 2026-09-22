@@ -68,7 +68,11 @@ export function useReviewFilePatches({
                       file: {
                         path: file.path,
                         previousPath: file.previousPath,
-                        sourceKind: source.kind,
+                        // The per-file patch request only distinguishes a branch
+                        // comparison from everything else uncommitted; staged and
+                        // unstaged both fetch the working-tree side.
+                        sourceKind:
+                          source.kind === "branch-range" ? "branch-range" : "working-tree",
                       },
                     },
                   },
