@@ -360,7 +360,6 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const cancelSideQuestion = useAtomCommand(orchestrationEnvironment.cancelSideQuestion, {
     reportFailure: false,
   });
-  const navigation = useNavigation();
   const { present: presentSideSettings, clear: clearSideSettings } =
     useExistingThreadSettingsRoutePresentation();
   const agentLabel = `${props.selectedThread.modelSelection.instanceId} agent`;

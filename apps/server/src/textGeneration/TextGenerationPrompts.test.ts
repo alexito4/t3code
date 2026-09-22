@@ -242,7 +242,7 @@ describe("side questions", () => {
     );
   });
 
-  it("uses completed messages and tool results without exposing streaming assistant text", () => {
+  it("uses completed messages and tool results without exposing streaming assistant text or thinking traces", () => {
     const context = formatSideQuestionContext({
       messages: [
         {
@@ -262,6 +262,12 @@ describe("side questions", () => {
           text: "unfinished reply",
           streaming: true,
           createdAt: "2026-08-26T10:00:03.000Z",
+        },
+        {
+          role: "reasoning",
+          text: "Let me consider token expiry",
+          streaming: false,
+          createdAt: "2026-08-26T10:00:00.500Z",
         },
       ],
       activities: [
@@ -286,6 +292,7 @@ describe("side questions", () => {
     expect(context).toContain("stale token found");
     expect(context).not.toContain("unfinished reply");
     expect(context).not.toContain("Read started");
+    expect(context).not.toContain("Let me consider token expiry");
   });
 
   it("asks for a tool-free answer that stays outside the main conversation", () => {

@@ -331,7 +331,7 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
 
 interface SideQuestionContextInput {
   messages: ReadonlyArray<{
-    role: "user" | "assistant" | "system";
+    role: "user" | "assistant" | "system" | "reasoning";
     text: string;
     streaming: boolean;
     createdAt: string;
@@ -353,7 +353,9 @@ export function isSideQuestionContextWithinLimit(context: string): boolean {
 export function formatSideQuestionContext(input: SideQuestionContextInput): string {
   const entries = [
     ...input.messages
-      .filter((message) => !message.streaming)
+      // Thinking traces are working notes, not conversational content a side
+      // question should be answered against — see ThreadTitleContext.ts.
+      .filter((message) => !message.streaming && message.role !== "reasoning")
       .map((message) => ({
         createdAt: message.createdAt,
         text: message.role.toUpperCase() + ":\n" + message.text,
