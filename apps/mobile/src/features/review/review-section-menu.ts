@@ -2,6 +2,8 @@ import type { ReviewSectionItem } from "./reviewModel";
 
 export interface ReviewSectionMenu {
   readonly workingTree: ReviewSectionItem | null;
+  readonly staged: ReviewSectionItem | null;
+  readonly unstaged: ReviewSectionItem | null;
   readonly branchChanges: ReviewSectionItem | null;
   readonly latestTurn: ReviewSectionItem | null;
   readonly turns: ReadonlyArray<ReviewSectionItem>;
@@ -14,6 +16,8 @@ export function buildReviewSectionMenu(
 
   return {
     workingTree: sections.find((section) => section.kind === "working-tree") ?? null,
+    staged: sections.find((section) => section.kind === "staged") ?? null,
+    unstaged: sections.find((section) => section.kind === "unstaged") ?? null,
     branchChanges: sections.find((section) => section.kind === "branch-range") ?? null,
     latestTurn: turns[0] ?? null,
     turns,

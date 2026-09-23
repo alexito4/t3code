@@ -2538,6 +2538,84 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     const baseFiles = baseResult.files;
     const dirtyDiff = dirtyTrackedResult.stdout;
     const baseDiff = baseResult.stdout;
+
+    const stagedResult = yield* executeGit(
+      "GitVcsDriver.getReviewDiffPreview.staged",
+      input.cwd,
+      [
+        "diff",
+        "--cached",
+        "--patch",
+        "--no-color",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--minimal",
+        ...(input.ignoreWhitespace ? ["--ignore-all-space"] : []),
+        "--",
+      ],
+      {
+        maxOutputBytes: REVIEW_DIFF_PATCH_MAX_OUTPUT_BYTES,
+        appendTruncationMarker: true,
+      },
+    ).pipe(
+      Effect.orElseSucceed(() => ({
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        stdoutTruncated: false,
+        stderrTruncated: false,
+      })),
+    );
+
+    // Untracked files never show up in a plain `git diff`, so intent-to-add them
+    // to a scratch index first (see prepareReviewIndex) the same way the dirty
+    // working-tree diff does, then diff normally so they appear as additions.
+    const unstagedTrackedResult = yield* Effect.gen(function* () {
+      const untracked = yield* executeGit(
+        "GitVcsDriver.getReviewDiffPreview.listUntrackedUnstaged",
+        cwd,
+        ["ls-files", "--others", "--exclude-standard", "-z", "--", ...pathArgs],
+        { maxOutputBytes: REVIEW_METADATA_MAX_OUTPUT_BYTES },
+      ).pipe(Effect.orElseSucceed(() => null));
+      const untrackedPaths =
+        untracked === null
+          ? []
+          : splitNullSeparatedGitStdoutPaths(untracked).filter(
+              (candidate) => !input.file || candidate === input.file.path,
+            );
+      const env =
+        untrackedPaths.length > 0 ? yield* prepareReviewIndex(cwd, untrackedPaths) : undefined;
+      return yield* executeGit(
+        "GitVcsDriver.getReviewDiffPreview.unstaged",
+        input.cwd,
+        [
+          "diff",
+          "--patch",
+          "--no-color",
+          "--no-ext-diff",
+          "--no-textconv",
+          "--minimal",
+          ...(input.ignoreWhitespace ? ["--ignore-all-space"] : []),
+          "--",
+        ],
+        {
+          maxOutputBytes: REVIEW_DIFF_PATCH_MAX_OUTPUT_BYTES,
+          appendTruncationMarker: true,
+          ...(env === undefined ? {} : { env }),
+        },
+      );
+    }).pipe(
+      Effect.scoped,
+      Effect.orElseSucceed(() => ({
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        stdoutTruncated: false,
+        stderrTruncated: false,
+      })),
+    );
+    const unstagedDiff = unstagedTrackedResult.stdout;
+
     const hashDiff = (diff: string, files: ReadonlyArray<ReviewDiffFileStat>) =>
       crypto.digest("SHA-256", new TextEncoder().encode(JSON.stringify([diff, files]))).pipe(
         Effect.map(Encoding.encodeHex),
@@ -2552,9 +2630,11 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
             }),
         ),
       );
-    const [dirtyDiffHash, baseDiffHash] = yield* Effect.all([
+    const [dirtyDiffHash, baseDiffHash, stagedDiffHash, unstagedDiffHash] = yield* Effect.all([
       hashDiff(dirtyDiff, dirtyFiles ?? []),
       hashDiff(baseDiff, baseFiles),
+      hashDiff(stagedResult.stdout, []),
+      hashDiff(unstagedDiff, []),
     ]);
 
     const sources: ReviewDiffPreviewSource[] = [
@@ -2568,6 +2648,26 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
         ...(dirtyFiles === undefined ? {} : { files: dirtyFiles }),
         diffHash: dirtyDiffHash,
         truncated: dirtyTrackedResult.stdoutTruncated,
+      },
+      {
+        id: "staged",
+        kind: "staged",
+        title: "Staged changes",
+        baseRef: null,
+        headRef: null,
+        diff: stagedResult.stdout,
+        diffHash: stagedDiffHash,
+        truncated: stagedResult.stdoutTruncated,
+      },
+      {
+        id: "unstaged",
+        kind: "unstaged",
+        title: "Unstaged changes",
+        baseRef: null,
+        headRef: null,
+        diff: unstagedDiff,
+        diffHash: unstagedDiffHash,
+        truncated: unstagedTrackedResult.stdoutTruncated,
       },
       {
         id: "branch-range",
@@ -2709,6 +2809,44 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
           input.changeType === "new"
             ? Effect.succeed("")
             : readReviewFileAtRevision(input, input.baseRef ?? "HEAD", input.oldPath),
+          input.changeType === "deleted"
+            ? Effect.succeed("")
+            : readWorkingTreeReviewFile(input, repositoryRoot),
+        ],
+        { concurrency: 2 },
+      );
+      return { oldContents, newContents };
+    }
+
+    if (input.sourceKind === "staged") {
+      const [oldContents, newContents] = yield* Effect.all(
+        [
+          input.changeType === "new"
+            ? Effect.succeed("")
+            : readReviewFileAtRevision(input, "HEAD", input.oldPath),
+          input.changeType === "deleted"
+            ? Effect.succeed("")
+            : readReviewFileAtRevision(input, "", input.newPath),
+        ],
+        { concurrency: 2 },
+      );
+      return { oldContents, newContents };
+    }
+
+    if (input.sourceKind === "unstaged") {
+      const repositoryRoot = yield* runGitStdout(
+        "GitVcsDriver.getReviewDiffFileContents.repositoryRoot",
+        input.cwd,
+        ["rev-parse", "--show-toplevel"],
+      ).pipe(Effect.map((value) => value.trim()));
+      if (repositoryRoot.length === 0) {
+        return yield* reviewDiffFileError(input, "Could not resolve the Git repository root.");
+      }
+      const [oldContents, newContents] = yield* Effect.all(
+        [
+          input.changeType === "new"
+            ? Effect.succeed("")
+            : readReviewFileAtRevision(input, "", input.oldPath),
           input.changeType === "deleted"
             ? Effect.succeed("")
             : readWorkingTreeReviewFile(input, repositoryRoot),

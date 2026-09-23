@@ -127,6 +127,8 @@ function ReviewHeader(
                     inline: true,
                     items: [
                       sectionAction(props.sectionMenu.workingTree, "Working tree"),
+                      sectionAction(props.sectionMenu.unstaged, "Unstaged"),
+                      sectionAction(props.sectionMenu.staged, "Staged"),
                       sectionAction(props.sectionMenu.branchChanges, "Branch changes"),
                       sectionAction(props.sectionMenu.latestTurn, "Latest turn"),
                     ],

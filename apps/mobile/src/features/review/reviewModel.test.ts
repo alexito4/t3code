@@ -74,6 +74,26 @@ describe("buildReviewSectionItems", () => {
         truncated: false,
       },
       {
+        id: "staged",
+        kind: "staged",
+        title: "Staged changes",
+        baseRef: null,
+        headRef: null,
+        diff: "diff --git a/staged.ts b/staged.ts",
+        diffHash: "hash-staged",
+        truncated: false,
+      },
+      {
+        id: "unstaged",
+        kind: "unstaged",
+        title: "Unstaged changes",
+        baseRef: null,
+        headRef: null,
+        diff: "diff --git a/unstaged.ts b/unstaged.ts",
+        diffHash: "hash-unstaged",
+        truncated: false,
+      },
+      {
         id: "branch-range",
         kind: "branch-range",
         title: "Against main",
@@ -102,12 +122,22 @@ describe("buildReviewSectionItems", () => {
       "turn:2",
       "turn:1",
       "git:working-tree",
+      "git:staged",
+      "git:unstaged",
       "git:branch-range",
     ]);
     expect(items[0]).toMatchObject({ isLoading: true, diff: null });
     expect(items[1]).toMatchObject({
       isLoading: false,
       diff: expect.stringContaining("loaded.ts"),
+    });
+    expect(items.find((item) => item.id === "git:staged")).toMatchObject({
+      kind: "staged",
+      subtitle: "Staged changes",
+    });
+    expect(items.find((item) => item.id === "git:unstaged")).toMatchObject({
+      kind: "unstaged",
+      subtitle: "Unstaged changes",
     });
     expect(getDefaultReviewSectionId(items)).toBe("turn:2");
   });
