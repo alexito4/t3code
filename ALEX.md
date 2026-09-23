@@ -124,6 +124,20 @@ buildable/runnable for personal use (see Fork infrastructure below).
   `feat/scratchpad-panel` (based on `upstream/main`) and composed into `main` via
   `PATCH_BRANCHES`. Built for personal use first; not yet sent upstream.
 
+- **Conversation font size** — the Interface size in Settings → Appearance → Typography was the
+  only knob that reached thread messages, and it scales the whole app (sidebar, header,
+  controls). Adds a "Conversation size" row (Auto = follow Interface, or 12–20 px) that resizes
+  only the thread timeline's text by overriding Tailwind's `--text-*` tokens inside a
+  `.conversation-text` scope; spacing stays on the interface rem. Shown in both the simple and
+  Advanced typography views. Web + desktop only (mobile uses Dynamic Type). Written from
+  scratch instead of merging the competing open upstream PR
+  https://github.com/pingdotgg/t3code/pull/11246 (conflicting, unreviewed, accidentally
+  commits `.pnpm-store`, and also rescales fixed-px labels and composer approval panels,
+  which is more than this needs). On branch `feat/conversation-font-size` (based on
+  `upstream/main`) and composed into `main` via `PATCH_BRANCHES`. Sent upstream:
+  https://github.com/pingdotgg/t3code/pull/13234 (open).
+  Once merged, drop the branch from `PATCH_BRANCHES` and `rebuild`.
+
 ## Merged early from open upstream PRs
 
 Features from someone else's still-open, unmerged upstream PR, pulled onto `main` ahead of

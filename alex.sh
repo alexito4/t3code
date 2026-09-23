@@ -26,6 +26,7 @@ PATCH_BRANCHES=(
     patch/review-diff-file-actions
     feat/thread-share
     feat/scratchpad-panel
+    feat/conversation-font-size
 )
 
 usage() {
