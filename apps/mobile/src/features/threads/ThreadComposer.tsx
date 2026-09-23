@@ -1,6 +1,7 @@
 import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import { useAtomValue } from "@effect/atom-react";
+import { parseSideQuestion } from "@t3tools/client-runtime/state/orchestration";
 import { clampFileAttachmentUploadBytes } from "@t3tools/client-runtime/state/attachments";
 import { pastedTextDisposition, replaceTextSelection } from "@t3tools/client-runtime/text-paste";
 import {
@@ -314,9 +315,11 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   // Every send goes through the outbox; the label says whether it leaves now
   // or waits (for the connection, an earlier queued message, or an upload).
   const sendLabel =
-    props.connectionState !== "connected" || props.queueCount > 0 || attachmentsUploading
-      ? "Queue"
-      : "Send";
+    parseSideQuestion(props.draftMessage.trim()) !== null
+      ? "Ask"
+      : props.connectionState !== "connected" || props.queueCount > 0 || attachmentsUploading
+        ? "Queue"
+        : "Send";
   const currentModelSelection = props.selectedThread.modelSelection;
   const currentRuntimeMode = props.selectedThread.runtimeMode;
   const modelUnavailable =

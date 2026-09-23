@@ -4,13 +4,14 @@ import {
   serializeAssistantCitation,
   withAssistantCitationComment,
 } from "@t3tools/shared/assistantCitations";
+import { parseSideQuestion } from "@t3tools/client-runtime/state/orchestration";
 import {
   splitPromptIntoComposerSegments,
   type ComposerPromptSegment,
 } from "./composer-editor-mentions";
 
 export type ComposerTriggerKind = "path" | "pull-request" | "slash-command" | "skill";
-export type ComposerSlashCommand = "model" | "plan" | "default";
+export type ComposerSlashCommand = "model" | "plan" | "default" | "btw";
 export type ComposerSubmissionIntent = "foreground" | "background" | "alternate";
 
 export interface ComposerTrigger {
@@ -42,6 +43,28 @@ export function composerSubmissionIntentForEnter(input: {
     return "alternate";
   }
   return input.modifierKey && input.isDraftThread ? "background" : "foreground";
+}
+
+export function parseComposerSideQuestion(
+  value: string,
+  input: { isServerThread: boolean; hasPendingUserInput: boolean },
+): string | null {
+  return canAskComposerSideQuestion(input) ? parseSideQuestion(value) : null;
+}
+
+export function canAskComposerSideQuestion(input: {
+  isServerThread: boolean;
+  hasPendingUserInput: boolean;
+}): boolean {
+  return input.isServerThread && !input.hasPendingUserInput;
+}
+
+export function canOfferComposerSideQuestionCommand(input: {
+  trigger: ComposerTrigger;
+  isServerThread: boolean;
+  hasPendingUserInput: boolean;
+}): boolean {
+  return input.trigger.rangeStart === 0 && canAskComposerSideQuestion(input);
 }
 
 const isInlineTokenSegment = (segment: ComposerPromptSegment): boolean => segment.type !== "text";
@@ -279,7 +302,7 @@ export function composerStateAtPromptEnd(text: string): {
 
 export function parseStandaloneComposerSlashCommand(
   text: string,
-): Exclude<ComposerSlashCommand, "model"> | null {
+): Exclude<ComposerSlashCommand, "model" | "btw"> | null {
   const match = /^\/(plan|default)\s*$/i.exec(text.trim());
   if (!match) {
     return null;

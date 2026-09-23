@@ -78,6 +78,7 @@ import {
   VcsStatusInput,
   VcsStatusResult,
   VcsStatusStreamEvent,
+  TextGenerationError,
 } from "./git.ts";
 import {
   ReviewDiffFileContentsInput,
@@ -90,6 +91,8 @@ import { KeybindingsConfigError } from "./keybindings.ts";
 import {
   ClientOrchestrationCommand,
   ORCHESTRATION_WS_METHODS,
+  OrchestrationAskSideQuestionInput,
+  OrchestrationCancelSideQuestionInput,
   OrchestrationDispatchCommandError,
   OrchestrationGetFullThreadDiffError,
   OrchestrationGetFullThreadDiffInput,
@@ -1278,6 +1281,24 @@ const WsOrchestrationDispatchCommandRpc = Rpc.make(ORCHESTRATION_WS_METHODS.disp
   error: Schema.Union([OrchestrationDispatchCommandError, EnvironmentAuthorizationError]),
 });
 
+export const WsOrchestrationAskSideQuestionRpc = Rpc.make(
+  ORCHESTRATION_WS_METHODS.askSideQuestion,
+  {
+    payload: OrchestrationAskSideQuestionInput,
+    success: OrchestrationRpcSchemas.askSideQuestion.output,
+    error: Schema.Union([TextGenerationError, EnvironmentAuthorizationError]),
+  },
+);
+
+export const WsOrchestrationCancelSideQuestionRpc = Rpc.make(
+  ORCHESTRATION_WS_METHODS.cancelSideQuestion,
+  {
+    payload: OrchestrationCancelSideQuestionInput,
+    success: OrchestrationRpcSchemas.cancelSideQuestion.output,
+    error: EnvironmentAuthorizationError,
+  },
+);
+
 const WsOrchestrationGetWorkflowScriptRpc = Rpc.make(ORCHESTRATION_WS_METHODS.getWorkflowScript, {
   payload: OrchestrationRpcSchemas.getWorkflowScript.input,
   success: OrchestrationRpcSchemas.getWorkflowScript.output,
@@ -1529,6 +1550,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsSubscribeBackgroundPolicyRpc,
   WsSubscribeResourceTelemetryRpc,
   WsOrchestrationDispatchCommandRpc,
+  WsOrchestrationAskSideQuestionRpc,
+  WsOrchestrationCancelSideQuestionRpc,
   WsOrchestrationGetWorkflowScriptRpc,
   WsOrchestrationGetTurnDiffRpc,
   WsOrchestrationGetFullThreadDiffRpc,

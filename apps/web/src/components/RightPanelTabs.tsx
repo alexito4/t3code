@@ -22,6 +22,7 @@ import {
   FileDiff,
   Files,
   Globe2,
+  MessageCirclePlus,
   Plus,
   TerminalSquare,
   Volume2,
@@ -121,6 +122,7 @@ interface RightPanelTabsProps {
   onAddPullRequest: () => void;
   onAddPullRequests: () => void;
   onAddAgents: () => void;
+  onAddSideQuestion: () => void;
   onAddDevice: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
@@ -129,6 +131,7 @@ interface RightPanelTabsProps {
   pullRequestAvailable: boolean;
   pullRequestsAvailable: boolean;
   agentsAvailable: boolean;
+  sideQuestionAvailable: boolean;
   deviceAvailable: boolean;
   pullRequestStatusSeeds?: Readonly<Record<string, PullRequestTabStatusSeed>>;
   /** Running + waiting subagents; badges the Agents card in the empty state. */
@@ -160,6 +163,7 @@ const SURFACE_DISABLED_REASONS = {
   pullRequest: "This thread's branch has no pull request yet.",
   pullRequests: "No linked pull requests are available for this thread.",
   agents: "Agents are only available from a thread.",
+  sideQuestion: "Side chats need a running thread with no pending input.",
   device: "Devices are only available from a thread.",
 } as const;
 
@@ -184,6 +188,7 @@ const SURFACE_UNAVAILABLE_HINTS = {
   pullRequest: "No pull request on this branch yet.",
   pullRequests: "No linked pull requests available.",
   agents: "Available from a thread.",
+  sideQuestion: "Needs a running thread with no pending input.",
   device: "Available from a thread.",
 } as const;
 
@@ -324,6 +329,7 @@ function RightPanelEmptyState(props: {
   onAddPullRequest: () => void;
   onAddPullRequests: () => void;
   onAddAgents: () => void;
+  onAddSideQuestion: () => void;
   onAddDevice: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
@@ -332,6 +338,7 @@ function RightPanelEmptyState(props: {
   pullRequestAvailable: boolean;
   pullRequestsAvailable: boolean;
   agentsAvailable: boolean;
+  sideQuestionAvailable: boolean;
   deviceAvailable: boolean;
   liveAgentCount: number;
 }) {
@@ -401,6 +408,16 @@ function RightPanelEmptyState(props: {
       disabledReason: SURFACE_UNAVAILABLE_HINTS.agents,
       onClick: props.onAddAgents,
       badgeCount: props.liveAgentCount,
+    },
+    {
+      label: "Side chat",
+      description: "Ask without interrupting the agent.",
+      icon: MessageCirclePlus,
+      shortcut: "Q",
+      available: props.sideQuestionAvailable,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.sideQuestion,
+      onClick: props.onAddSideQuestion,
+      badgeCount: 0,
     },
     {
       label: "Device",
@@ -629,6 +646,8 @@ function surfaceTitle(
       return "Pull requests";
     case "agents":
       return "Agents";
+    case "side-question":
+      return "Side chat";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
     case "preview": {
@@ -714,6 +733,8 @@ function SurfaceIcon({
       return <PullRequestGlyph.link className="size-3 shrink-0" />;
     case "agents":
       return <Bot className="size-3 shrink-0" />;
+    case "side-question":
+      return <MessageCirclePlus className="size-3 shrink-0" />;
     case "device":
       return surface.target?.platform === "ios" ? (
         <AppleIcon className="size-3 shrink-0" />
@@ -923,6 +944,14 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       available: props.agentsAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.agents,
       onClick: props.onAddAgents,
+    },
+    {
+      label: "Side chat",
+      icon: MessageCirclePlus,
+      shortcut: "Q",
+      available: props.sideQuestionAvailable,
+      disabledReason: SURFACE_DISABLED_REASONS.sideQuestion,
+      onClick: props.onAddSideQuestion,
     },
     {
       label: "Device",
@@ -1403,6 +1432,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddPullRequest={props.onAddPullRequest}
             onAddPullRequests={props.onAddPullRequests}
             onAddAgents={props.onAddAgents}
+            onAddSideQuestion={props.onAddSideQuestion}
             onAddDevice={props.onAddDevice}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}
@@ -1411,6 +1441,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             pullRequestAvailable={props.pullRequestAvailable}
             pullRequestsAvailable={props.pullRequestsAvailable}
             agentsAvailable={props.agentsAvailable}
+            sideQuestionAvailable={props.sideQuestionAvailable}
             deviceAvailable={props.deviceAvailable}
             liveAgentCount={props.liveAgentCount}
           />
