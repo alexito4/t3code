@@ -55,6 +55,12 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
       staleTimeMs: 300_000,
       idleTtlMs: 300_000,
     }),
+    threadScratchpad: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:orchestration:thread-scratchpad",
+      tag: ORCHESTRATION_WS_METHODS.getThreadScratchpad,
+      // No staleTime/idleTtl: this client is also the writer while the panel
+      // is open, so the cache must never outlive its own local edits.
+    }),
     fullThreadDiff: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:orchestration:full-thread-diff",
       tag: ORCHESTRATION_WS_METHODS.getFullThreadDiff,

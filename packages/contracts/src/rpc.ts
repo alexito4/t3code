@@ -1330,6 +1330,15 @@ const WsOrchestrationGetWorkflowScriptRpc = Rpc.make(ORCHESTRATION_WS_METHODS.ge
   error: Schema.Union([OrchestrationGetWorkflowScriptError, EnvironmentAuthorizationError]),
 });
 
+const WsOrchestrationGetThreadScratchpadRpc = Rpc.make(
+  ORCHESTRATION_WS_METHODS.getThreadScratchpad,
+  {
+    payload: OrchestrationRpcSchemas.getThreadScratchpad.input,
+    success: OrchestrationRpcSchemas.getThreadScratchpad.output,
+    error: EnvironmentAuthorizationError,
+  },
+);
+
 const WsOrchestrationGetTurnDiffRpc = Rpc.make(ORCHESTRATION_WS_METHODS.getTurnDiff, {
   payload: OrchestrationGetTurnDiffInput,
   success: OrchestrationRpcSchemas.getTurnDiff.output,
@@ -1587,6 +1596,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationAskSideQuestionRpc,
   WsOrchestrationCancelSideQuestionRpc,
   WsOrchestrationGetWorkflowScriptRpc,
+  WsOrchestrationGetThreadScratchpadRpc,
   WsOrchestrationGetTurnDiffRpc,
   WsOrchestrationGetFullThreadDiffRpc,
   WsOrchestrationExportThreadRpc,

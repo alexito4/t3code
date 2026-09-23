@@ -634,6 +634,7 @@ const DevicePanel = lazy(() =>
   import("./device/DevicePanel").then((module) => ({ default: module.DevicePanel })),
 );
 const FilePreviewPanel = lazy(() => import("./files/FilePreviewPanel"));
+const ScratchpadPanel = lazy(() => import("./scratchpad/ScratchpadPanel"));
 const EMPTY_PENDING_FILE_SURFACE_IDS: ReadonlySet<string> = new Set();
 const TYPE_TO_FOCUS_EDITABLE_SELECTOR = [
   "input",
@@ -4669,6 +4670,41 @@ export default function ChatView(props: ChatViewProps) {
       return true;
     },
     [activeThread, activeThreadRef, routeThreadKey, sideQuestionAvailable],
+  );
+  // This fork's own patch: absent on servers without it, so hide the tab
+  // instead of offering one that would fail against them.
+  const scratchpadAvailable =
+    activeThreadRef !== null && serverConfig?.environment.capabilities.scratchpad === true;
+  const addScratchpadSurface = useCallback(() => {
+    if (!activeThreadRef || !scratchpadAvailable) return;
+    useRightPanelStore.getState().open(activeThreadRef, "scratchpad");
+  }, [activeThreadRef, scratchpadAvailable]);
+  const appendScratchpad = useAtomCommand(threadEnvironment.appendScratchpad, {
+    reportFailure: false,
+  });
+  const addSelectionToScratchpad = useCallback(
+    (citation: AssistantCitation) => {
+      if (!activeThreadRef || !scratchpadAvailable) return false;
+      void appendScratchpad({
+        environmentId: activeThreadRef.environmentId,
+        input: { threadId: activeThreadRef.threadId, text: citation.text },
+      }).then((result) => {
+        if (result._tag === "Success") {
+          toastManager.add({ type: "success", title: "Added to scratchpad" });
+        } else if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not add to scratchpad",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
+      });
+      return true;
+    },
+    [activeThreadRef, appendScratchpad, scratchpadAvailable],
   );
   const supportsThreadPullRequests =
     serverConfig?.environment.capabilities.threadPullRequests === true;
@@ -10015,6 +10051,10 @@ export default function ChatView(props: ChatViewProps) {
         environmentId={activeThreadRef?.environmentId ?? null}
         threadId={activeThreadRef?.threadId ?? null}
       />
+    ) : renderedRightPanelSurface?.kind === "scratchpad" && activeThreadRef ? (
+      <Suspense fallback={null}>
+        <ScratchpadPanel threadRef={activeThreadRef} composerDraftTarget={composerDraftTarget} />
+      </Suspense>
     ) : renderedRightPanelSurface?.kind === "device" ? (
       <Suspense fallback={null}>
         <DevicePanel
@@ -10213,6 +10253,8 @@ export default function ChatView(props: ChatViewProps) {
                       onCiteAssistantText: citeAssistantText,
                       onAskInSideChat: askSelectionInSideChat,
                       askInSideChatAvailable: sideQuestionAvailable,
+                      onAddToScratchpad: addSelectionToScratchpad,
+                      addToScratchpadAvailable: scratchpadAvailable,
                       agentPanelModel,
                       onOpenAgents: addAgentsSurface,
                       onUseArtifactTemplate: useArtifactTemplate,
@@ -10689,6 +10731,7 @@ export default function ChatView(props: ChatViewProps) {
           onAddAgents={addAgentsSurface}
           onAddSideQuestion={addSideQuestionSurface}
           onAddDevice={addDeviceSurface}
+          onAddScratchpad={addScratchpadSurface}
           browserAvailable={isPreviewSupportedInRuntime()}
           terminalAvailable={activeProject !== null}
           diffAvailable={isServerThread && isGitRepo}
@@ -10698,6 +10741,7 @@ export default function ChatView(props: ChatViewProps) {
           agentsAvailable
           sideQuestionAvailable={sideQuestionAvailable}
           deviceAvailable={activeThreadRef !== null}
+          scratchpadAvailable={scratchpadAvailable}
           liveAgentCount={agentPanelModel.liveCount}
         >
           {rightPanelContent}
@@ -10748,6 +10792,7 @@ export default function ChatView(props: ChatViewProps) {
             onAddAgents={addAgentsSurface}
             onAddSideQuestion={addSideQuestionSurface}
             onAddDevice={addDeviceSurface}
+            onAddScratchpad={addScratchpadSurface}
             browserAvailable={isPreviewSupportedInRuntime()}
             terminalAvailable={activeProject !== null}
             diffAvailable={isServerThread && isGitRepo}
@@ -10757,6 +10802,7 @@ export default function ChatView(props: ChatViewProps) {
             agentsAvailable
             sideQuestionAvailable={sideQuestionAvailable}
             deviceAvailable={activeThreadRef !== null}
+            scratchpadAvailable={scratchpadAvailable}
             liveAgentCount={agentPanelModel.liveCount}
           >
             {rightPanelContent}

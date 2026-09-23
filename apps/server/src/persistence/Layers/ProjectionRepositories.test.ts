@@ -24,6 +24,8 @@ import {
 } from "../ProjectionThreadPullRequests.ts";
 import { ProjectionThreadProposedPlanRepositoryLive } from "./ProjectionThreadProposedPlans.ts";
 import { ProjectionThreadProposedPlanRepository } from "../Services/ProjectionThreadProposedPlans.ts";
+import { ProjectionThreadScratchpadRepositoryLive } from "./ProjectionThreadScratchpads.ts";
+import { ProjectionThreadScratchpadRepository } from "../Services/ProjectionThreadScratchpads.ts";
 
 const projectionRepositoriesLayer = it.layer(
   Layer.mergeAll(
@@ -31,6 +33,7 @@ const projectionRepositoriesLayer = it.layer(
     ProjectionThreadRepositoryLive.pipe(Layer.provideMerge(SqlitePersistenceMemory)),
     ProjectionThreadPullRequests.layer.pipe(Layer.provideMerge(SqlitePersistenceMemory)),
     ProjectionThreadProposedPlanRepositoryLive.pipe(Layer.provideMerge(SqlitePersistenceMemory)),
+    ProjectionThreadScratchpadRepositoryLive.pipe(Layer.provideMerge(SqlitePersistenceMemory)),
     SqlitePersistenceMemory,
   ),
 );
@@ -690,6 +693,47 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
 
       yield* pullRequests.deleteByThreadId({ threadId: otherThreadId });
       assert.deepStrictEqual(yield* pullRequests.listByThreadId({ threadId: otherThreadId }), []);
+    }),
+  );
+
+  it.effect("upserts, reads, and deletes a thread's scratchpad by thread id", () =>
+    Effect.gen(function* () {
+      const scratchpads = yield* ProjectionThreadScratchpadRepository;
+      const threadId = ThreadId.make("thread-scratchpad");
+
+      assert.deepStrictEqual(yield* scratchpads.getByThreadId({ threadId }), Option.none());
+
+      yield* scratchpads.upsert({
+        threadId,
+        content: "first draft of notes",
+        updatedAt: "2026-03-24T00:00:01.000Z",
+      });
+      assert.deepStrictEqual(
+        yield* scratchpads.getByThreadId({ threadId }),
+        Option.some({
+          threadId,
+          content: "first draft of notes",
+          updatedAt: "2026-03-24T00:00:01.000Z",
+        }),
+      );
+
+      // A second set overwrites the single row in place -- one per thread, not a list.
+      yield* scratchpads.upsert({
+        threadId,
+        content: "revised notes",
+        updatedAt: "2026-03-24T00:00:02.000Z",
+      });
+      assert.deepStrictEqual(
+        yield* scratchpads.getByThreadId({ threadId }),
+        Option.some({
+          threadId,
+          content: "revised notes",
+          updatedAt: "2026-03-24T00:00:02.000Z",
+        }),
+      );
+
+      yield* scratchpads.deleteByThreadId({ threadId });
+      assert.deepStrictEqual(yield* scratchpads.getByThreadId({ threadId }), Option.none());
     }),
   );
 });

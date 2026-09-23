@@ -37,6 +37,7 @@ export const ORCHESTRATION_WS_METHODS = {
   askSideQuestion: "orchestration.askSideQuestion",
   cancelSideQuestion: "orchestration.cancelSideQuestion",
   getWorkflowScript: "orchestration.getWorkflowScript",
+  getThreadScratchpad: "orchestration.getThreadScratchpad",
   getTurnDiff: "orchestration.getTurnDiff",
   getFullThreadDiff: "orchestration.getFullThreadDiff",
   exportThread: "orchestration.exportThread",
@@ -1247,6 +1248,16 @@ const ThreadMetaUpdateCommand = Schema.Struct({
   ),
 );
 
+/** A thread's freeform personal notes, not part of the conversation the agent sees. */
+export const THREAD_SCRATCHPAD_MAX_CHARS = 200_000;
+
+const ThreadScratchpadSetCommand = Schema.Struct({
+  type: Schema.Literal("thread.scratchpad.set"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  content: Schema.String.check(Schema.isMaxLength(THREAD_SCRATCHPAD_MAX_CHARS)),
+});
+
 const ThreadPullRequestLinkCommand = Schema.Struct({
   type: Schema.Literal("thread.pull-request.link"),
   commandId: CommandId,
@@ -1431,6 +1442,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadPinReorderCommand,
   ThreadActiveReorderCommand,
   ThreadMetaUpdateCommand,
+  ThreadScratchpadSetCommand,
   ThreadPullRequestLinkCommand,
   ThreadPullRequestUnlinkCommand,
   ThreadRuntimeModeSetCommand,
@@ -1464,6 +1476,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadPinReorderCommand,
   ThreadActiveReorderCommand,
   ThreadMetaUpdateCommand,
+  ThreadScratchpadSetCommand,
   ThreadPullRequestLinkCommand,
   ThreadPullRequestUnlinkCommand,
   ThreadRuntimeModeSetCommand,
@@ -1691,6 +1704,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.unpinned",
   "thread.pin-reordered",
   "thread.meta-updated",
+  "thread.scratchpad-set",
   "thread.pull-request-linked",
   "thread.pull-request-unlinked",
   "thread.pull-request-synced",
@@ -1964,6 +1978,13 @@ export const ThreadProposedPlanUpsertedPayload = Schema.Struct({
   proposedPlan: OrchestrationProposedPlan,
 });
 
+/** Not part of the conversation the agent sees; a thread-scoped personal notes blob. */
+export const ThreadScratchpadSetPayload = Schema.Struct({
+  threadId: ThreadId,
+  content: Schema.String,
+  updatedAt: IsoDateTime,
+});
+
 export const ThreadTurnDiffCompletedPayload = Schema.Struct({
   threadId: ThreadId,
   turnId: TurnId,
@@ -2096,6 +2117,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.meta-updated"),
     payload: ThreadMetaUpdatedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.scratchpad-set"),
+    payload: ThreadScratchpadSetPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
@@ -2355,6 +2381,22 @@ export const OrchestrationGetWorkflowScriptResult = Schema.Struct({
 });
 export type OrchestrationGetWorkflowScriptResult = typeof OrchestrationGetWorkflowScriptResult.Type;
 
+export const OrchestrationGetThreadScratchpadInput = Schema.Struct({
+  threadId: ThreadId,
+});
+export type OrchestrationGetThreadScratchpadInput =
+  typeof OrchestrationGetThreadScratchpadInput.Type;
+
+export const OrchestrationGetThreadScratchpadResult = Schema.Struct({
+  threadId: ThreadId,
+  // "" for a thread that has never had one -- not an error, and not Option/
+  // nullable, since an absent scratchpad and an emptied one render identically.
+  content: Schema.String,
+  updatedAt: Schema.NullOr(IsoDateTime),
+});
+export type OrchestrationGetThreadScratchpadResult =
+  typeof OrchestrationGetThreadScratchpadResult.Type;
+
 const WORKFLOW_SCRIPT_ERROR_MESSAGES = {
   "invalid-path": "Workflow scripts must be absolute .js paths.",
   "root-unavailable": "Script root unavailable.",
@@ -2404,6 +2446,10 @@ export const OrchestrationRpcSchemas = {
   getWorkflowScript: {
     input: OrchestrationGetWorkflowScriptInput,
     output: OrchestrationGetWorkflowScriptResult,
+  },
+  getThreadScratchpad: {
+    input: OrchestrationGetThreadScratchpadInput,
+    output: OrchestrationGetThreadScratchpadResult,
   },
   getTurnDiff: {
     input: OrchestrationGetTurnDiffInput,

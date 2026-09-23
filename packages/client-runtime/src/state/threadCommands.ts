@@ -8,6 +8,7 @@ import {
 
 import { createOptimisticThreadLifecycle } from "./threadLifecycle.ts";
 import { canSnooze } from "./threadSettled.ts";
+import { appendToThreadScratchpad } from "./scratchpadAppend.ts";
 
 import {
   createAtomCommandScheduler,
@@ -39,6 +40,7 @@ import {
   type UnsettleThreadInput,
   type UnsnoozeThreadInput,
   type UpdateThreadMetadataInput,
+  type SetThreadScratchpadInput,
   archiveThread,
   createThread,
   deleteThread,
@@ -63,6 +65,7 @@ import {
   unsettleThread,
   unsnoozeThread,
   updateThreadMetadata,
+  setThreadScratchpad,
 } from "../operations/commands.ts";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 
@@ -91,6 +94,7 @@ export type {
   UnsettleThreadInput,
   UnsnoozeThreadInput,
   UpdateThreadMetadataInput,
+  SetThreadScratchpadInput,
 } from "../operations/commands.ts";
 
 export function createThreadEnvironmentAtoms<R, E>(
@@ -179,6 +183,19 @@ export function createThreadEnvironmentAtoms<R, E>(
     updateMetadata: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:update-metadata",
       execute: (input: UpdateThreadMetadataInput) => updateThreadMetadata(input),
+      scheduler,
+      concurrency,
+    }),
+    setScratchpad: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:set-scratchpad",
+      execute: (input: SetThreadScratchpadInput) => setThreadScratchpad(input),
+      scheduler,
+      concurrency,
+    }),
+    appendScratchpad: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:append-scratchpad",
+      execute: (input: { readonly threadId: SetThreadScratchpadInput["threadId"]; text: string }) =>
+        appendToThreadScratchpad(input),
       scheduler,
       concurrency,
     }),

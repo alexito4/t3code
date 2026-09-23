@@ -1034,6 +1034,31 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.scratchpad.set": {
+      // Personal notes, not conversation state -- editable even on an
+      // archived/settled thread, like thread.meta.update.
+      yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.scratchpad-set",
+        payload: {
+          threadId: command.threadId,
+          content: command.content,
+          updatedAt: occurredAt,
+        },
+      };
+    }
+
     case "thread.pull-request.link": {
       const thread = yield* requireThread({
         readModel,
