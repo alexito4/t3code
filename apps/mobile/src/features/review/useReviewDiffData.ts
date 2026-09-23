@@ -173,8 +173,8 @@ export function useReviewDiffData(input: {
                         path: file.path,
                         previousPath: file.previousPath,
                         // The per-file patch request only distinguishes a branch
-                        // comparison from everything else uncommitted; staged and
-                        // unstaged both fetch the working-tree side.
+                        // comparison from everything else uncommitted; staged,
+                        // unstaged, and commit all fetch the working-tree side.
                         sourceKind:
                           lazySource.kind === "branch-range" ? "branch-range" : "working-tree",
                       },
