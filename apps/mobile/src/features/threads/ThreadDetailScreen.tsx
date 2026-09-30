@@ -98,6 +98,7 @@ import { scopedThreadKey } from "../../lib/scopedEntities";
 import { buildModelOptions, groupByProvider } from "../../lib/modelOptions";
 import { resolveProviderOptionDescriptors } from "../../lib/providerOptions";
 import { randomHex } from "../../lib/uuid";
+import { useDelayedStatus } from "../../lib/useDelayedStatus";
 import type {
   PendingApproval,
   PendingUserInput,
@@ -488,7 +489,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   // The raw sync status enters "synchronizing" on every full fetch, cached or
   // not. Whether messages are already on screen decides the pill label: no
   // data yet → "Loading messages", cached data reconciling → "Syncing".
-  const threadSyncLabel = (() => {
+  const realThreadSyncLabel = (() => {
     switch (props.threadSyncStatus) {
       case "empty":
       case "cached":
@@ -501,6 +502,9 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
         return null;
     }
   })();
+  // Opening a running thread resyncs for a few frames. The pill shows the
+  // sync label only when the sync lasts, so it does not flash before the timer.
+  const threadSyncLabel = useDelayedStatus(selectedThreadKey, realThreadSyncLabel);
   // One floating pill above the composer: it reads the connection phase while
   // disconnected, the sync state while messages load, then the working timer
   // once the feed is settled.
@@ -809,10 +813,12 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const isSplitLayout = layoutVariant === "split";
   const contentMaxWidth = isSplitLayout ? CHAT_CONTENT_MAX_WIDTH : undefined;
   const workspaceContentWidth = useWorkspaceContentWidth();
+  // Clearing animated width can retain the unfolded width after Android resumes folded.
+  // Assign both layouts explicitly so the dock always follows its current parent.
   const composerWidthStyle = useAnimatedStyle(() =>
     isSplitLayout && workspaceContentWidth !== null
-      ? { width: workspaceContentWidth.value, right: undefined }
-      : { width: undefined, right: 0 },
+      ? { width: workspaceContentWidth.value }
+      : { width: "100%" },
   );
   const selectedInstanceId = props.selectedThread.modelSelection.instanceId;
   useStreamingHaptics(props.selectedThread.id, props.selectedThreadFeed);
@@ -1290,7 +1296,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
           <Animated.View
             layout={COMPOSER_LAYOUT_TRANSITION}
             pointerEvents="box-none"
-            style={[{ position: "absolute", bottom: 0, left: 0, right: 0 }, composerWidthStyle]}
+            style={[{ position: "absolute", bottom: 0, left: 0 }, composerWidthStyle]}
           >
             {/* No paddingTop here: the overlay's measured height becomes the
                 list's bottom inset, so any padding above the pill/composer
