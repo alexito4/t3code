@@ -114,7 +114,8 @@ buildable/runnable for personal use (see Fork infrastructure below).
   `buildFileReviewComment`'s sibling `buildScratchpadReviewComment`, which shapes a cited excerpt
   as a `ReviewCommentContext` with `sectionId: "scratchpad:<threadId>"` — no new
   `ComposerContextRecord` kind needed). Content persists server-side in its own projection table
-  (`projection_thread_scratchpads`, a `thread.scratchpad.set` command/event pair) fetched on
+  (`projection_thread_scratchpads`, created by its repository layer rather than a numbered
+  migration — see "Adding a new entry" — plus a `thread.scratchpad.set` command/event pair) fetched on
   demand via `orchestration.getThreadScratchpad`, deliberately never added to the in-memory
   `OrchestrationThread` snapshot or thread-shell broadcast, so a large scratchpad never slows down
   the thread list. Since this only works against a server built from this fork, it's gated behind
@@ -244,6 +245,13 @@ New personal _feature_ (not infra): give it its own `patch/<name>` branch based 
 `upstream/main`, add it to `PATCH_BRANCHES` in `alex.sh`, run `rebuild` to compose it into
 `main` for the first time, document it here in "Features". Default to a new branch — the
 ability to drop a feature independently is the reason this scheme exists.
+
+Schema changes: never add a numbered migration on a fork branch. `~/.t3/userdata/state.sqlite`
+is shared with the official app, and the migrator skips every ID at or below the highest one
+recorded, so a fork migration ID silently hides upstream's next migration with that number, in
+both apps. That happened once: the scratchpad table was recorded as 53/54 in the live DB, and
+upstream's own 54 (`auto_settle_disabled_at`) would never have run. Create fork-only tables
+idempotently (`CREATE TABLE IF NOT EXISTS`) where the owning repository layer is built instead.
 
 New _infra_ work: commit it directly onto `patch/fork-infra`, document it in "Fork
 infrastructure" above. No new branch, no `PATCH_BRANCHES` change needed.
