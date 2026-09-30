@@ -8,6 +8,9 @@ import {
   createEnvironmentRpcQueryAtomFamily,
 } from "./runtime.ts";
 import { exportThreadViaFallback } from "./threadExportFallback.ts";
+// Re-exported so apps can name this module's inferred atom types (the fallback module has no
+// package subpath of its own).
+export { ThreadExportFallbackUnavailableError } from "./threadExportFallback.ts";
 import { ThreadSnapshotLoader } from "./threadSnapshotHttp.ts";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 
