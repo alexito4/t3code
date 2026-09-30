@@ -1425,12 +1425,12 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                           <ComposerInlineControl
                             accessibilityLabel="Side chat model and reasoning settings"
                             emphasized
-                            iconNode={
+                            renderIcon={(size) => (
                               <ProviderIcon
                                 provider={sideCurrentModelOption?.providerDriver}
-                                size={16}
+                                size={size}
                               />
-                            }
+                            )}
                             label={sideCurrentModelOption?.label ?? sideModelSelection.model}
                             maxWidth={180}
                             onPress={openSideSettings}
