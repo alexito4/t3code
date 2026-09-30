@@ -15,6 +15,17 @@ import {
 const makeProjectionThreadScratchpadRepository = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
 
+  // This fork-only table is not a numbered migration on purpose. The migrator skips every ID at or
+  // below the highest one recorded, and this database is shared with the official app, so a fork
+  // migration ID would silently hide upstream's next migration with that number.
+  yield* sql`
+    CREATE TABLE IF NOT EXISTS projection_thread_scratchpads (
+      thread_id TEXT PRIMARY KEY,
+      content TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `.pipe(Effect.orDie);
+
   const upsertProjectionThreadScratchpadRow = SqlSchema.void({
     Request: ProjectionThreadScratchpad,
     execute: (row) => sql`
