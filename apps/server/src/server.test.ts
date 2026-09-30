@@ -9014,6 +9014,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                     truncated: false,
                   },
                 ],
+                branchCommits: [
+                  {
+                    sha: "0123456789abcdef0123456789abcdef01234567",
+                    subject: "add second file",
+                    committedAt: DateTime.makeUnsafe("2026-08-10T00:00:00.000Z"),
+                  },
+                ],
+                branchCommitsTruncated: false,
               }),
             getDiffFileContents: () =>
               Effect.succeed({
@@ -9134,6 +9142,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         ),
       );
       assert.equal(diffPreview.sources[0]?.diff, "dirty-diff");
+      assert.equal(diffPreview.branchCommits[0]?.subject, "add second file");
 
       const diffFileContents = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) =>
