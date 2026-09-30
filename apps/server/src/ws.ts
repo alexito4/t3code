@@ -144,6 +144,8 @@ import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
 import { readWorkflowScript } from "./orchestration/workflowScriptQuery.ts";
 import { exportThread } from "./orchestration/threadExportQuery.ts";
+import { getThreadScratchpad } from "./orchestration/threadScratchpadQuery.ts";
+import { ProjectionThreadScratchpadRepositoryLive } from "./persistence/Layers/ProjectionThreadScratchpads.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
 import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
@@ -2099,6 +2101,12 @@ const makeWsRpcLayer = (
             readWorkflowScript({ scriptPath: input.scriptPath }),
             { "rpc.aggregate": "orchestration" },
           ),
+        [ORCHESTRATION_WS_METHODS.getThreadScratchpad]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.getThreadScratchpad,
+            getThreadScratchpad({ threadId: input.threadId }),
+            { "rpc.aggregate": "orchestration" },
+          ),
         [ORCHESTRATION_WS_METHODS.getTurnDiff]: (input) =>
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.getTurnDiff,
@@ -4026,6 +4034,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
             ).pipe(
               Layer.provideMerge(RpcSerialization.layerJson),
               Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),
+              Layer.provide(ProjectionThreadScratchpadRepositoryLive),
               Layer.provide(AgentSessionScanner.layer),
               Layer.provide(ProviderMaintenanceRunner.layer),
               Layer.provide(

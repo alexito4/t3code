@@ -125,6 +125,7 @@ function renderTabs(
       onAddAgents={() => undefined}
       onAddSideQuestion={() => undefined}
       onAddDevice={() => undefined}
+      onAddScratchpad={() => undefined}
       liveAgentCount={0}
       browserAvailable
       terminalAvailable={false}
@@ -135,6 +136,7 @@ function renderTabs(
       agentsAvailable={false}
       sideQuestionAvailable={false}
       deviceAvailable={false}
+      scratchpadAvailable={false}
     >
       <div>content</div>
     </RightPanelTabs>,

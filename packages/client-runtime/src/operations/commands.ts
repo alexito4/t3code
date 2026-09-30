@@ -45,6 +45,7 @@ export type ReorderPinnedThreadInput = CommandInput<"thread.pin.reorder">;
 export type SetThreadAutoSettleInput = CommandInput<"thread.auto-settle.set">;
 export type ReorderActiveThreadInput = CommandInput<"thread.active.reorder">;
 export type UpdateThreadMetadataInput = CommandInput<"thread.meta.update">;
+export type SetThreadScratchpadInput = CommandInput<"thread.scratchpad.set">;
 export type LinkThreadPullRequestInput = CommandInput<"thread.pull-request.link">;
 export type UnlinkThreadPullRequestInput = CommandInput<"thread.pull-request.unlink">;
 export type SetThreadRuntimeModeInput = CommandInput<"thread.runtime-mode.set">;
@@ -263,6 +264,16 @@ export const updateThreadMetadata: (input: UpdateThreadMetadataInput) => Command
   return yield* dispatch({
     ...input,
     type: "thread.meta.update",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const setThreadScratchpad: (input: SetThreadScratchpadInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.setThreadScratchpad",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "thread.scratchpad.set",
     commandId: yield* commandId(input),
   });
 });

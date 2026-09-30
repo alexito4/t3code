@@ -81,6 +81,31 @@ export function buildFileReviewComment(input: {
   };
 }
 
+/** A thread's own scratchpad notes, not a project file -- no fenceLanguage, since it's prose. */
+export function buildScratchpadReviewComment(input: {
+  id: string;
+  threadId: string;
+  startLine: number;
+  endLine: number;
+  text: string;
+  contents: string;
+}): ReviewCommentContext {
+  const startLine = Math.max(1, Math.min(input.startLine, input.endLine));
+  const endLine = Math.max(startLine, Math.max(input.startLine, input.endLine));
+  const selectedLines = input.contents.split("\n").slice(startLine - 1, endLine);
+  return {
+    id: input.id,
+    sectionId: `scratchpad:${input.threadId}`,
+    sectionTitle: "Scratchpad",
+    filePath: "Scratchpad",
+    startIndex: startLine - 1,
+    endIndex: endLine - 1,
+    rangeLabel: startLine === endLine ? `L${startLine}` : `L${startLine} to L${endLine}`,
+    text: input.text.trim(),
+    diff: selectedLines.join("\n"),
+  };
+}
+
 export function inferReviewCommentFenceLanguage(filePath: string): string {
   const normalizedPath = filePath.replaceAll("\\", "/");
   const fileName = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1).toLowerCase();

@@ -2116,6 +2116,7 @@ function PullRequestsRouteView() {
             onAddAgents={() => undefined}
             onAddSideQuestion={() => undefined}
             onAddDevice={() => undefined}
+            onAddScratchpad={() => undefined}
             browserAvailable={false}
             terminalAvailable={false}
             diffAvailable={false}
@@ -2125,6 +2126,7 @@ function PullRequestsRouteView() {
             agentsAvailable={false}
             sideQuestionAvailable={false}
             deviceAvailable={false}
+            scratchpadAvailable={false}
             liveAgentCount={0}
             pullRequestStatusSeeds={listedPullRequestTabStatuses}
           >
