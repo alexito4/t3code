@@ -4,7 +4,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   resolveEnvironmentIdentificationPillLabel,
   resolveSidebarStageBackdropVariant,
-  resolveSidebarStageFocusRingOffsetClass,
   StageBackdropArt,
   StageBackdropButtonArt,
 } from "./SidebarStageBackdrop";
@@ -24,18 +23,6 @@ describe("SidebarStageBackdrop", () => {
     expect(resolveEnvironmentIdentificationPillLabel("personal")).toBe("Personal");
     expect(resolveEnvironmentIdentificationPillLabel("Latest")).toBeNull();
     expect(resolveEnvironmentIdentificationPillLabel("Alpha")).toBeNull();
-  });
-
-  it("matches the focus-ring offset to each artwork palette", () => {
-    expect(resolveSidebarStageFocusRingOffsetClass("nightly")).toBe(
-      "focus-visible:ring-offset-(--stage-night-bottom)",
-    );
-    expect(resolveSidebarStageFocusRingOffsetClass("dev")).toBe(
-      "focus-visible:ring-offset-(--stage-art-bottom)",
-    );
-    expect(resolveSidebarStageFocusRingOffsetClass("personal")).toBe(
-      "focus-visible:ring-offset-(--stage-sunset-bottom)",
-    );
   });
 
   it.each(["nightly", "dev", "personal"] as const)(
@@ -71,13 +58,13 @@ describe("SidebarStageBackdrop", () => {
   });
 
   it.each([
-    ["nightly", "96 0 8192 96", "stage-nightly"],
-    ["dev", "64 0 8192 96", "stage-blueprint"],
-    ["personal", "96 0 8192 96", "stage-sunset"],
-  ] as const)("uses the compact %s crop inside the send button", (variant, viewBox, className) => {
+    ["nightly", "96 0 8192 96", "nightly"],
+    ["dev", "64 0 8192 96", "blueprint"],
+    ["personal", "96 0 8192 96", "sunset"],
+  ] as const)("uses the compact %s crop inside the send button", (variant, viewBox, stageArt) => {
     const markup = renderToStaticMarkup(<StageBackdropButtonArt variant={variant} />);
 
     expect(markup).toContain(`viewBox="${viewBox}"`);
-    expect(markup).toContain(className);
+    expect(markup).toContain(`data-stage-art="${stageArt}"`);
   });
 });
