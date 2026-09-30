@@ -19,5 +19,23 @@ export function createGitEnvironmentAtoms<R, E>(
       scheduler: vcsCommandScheduler,
       concurrency: vcsCommandConcurrency,
     }),
+    stageFile: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:git:stage-file",
+      tag: WS_METHODS.gitStageFile,
+      scheduler: vcsCommandScheduler,
+      concurrency: vcsCommandConcurrency,
+    }),
+    unstageFile: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:git:unstage-file",
+      tag: WS_METHODS.gitUnstageFile,
+      scheduler: vcsCommandScheduler,
+      concurrency: vcsCommandConcurrency,
+    }),
+    discardFile: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:git:discard-file",
+      tag: WS_METHODS.gitDiscardFile,
+      scheduler: vcsCommandScheduler,
+      concurrency: vcsCommandConcurrency,
+    }),
   };
 }

@@ -2,7 +2,11 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { openDiffFilePrimaryAction, resolveDiffPathForWorkspace } from "./diffFileActions";
+import {
+  openDiffFilePrimaryAction,
+  resolveDiffFileStagingActions,
+  resolveDiffPathForWorkspace,
+} from "./diffFileActions";
 import { selectThreadRightPanelState, useRightPanelStore } from "./rightPanelStore";
 
 const THREAD_REF = scopeThreadRef(
@@ -121,4 +125,48 @@ describe("openDiffFilePrimaryAction", () => {
       expect(openInEditor).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("resolveDiffFileStagingActions", () => {
+  it("hides every action for historical selections regardless of scope", () => {
+    for (const scope of ["uncommitted", "unstaged", "staged", "branch"] as const) {
+      expect(resolveDiffFileStagingActions(scope, true)).toEqual({
+        canStage: false,
+        canUnstage: false,
+        canDiscard: false,
+      });
+    }
+  });
+
+  it("hides every action for the read-only branch scope", () => {
+    expect(resolveDiffFileStagingActions("branch", false)).toEqual({
+      canStage: false,
+      canUnstage: false,
+      canDiscard: false,
+    });
+  });
+
+  it("offers stage and discard, but not unstage, in the unstaged scope", () => {
+    expect(resolveDiffFileStagingActions("unstaged", false)).toEqual({
+      canStage: true,
+      canUnstage: false,
+      canDiscard: true,
+    });
+  });
+
+  it("offers unstage and discard, but not stage, in the staged scope", () => {
+    expect(resolveDiffFileStagingActions("staged", false)).toEqual({
+      canStage: false,
+      canUnstage: true,
+      canDiscard: true,
+    });
+  });
+
+  it("offers stage and discard, but not unstage, in the combined uncommitted scope", () => {
+    expect(resolveDiffFileStagingActions("uncommitted", false)).toEqual({
+      canStage: true,
+      canUnstage: false,
+      canDiscard: true,
+    });
+  });
 });
