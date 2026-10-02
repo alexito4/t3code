@@ -95,7 +95,7 @@ describe("SideQuestionPanel", () => {
     expect(markup).toContain('aria-label="Side chat model"');
     expect(markup).toContain("High");
     expect(markup).toContain('data-user-message-actions="true"');
-    expect(markup).toContain('aria-label="Copy link"');
+    expect(markup).toContain('aria-label="Copy message"');
     expect(markup).toContain('aria-label="Minimize side chat"');
     expect(markup).not.toContain('data-side-question-context="true"');
     expect(markup).not.toContain("chat-composer-glass-shell-with-context");
