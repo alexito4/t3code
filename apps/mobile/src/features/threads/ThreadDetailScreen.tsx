@@ -368,6 +368,9 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     Record<string, SideQuestionState>
   >({});
   const sideQuestionState = sideQuestionsByThread[selectedThreadKey] ?? null;
+  // Unpatched servers reject side chat as an unknown RPC; /btw goes to the agent there.
+  const sideQuestionsSupported =
+    props.serverConfig?.environment.capabilities.sideQuestions === true;
   const setSideQuestionMode = useCallback(
     (mode: SideQuestionState["mode"]) =>
       setSideQuestionsByThread((current) => {
@@ -1035,7 +1038,9 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   ]);
 
   const handleSendMessage = useCallback(async () => {
-    const sideQuestion = parseSideQuestion(props.draftMessage.trim());
+    const sideQuestion = sideQuestionsSupported
+      ? parseSideQuestion(props.draftMessage.trim())
+      : null;
     if (sideQuestion !== null) {
       if (sideQuestion.length === 0) {
         setSideQuestionsByThread((current) => ({
@@ -1129,6 +1134,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     selectedThreadFeed,
     selectedThreadKey,
     sideQuestionState,
+    sideQuestionsSupported,
     submitSideQuestion,
   ]);
 

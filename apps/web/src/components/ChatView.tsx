@@ -4617,9 +4617,12 @@ export default function ChatView(props: ChatViewProps) {
     if (!activeThreadRef) return;
     useRightPanelStore.getState().open(activeThreadRef, "agents");
   }, [activeThreadRef]);
+  // Side chat is this fork's own patch: an unpatched server rejects it as an unknown RPC.
+  const sideQuestionsSupported = serverConfig?.environment.capabilities.sideQuestions === true;
   const sideQuestionAvailable =
     activeThreadRef !== null &&
     canAskComposerSideQuestion({
+      sideQuestionsSupported,
       isServerThread,
       hasPendingUserInput: activePendingProgress !== null,
     });
@@ -7627,6 +7630,7 @@ export default function ChatView(props: ChatViewProps) {
       return;
     }
     const sideQuestion = parseComposerSideQuestion(promptRef.current.trim(), {
+      sideQuestionsSupported,
       isServerThread,
       hasPendingUserInput: activePendingProgress !== null,
     });
@@ -10331,6 +10335,7 @@ export default function ChatView(props: ChatViewProps) {
                             activeThreadShell={routeServerThreadShell}
                             promptHistoryMessages={timelineMessages}
                             isServerThread={isServerThread}
+                            sideQuestionsSupported={sideQuestionsSupported}
                             isLocalDraftThread={isLocalDraftThread}
                             forceExpandedOnMobile={forceExpandedMobileComposer && isDraftHeroState}
                             projectSelectionRequired={isLocalDraftThread && activeProject === null}

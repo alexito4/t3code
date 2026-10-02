@@ -1347,6 +1347,7 @@ export interface ChatComposerProps {
   /** Timeline messages including optimistic sends, for ArrowUp prompt recall. */
   promptHistoryMessages: ReadonlyArray<ChatMessage>;
   isServerThread: boolean;
+  sideQuestionsSupported: boolean;
   isLocalDraftThread: boolean;
   forceExpandedOnMobile: boolean;
   projectSelectionRequired: boolean;
@@ -1505,6 +1506,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeThreadEnvironmentId: _activeThreadEnvironmentId,
     activeThread,
     isServerThread,
+    sideQuestionsSupported,
     promptHistoryMessages,
     isLocalDraftThread: _isLocalDraftThread,
     forceExpandedOnMobile,
@@ -2370,6 +2372,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         },
         ...(canOfferComposerSideQuestionCommand({
           trigger: composerTrigger,
+          sideQuestionsSupported,
           isServerThread,
           hasPendingUserInput: activePendingProgress !== null,
         })
@@ -2508,6 +2511,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     compactSlashCommandAvailable,
     composerTrigger,
     isServerThread,
+    sideQuestionsSupported,
     exactPullRequestLookup.data,
     planModeUiEnabled,
     pullRequestLookup.data,
@@ -2712,6 +2716,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   );
   const isSideQuestionDraft =
     parseComposerSideQuestion(prompt.trim(), {
+      sideQuestionsSupported,
       isServerThread,
       hasPendingUserInput: activePendingProgress !== null,
     }) !== null;

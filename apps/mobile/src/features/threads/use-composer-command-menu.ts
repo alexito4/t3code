@@ -56,6 +56,8 @@ export function buildComposerSlashCommandItems(input: {
   readonly hasCompactableConversation?: boolean;
   /** Whether T3 itself offers /usage-limits for the selected provider. */
   readonly offersUsageLimits?: boolean;
+  /** Whether the environment advertises the `sideQuestions` capability. */
+  readonly offersSideQuestions?: boolean;
   readonly allowInteractionMode: boolean;
   readonly selectedProviderStatus: Pick<
     ServerProvider,
@@ -98,7 +100,8 @@ export function buildComposerSlashCommandItems(input: {
   const items: ComposerCommandItem[] = builtIn.filter(
     (item) =>
       item.command.includes(query) &&
-      (item.command === "model" || item.command === "btw" || allowInteractionMode),
+      (item.command === "model" ||
+        (item.command === "btw" ? input.offersSideQuestions === true : allowInteractionMode)),
   );
 
   // Providers expand commands only at the start of a message. T3 commands
@@ -180,6 +183,7 @@ export function useComposerCommandMenu({
   hasThread,
   hasCompactableConversation,
   offersUsageLimits = false,
+  offersSideQuestions = false,
   enabled = true,
   onChangeDraftMessage,
   onUpdateInteractionMode,
@@ -196,6 +200,8 @@ export function useComposerCommandMenu({
   readonly hasCompactableConversation: boolean;
   /** Whether T3 itself offers /usage-limits for the selected provider. */
   readonly offersUsageLimits?: boolean;
+  /** Whether the environment advertises the `sideQuestions` capability. */
+  readonly offersSideQuestions?: boolean;
   readonly enabled?: boolean;
   readonly onChangeDraftMessage: (value: string) => void;
   readonly onUpdateInteractionMode?: (mode: ProviderInteractionMode) => void;
@@ -347,6 +353,7 @@ export function useComposerCommandMenu({
         hasThread,
         hasCompactableConversation,
         offersUsageLimits,
+        offersSideQuestions,
         allowInteractionMode: onUpdateInteractionMode !== undefined,
         selectedProviderStatus: selectedProviderStatus
           ? {
@@ -481,6 +488,7 @@ export function useComposerCommandMenu({
     skills,
     trigger,
     offersUsageLimits,
+    offersSideQuestions,
   ]);
 
   const onSelect = useCallback(

@@ -177,7 +177,7 @@ export function AssistantSelectionToolbar({
             aria-label={
               askInSideChatAvailable
                 ? "Ask about selection in a side chat"
-                : "Side chats need a running thread with no pending input"
+                : "Side chats need a running thread with no pending input, on a server with this fork's changes"
             }
             className="rounded-none px-2.5"
             onClick={askInSideChat}

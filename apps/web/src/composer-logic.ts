@@ -45,25 +45,27 @@ export function composerSubmissionIntentForEnter(input: {
   return input.modifierKey && input.isDraftThread ? "background" : "foreground";
 }
 
+type ComposerSideQuestionInput = {
+  /** The thread's environment advertises the `sideQuestions` capability. */
+  sideQuestionsSupported: boolean;
+  isServerThread: boolean;
+  hasPendingUserInput: boolean;
+};
+
 export function parseComposerSideQuestion(
   value: string,
-  input: { isServerThread: boolean; hasPendingUserInput: boolean },
+  input: ComposerSideQuestionInput,
 ): string | null {
   return canAskComposerSideQuestion(input) ? parseSideQuestion(value) : null;
 }
 
-export function canAskComposerSideQuestion(input: {
-  isServerThread: boolean;
-  hasPendingUserInput: boolean;
-}): boolean {
-  return input.isServerThread && !input.hasPendingUserInput;
+export function canAskComposerSideQuestion(input: ComposerSideQuestionInput): boolean {
+  return input.sideQuestionsSupported && input.isServerThread && !input.hasPendingUserInput;
 }
 
-export function canOfferComposerSideQuestionCommand(input: {
-  trigger: ComposerTrigger;
-  isServerThread: boolean;
-  hasPendingUserInput: boolean;
-}): boolean {
+export function canOfferComposerSideQuestionCommand(
+  input: ComposerSideQuestionInput & { trigger: ComposerTrigger },
+): boolean {
   return input.trigger.rangeStart === 0 && canAskComposerSideQuestion(input);
 }
 

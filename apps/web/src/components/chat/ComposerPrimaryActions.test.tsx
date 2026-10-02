@@ -116,6 +116,7 @@ describe("ComposerPrimaryActions", () => {
   it("keeps pending-answer controls when the custom answer starts with /btw", () => {
     const isSideQuestion =
       parseComposerSideQuestion("/btw custom answer", {
+        sideQuestionsSupported: true,
         isServerThread: true,
         hasPendingUserInput: true,
       }) !== null;

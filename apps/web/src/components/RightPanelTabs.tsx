@@ -164,7 +164,8 @@ const SURFACE_DISABLED_REASONS = {
   pullRequest: "This thread's branch has no pull request yet.",
   pullRequests: "No linked pull requests are available for this thread.",
   agents: "Agents are only available from a thread.",
-  sideQuestion: "Side chats need a running thread with no pending input.",
+  sideQuestion:
+    "Side chats need a running thread with no pending input, on a server with this fork's changes.",
   device: "Devices are only available from a thread.",
 } as const;
 
@@ -189,7 +190,8 @@ const SURFACE_UNAVAILABLE_HINTS = {
   pullRequest: "No pull request on this branch yet.",
   pullRequests: "No linked pull requests available.",
   agents: "Available from a thread.",
-  sideQuestion: "Needs a running thread with no pending input.",
+  sideQuestion:
+    "Needs a running thread with no pending input, on a server with this fork's changes.",
   device: "Available from a thread.",
 } as const;
 

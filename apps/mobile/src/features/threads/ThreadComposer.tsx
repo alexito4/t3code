@@ -313,10 +313,12 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       serverConfig: props.serverConfig,
       states: uploadStates,
     });
+  const sideQuestionsSupported =
+    props.serverConfig?.environment.capabilities.sideQuestions === true;
   // Every send goes through the outbox; the label says whether it leaves now
   // or waits (for the connection, an earlier queued message, or an upload).
   const sendLabel =
-    parseSideQuestion(props.draftMessage.trim()) !== null
+    sideQuestionsSupported && parseSideQuestion(props.draftMessage.trim()) !== null
       ? "Ask"
       : props.connectionState !== "connected" || props.queueCount > 0 || attachmentsUploading
         ? "Queue"
@@ -390,6 +392,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         ? undefined
         : props.onUpdateInteractionMode,
     offersUsageLimits: usageLimitsOffered,
+    offersSideQuestions: sideQuestionsSupported,
     // With attachments aboard the pick just inserts the text, so it sends as a prompt.
     onUsageLimits:
       usageLimitsOffered && props.draftAttachments.length === 0 ? openUsageLimits : undefined,

@@ -168,25 +168,34 @@ describe("composerSubmissionIntentForEnter", () => {
 });
 
 describe("side-question composer state", () => {
+  const supported = { sideQuestionsSupported: true, isServerThread: true };
+
   it("hides side-question actions while pending user input owns the composer", () => {
-    expect(canAskComposerSideQuestion({ isServerThread: true, hasPendingUserInput: true })).toBe(
-      false,
-    );
-    expect(canAskComposerSideQuestion({ isServerThread: true, hasPendingUserInput: false })).toBe(
-      true,
-    );
+    expect(canAskComposerSideQuestion({ ...supported, hasPendingUserInput: true })).toBe(false);
+    expect(canAskComposerSideQuestion({ ...supported, hasPendingUserInput: false })).toBe(true);
+  });
+
+  it("sends /btw to the agent on environments without side chat", () => {
+    const unsupported = {
+      sideQuestionsSupported: false,
+      isServerThread: true,
+      hasPendingUserInput: false,
+    };
+
+    expect(canAskComposerSideQuestion(unsupported)).toBe(false);
+    expect(parseComposerSideQuestion("/btw side question", unsupported)).toBeNull();
   });
 
   it("keeps /btw text on the pending user-input response path", () => {
     expect(
       parseComposerSideQuestion("/btw custom answer", {
-        isServerThread: true,
+        ...supported,
         hasPendingUserInput: true,
       }),
     ).toBeNull();
     expect(
       parseComposerSideQuestion("/btw side question", {
-        isServerThread: true,
+        ...supported,
         hasPendingUserInput: false,
       }),
     ).toBe("side question");
@@ -201,14 +210,14 @@ describe("side-question composer state", () => {
     expect(
       canOfferComposerSideQuestionCommand({
         trigger: promptStartTrigger!,
-        isServerThread: true,
+        ...supported,
         hasPendingUserInput: false,
       }),
     ).toBe(true);
     expect(
       canOfferComposerSideQuestionCommand({
         trigger: laterLineTrigger!,
-        isServerThread: true,
+        ...supported,
         hasPendingUserInput: false,
       }),
     ).toBe(false);
