@@ -147,12 +147,14 @@ original PR, not pile up here as one-off fixes.
 
 - **`/btw` side conversations** (side-question tool, right-panel/mobile-card UI, per-provider
   read-only isolation) — from https://github.com/pingdotgg/t3code/pull/8296
-  (`Bil0000/t3code:feat/btw-side-questions`, 44 commits, open/unmerged as of 2026-09-02).
+  (`Bil0000/t3code:feat/btw-side-questions`, 44 commits). Closed unmerged on 2026-09-07:
+  upstream won't add a second ephemeral side-conversation protocol, so this fork now owns the
+  feature outright.
   - **Branch**: `patch/pr8296-side-questions`, built by merging `upstream-pr-8296` (a mirror of
     `refs/pull/8296/head`, kept independent of everything else) onto fresh `upstream/main`.
     `alex.sh rebuild` merges `upstream/main` into this branch like any other patch branch —
     incrementally, resolving only the new delta each time, not the whole diff.
-  - **Known conflict set** (recurs on `rebuild` until the PR merges upstream or this drops):
+  - **Known conflict set** (recurs on `rebuild` for as long as this branch is carried):
     `ChatComposer.tsx`, `ChatView.tsx`, `MessagesTimeline.tsx`, `ws.ts`,
     `OpenCodeTextGeneration.ts`, `BranchToolbarEnvModeSelector.tsx`, `index.css`, and the
     mobile `ThreadComposer.tsx`/`ThreadDetailScreen.tsx`/`ThreadSettingsSheet.tsx` trio — main's
@@ -162,15 +164,17 @@ original PR, not pile up here as one-off fixes.
     auto-merged (non-conflicting) hunks blindly — this has twice produced silent bugs a
     conflict marker wouldn't catch (a duplicate type import, a dropped `data-*` attribute), only
     caught by running typecheck after resolving.
-  - **Updating from the author** (separate from `rebuild`, and NOT automatic — review what they
-    changed first): `git fetch upstream refs/pull/8296/head && git branch -f upstream-pr-8296
-FETCH_HEAD`, `git range-diff` against the old tip to see what changed, then merge the
-    refreshed `upstream-pr-8296` into `patch/pr8296-side-questions`.
-  - **My own fixes/improvements to this feature** belong on a branch based on
-    `upstream-pr-8296` (not on `patch/pr8296-side-questions` directly), so they stay sendable as
-    a PR against `Bil0000:feat/btw-side-questions` later. Then merge that branch into
-    `patch/pr8296-side-questions` too if it should land in the daily build now, ahead of sending
-    it upstream.
+  - **`upstream-pr-8296`** is frozen at the closed PR's final head; there is nothing left to
+    pull from the author.
+  - **My own fixes/improvements to this feature** go straight onto
+    `patch/pr8296-side-questions` now that there is no PR to send them back to:
+    - Side chat reliability (2026-10-02) — a `sideQuestions` server capability, so web and
+      mobile hide side chat (and send `/btw` to the agent) on servers without this fork, e.g. a
+      remote machine on an official build, instead of failing with `Unknown request tag`. Long
+      threads now keep their newest context within the 512 KB budget instead of refusing with
+      "thread context is too large". Side chat still defaults to the thread's own model and
+      effort, so on e.g. Opus at `xhigh` an answer takes ~30 s+; pick a lighter model in the
+      side chat's picker when that matters.
     - `improve/pr8296-side-question-button` (2026-09-02) — a "Side question" entry in the right
       panel's empty-state launcher and `+` add-surface menu (shortcut `Q`), opening the panel
       with an empty turn list ready for a first question instead of requiring `/btw` typed in
