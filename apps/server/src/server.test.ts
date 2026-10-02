@@ -2321,45 +2321,61 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("rejects oversized side-question context before starting a provider", () =>
+  it.effect("answers long threads from the newest context that fits", () =>
     Effect.gen(function* () {
       const snapshot = makeDefaultOrchestrationReadModel();
       const thread = snapshot.threads[0]!;
       const project = snapshot.projects[0]!;
-      const oversizedThread = {
+      const message = (id: string, text: string, createdAt: string) => ({
+        id: MessageId.make(id),
+        role: "user" as const,
+        text,
+        turnId: null,
+        streaming: false,
+        createdAt,
+        updatedAt: createdAt,
+      });
+      const newestPage = {
+        ...thread,
+        messages: [message("newest-context", "Latest finding", "2026-01-01T00:00:02.000Z")],
+      };
+      const oversizedOlderPage = {
         ...thread,
         messages: [
-          {
-            id: MessageId.make("oversized-side-question-context"),
-            role: "user" as const,
-            text: "a".repeat(SIDE_QUESTION_CONTEXT_MAX_BYTES),
-            turnId: null,
-            streaming: false,
-            createdAt: thread.createdAt,
-            updatedAt: thread.updatedAt,
-          },
+          message(
+            "oversized-older-context",
+            "a".repeat(SIDE_QUESTION_CONTEXT_MAX_BYTES),
+            "2026-01-01T00:00:01.000Z",
+          ),
         ],
       };
-      let generationCount = 0;
+      const received: Array<TextGeneration.SideQuestionGenerationInput> = [];
+      let pageReadCount = 0;
 
       yield* buildAppUnderTest({
         layers: {
           projectionSnapshotQuery: {
             getThreadDetailSnapshot: () =>
-              Effect.succeed(
-                Option.some({
+              Effect.sync(() => {
+                pageReadCount += 1;
+                const firstPage = pageReadCount === 1;
+                return Option.some({
                   snapshotSequence: 0,
-                  thread: oversizedThread,
-                  page: { beforeCursor: null, hasMore: false, snapshotSequence: 0 },
-                }),
-              ),
+                  thread: firstPage ? newestPage : oversizedOlderPage,
+                  page: {
+                    beforeCursor: firstPage ? "older-page" : null,
+                    hasMore: firstPage,
+                    snapshotSequence: 0,
+                  },
+                });
+              }),
             getProjectShellById: () => Effect.succeed(Option.some(project)),
           },
           textGeneration: {
-            answerSideQuestion: () =>
+            answerSideQuestion: (input) =>
               Effect.sync(() => {
-                generationCount += 1;
-                return { answer: "unreachable" };
+                received.push(input);
+                return { answer: "From the latest finding." };
               }),
           },
         },
@@ -2370,15 +2386,16 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         withWsRpcClient(wsUrl, (client) =>
           client[ORCHESTRATION_WS_METHODS.askSideQuestion]({
             threadId: defaultThreadId,
-            question: "Will this start a provider?",
+            question: "What did we find?",
           }),
-        ).pipe(Effect.result),
+        ),
       );
 
-      assertTrue(result._tag === "Failure");
-      assertTrue(result.failure._tag === "TextGenerationError");
-      assert.include(result.failure.detail, "too large");
-      assert.equal(generationCount, 0);
+      assert.deepEqual(result, { answer: "From the latest finding." });
+      assert.equal(received.length, 1);
+      assert.include(received[0]!.context, "[Earlier content truncated]");
+      assert.include(received[0]!.context, "USER:\nLatest finding");
+      assert.notInclude(received[0]!.context, "a".repeat(100));
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

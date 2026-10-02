@@ -350,8 +350,9 @@ export function isSideQuestionContextWithinLimit(context: string): boolean {
   return NodeBuffer.Buffer.byteLength(context, "utf8") <= SIDE_QUESTION_CONTEXT_MAX_BYTES;
 }
 
-export function formatSideQuestionContext(input: SideQuestionContextInput): string {
-  const entries = [
+/** Formatted context entries, oldest first. */
+export function sideQuestionContextEntries(input: SideQuestionContextInput): Array<string> {
+  return [
     ...input.messages
       // Thinking traces are working notes, not conversational content a side
       // question should be answered against — see ThreadTitleContext.ts.
@@ -366,9 +367,50 @@ export function formatSideQuestionContext(input: SideQuestionContextInput): stri
         createdAt: activity.createdAt,
         text: "TOOL:\n" + activity.summary + "\n" + JSON.stringify(activity.payload),
       })),
-  ].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  ]
+    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
+    .map((entry) => entry.text);
+}
 
-  return entries.map((entry) => entry.text).join("\n\n");
+/** Bytes left for thread context once the earlier side conversation is included. */
+export function sideQuestionThreadContextBudget(conversationSection: string): number {
+  if (!conversationSection) return SIDE_QUESTION_CONTEXT_MAX_BYTES;
+  return SIDE_QUESTION_CONTEXT_MAX_BYTES - NodeBuffer.Buffer.byteLength(conversationSection) - 2;
+}
+
+/**
+ * Keeps the newest entries that fit in `maxBytes`, so a long thread loses its oldest context
+ * instead of failing the side question. `full` means older entries would not fit either.
+ */
+export function fitSideQuestionContext(
+  entries: ReadonlyArray<string>,
+  maxBytes: number,
+  hasOlderEntries: boolean,
+): { readonly context: string; readonly full: boolean } {
+  const budget = maxBytes - NodeBuffer.Buffer.byteLength(EARLIER_CONTENT_TRUNCATION_MARKER);
+  const kept: Array<string> = [];
+  let used = 0;
+  let full = false;
+  for (const entry of entries.toReversed()) {
+    const size = NodeBuffer.Buffer.byteLength(entry) + (kept.length > 0 ? 2 : 0);
+    if (used + size > budget) {
+      // An oversized newest entry (usually a tool payload) keeps its head; the streaming
+      // decode drops a multi-byte character cut in half.
+      if (kept.length === 0 && budget > 0) {
+        const head = NodeBuffer.Buffer.from(entry).subarray(0, budget);
+        kept.push(new TextDecoder().decode(head, { stream: true }));
+      }
+      full = true;
+      break;
+    }
+    kept.push(entry);
+    used += size;
+  }
+  const context = kept.toReversed().join("\n\n");
+  return {
+    context: full || hasOlderEntries ? `${EARLIER_CONTENT_TRUNCATION_MARKER}${context}` : context,
+    full,
+  };
 }
 
 export interface SideQuestionPromptInput {

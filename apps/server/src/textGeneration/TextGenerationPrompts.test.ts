@@ -6,10 +6,11 @@ import {
   buildPrContentPrompt,
   buildSideQuestionPrompt,
   buildThreadTitlePrompt,
-  formatSideQuestionContext,
+  fitSideQuestionContext,
   formatSideQuestionConversation,
   isSideQuestionContextWithinLimit,
   SIDE_QUESTION_CONTEXT_MAX_BYTES,
+  sideQuestionContextEntries,
 } from "./TextGenerationPrompts.ts";
 import {
   normalizeCliError,
@@ -243,7 +244,7 @@ describe("side questions", () => {
   });
 
   it("uses completed messages and tool results without exposing streaming assistant text or thinking traces", () => {
-    const context = formatSideQuestionContext({
+    const context = sideQuestionContextEntries({
       messages: [
         {
           role: "user",
@@ -284,7 +285,7 @@ describe("side questions", () => {
           createdAt: "2026-08-26T10:00:02.000Z",
         },
       ],
-    });
+    }).join("\n\n");
 
     expect(context).toContain("USER:\nFind the reconnect bug");
     expect(context).toContain("ASSISTANT:\nThe stable finding");
@@ -293,6 +294,40 @@ describe("side questions", () => {
     expect(context).not.toContain("unfinished reply");
     expect(context).not.toContain("Read started");
     expect(context).not.toContain("Let me consider token expiry");
+  });
+
+  it("keeps the newest context entries that fit and marks what was dropped", () => {
+    const fitted = fitSideQuestionContext(
+      ["USER:\noldest", "USER:\nmiddle", "USER:\nnewest"],
+      50,
+      false,
+    );
+
+    expect(fitted).toEqual({
+      context: "[Earlier content truncated]\n\nUSER:\nnewest",
+      full: true,
+    });
+  });
+
+  it("leaves context that fits untouched unless older pages were never read", () => {
+    const entries = ["USER:\nfirst", "ASSISTANT:\nsecond"];
+
+    expect(fitSideQuestionContext(entries, 1_000, false)).toEqual({
+      context: "USER:\nfirst\n\nASSISTANT:\nsecond",
+      full: false,
+    });
+    expect(fitSideQuestionContext(entries, 1_000, true).context).toBe(
+      "[Earlier content truncated]\n\nUSER:\nfirst\n\nASSISTANT:\nsecond",
+    );
+  });
+
+  it("clips an oversized newest entry within the byte budget", () => {
+    const fitted = fitSideQuestionContext([`TOOL:\n${"é".repeat(100)}`], 64, false);
+
+    expect(fitted.full).toBe(true);
+    expect(fitted.context.startsWith("[Earlier content truncated]\n\nTOOL:\né")).toBe(true);
+    expect(Buffer.byteLength(fitted.context)).toBeLessThanOrEqual(64);
+    expect(fitted.context).not.toContain("\uFFFD");
   });
 
   it("asks for a tool-free answer that stays outside the main conversation", () => {

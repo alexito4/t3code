@@ -109,9 +109,11 @@ import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionRe
 import * as TextGeneration from "./textGeneration/TextGeneration.ts";
 import * as SideQuestionCoordinator from "./textGeneration/SideQuestionCoordinator.ts";
 import {
+  fitSideQuestionContext,
   formatSideQuestionConversation,
-  formatSideQuestionContext,
   isSideQuestionContextWithinLimit,
+  sideQuestionContextEntries,
+  sideQuestionThreadContextBudget,
 } from "./textGeneration/TextGenerationPrompts.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
@@ -1992,22 +1994,30 @@ const makeWsRpcLayer = (
 
               const firstSnapshot = projectThreadDetailSnapshot(firstPage.value);
               const thread = firstSnapshot.thread;
-              let context = formatSideQuestionContext(thread);
-              if (!isSideQuestionContextWithinLimit(context)) {
+              const previousConversation = formatSideQuestionConversation(
+                input.previousTurns ?? [],
+              );
+              const conversationSection = previousConversation
+                ? `Earlier side conversation:\n${previousConversation}`
+                : "";
+              const contextBudget = sideQuestionThreadContextBudget(conversationSection);
+              if (contextBudget <= 0) {
                 return yield* new TextGenerationError({
                   operation: "answerSideQuestion",
-                  detail: "The thread context is too large for a side question.",
+                  detail: "The side-question context is too large.",
                 });
               }
+
+              // Pages arrive newest first; older ones only fill the budget the newer ones left.
+              let entries = sideQuestionContextEntries(thread);
               let beforeCursor = firstSnapshot.page?.beforeCursor ?? null;
+              let fitted = fitSideQuestionContext(entries, contextBudget, beforeCursor !== null);
               let pageCount = 1;
-              while (beforeCursor !== null) {
-                if (pageCount >= SIDE_QUESTION_CONTEXT_MAX_PAGES) {
-                  return yield* new TextGenerationError({
-                    operation: "answerSideQuestion",
-                    detail: "The thread context is too large for a side question.",
-                  });
-                }
+              while (
+                beforeCursor !== null &&
+                !fitted.full &&
+                pageCount < SIDE_QUESTION_CONTEXT_MAX_PAGES
+              ) {
                 const page = yield* projectionSnapshotQuery.getThreadDetailSnapshot(
                   input.threadId,
                   { turnLimit: SIDE_QUESTION_CONTEXT_TURNS_PER_PAGE, beforeCursor },
@@ -2018,27 +2028,16 @@ const makeWsRpcLayer = (
                     detail: `Thread '${input.threadId}' was not found.`,
                   });
                 }
-                const olderContext = formatSideQuestionContext(
-                  projectThreadDetailSnapshot(page.value).thread,
-                );
-                context = [olderContext, context].filter(Boolean).join("\n\n");
-                if (!isSideQuestionContextWithinLimit(context)) {
-                  return yield* new TextGenerationError({
-                    operation: "answerSideQuestion",
-                    detail: "The thread context is too large for a side question.",
-                  });
-                }
+                entries = [
+                  ...sideQuestionContextEntries(projectThreadDetailSnapshot(page.value).thread),
+                  ...entries,
+                ];
                 beforeCursor = page.value.page?.beforeCursor ?? null;
+                fitted = fitSideQuestionContext(entries, contextBudget, beforeCursor !== null);
                 pageCount += 1;
               }
 
-              const previousConversation = formatSideQuestionConversation(
-                input.previousTurns ?? [],
-              );
-              const providerContext = [
-                context,
-                previousConversation ? `Earlier side conversation:\n${previousConversation}` : "",
-              ]
+              const providerContext = [fitted.context, conversationSection]
                 .filter(Boolean)
                 .join("\n\n");
               if (!isSideQuestionContextWithinLimit(providerContext)) {
