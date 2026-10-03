@@ -62,14 +62,18 @@ buildable/runnable for personal use (see Fork infrastructure below).
     stats/lazy per-file loading instead of computing both full patches on every request.
   - `patch/review-diff-committed-mode` — adds a "Committed" per-commit diff mode, adapted from
     upstream PR https://github.com/pingdotgg/t3code/pull/6102 (closed unmerged 2026-09-30 for
-    lacking maintainer approval, so this is permanent fork code). Commits are listed from the
-    review's merge base to `HEAD`. Mobile only gets the data-model update (`ReviewSectionKind`),
-    matching #6102's own scope — no mobile "Commits" picker UI.
+    lacking maintainer approval, so this is permanent fork code). The Commits submenu lists
+    `<merge-base>..HEAD` (up to 100) and commit previews load per file like the other views.
+    It's gated by a `reviewCommits` server capability. Mobile only gets the data-model update
+    (`ReviewSectionKind`), matching #6102's own scope — no mobile "Commits" picker UI.
   - `patch/review-diff-file-actions` — per-file stage/unstage/discard buttons in the diff header,
     shown only in the working-tree views (Uncommitted/Unstaged/Staged), not Changes or
-    Committed. `discardFile` runs a silent `git stash push -- <path>` immediately before the
-    destructive checkout/clean, left unpopped, purely as a recovery net — no confirmation dialog,
-    the one-click UX matches Codex exactly. Web + desktop only, deliberately no mobile UI.
+    Committed. They're gated by a `reviewFileActions` server capability. `discardFile` runs a
+    silent `git stash push -- <path>` immediately before the destructive checkout/clean, left
+    unpopped, purely as a recovery net — no confirmation dialog, the one-click UX matches Codex
+    exactly. Git runs at the repository root with literal pathspecs; the V2 port fixed a project
+    cwd below the repo root, and a file named like `[ab].txt` sweeping `a.txt` into the stash.
+    Web + desktop only, deliberately no mobile UI.
   - **Stacked since the V2 port**: committed-mode and file-actions each sit on top of
     staged-unstaged and get updates by merging it (`patch_base` in `alex.sh`), not
     `upstream/main`. Before that, each carried its own retyped copy of staged-unstaged, so every
@@ -130,14 +134,22 @@ buildable/runnable for personal use (see Fork infrastructure below).
 - **Export a thread** — no existing way to show a colleague what happened in a thread without
   giving them access to the environment (confirmed by checking upstream: nothing solves this,
   and open PR #7902 "copy a link to a thread" explicitly isn't a share link — the recipient still
-  needs pairing). Adds "Export thread…" to the thread context menu (sidebar row and chat header,
-  same shared `buildThreadActionMenuItems` list PR #7902 would also extend) that saves the full
-  transcript, tool activity, and code changes as one self-contained Markdown file: human/agent
-  readable prose plus an embedded JSON block carrying the thread's own read-model shape (reusing
-  `OrchestrationThread` as-is) and a full-thread diff, for a future T3-native re-import. No
-  redaction — export is exactly what's in the thread. Read-only "learn from it" only for now;
-  resuming a thread from an export is deliberately out of scope, though the embedded diff makes
-  that a follow-up, not a redesign, when it's wanted. On branch `feat/thread-share` (based on
+  needs pairing; #7902 has since closed unmerged). Adds "Export thread…" to the thread context
+  menu (sidebar row and chat header, same shared `buildThreadActionMenuItems` list; web +
+  desktop only) that saves the full transcript, tool activity, and code changes as one
+  self-contained Markdown file: human/agent readable prose plus an embedded JSON block (format
+  version 2: the full V2 thread projection encoded with `OrchestrationV2ThreadProjectionJson`)
+  and a full-thread diff (whitespace changes kept), for a future T3-native re-import. Reasoning
+  is left out of the readable transcript but kept in the JSON. No redaction — export is exactly
+  what's in the thread. Read-only "learn from it" only for now; resuming a thread from an export
+  is deliberately out of scope, though the embedded diff makes that a follow-up, not a redesign,
+  when it's wanted. Since the V2 port it is **client-only**
+  (`packages/client-runtime/src/state/threadExport.ts`, formatter in
+  `packages/shared/src/threadExport.ts`): it uses only requests any official V2 server answers
+  (the HTTP thread snapshot, `orchestration.getFullThreadDiff`, signed attachment URLs for inlined
+  images), so there's no server code and no capability flag. The cost: the HTTP snapshot strips
+  command output and per-file diffs and shortens large tool payloads. Threads without checkpoints
+  (migrated V1 threads, threads outside a Git repo) export without a diff. On branch `feat/thread-share` (based on
   `upstream/main`) and composed into `main` via `PATCH_BRANCHES`. Built for personal use first;
   not yet sent upstream. CONTRIBUTING.md is explicit that unsolicited feature PRs are unlikely to
   be accepted without an Ideas discussion first — revisit once lived with for a while, and open
@@ -200,13 +212,25 @@ original PR, not pile up here as one-off fixes.
     `refs/pull/8296/head`, kept independent of everything else) onto fresh `upstream/main`.
     `alex.sh rebuild` merges `upstream/main` into this branch like any other patch branch —
     incrementally, resolving only the new delta each time, not the whole diff.
+  - **V2 shape (ported 2026-10-03)**: contracts in `packages/contracts/src/sideQuestion.ts`
+    (method names unchanged). `SideQuestionCoordinator.ask()` reads the thread's V2 turn items
+    through `ThreadManagementService.getThreadRecords` and applies the timeline's own visibility
+    rule, so rolled-back turns and cancelled queued messages are left out. Still stateless:
+    nothing is written to the shared database. Web logic lives in `useSideChat.tsx`, so
+    ChatView only gains about 40 lines. `SideQuestionPanel.tsx` is built on upstream's
+    `ComposerSurface`/`ComposerBanner` via a `sideChatBanner` prop on `ChatComposer`. The fork's
+    467-line composer CSS, `ComposerGlass.tsx` and `UserMessageBubble.tsx` were dropped, so side
+    chat now looks like upstream's composer instead of the old glass styling. Every
+    text-generation provider answers side questions, including V2's new Pi and OpenCode2. ACP
+    Registry threads have no text generation and get a clear error. Known gaps: in a V2 forked
+    thread, side chat only sees the fork's own turns, not the inherited history; each question
+    loads all of the thread's matching items before trimming to the budget.
   - **Known conflict set** (recurs on `rebuild` for as long as this branch is carried):
-    `ChatComposer.tsx`, `ChatView.tsx`, `MessagesTimeline.tsx`, `ws.ts`,
-    `OpenCodeTextGeneration.ts`, `BranchToolbarEnvModeSelector.tsx`, `index.css`, and the
-    mobile `ThreadComposer.tsx`/`ThreadDetailScreen.tsx`/`ThreadSettingsSheet.tsx` trio — main's
-    composer-surface and OpenCode-shared-server refactors keep landing in the same spots the PR
-    touches. Resolution pattern so far: adopt main's newer architecture (`ComposerSurface.*`,
-    `OpenCodeServerOwner`), splice the PR's side-question JSX/logic into it. Don't trust the
+    `ChatComposer.tsx`, `ChatView.tsx` (small since `useSideChat`), `ws.ts`, `rpc.ts`, the
+    `textGeneration/*` providers, and the mobile
+    `ThreadComposer.tsx`/`ThreadDetailScreen.tsx`/`ThreadSettingsSheet.tsx` trio. The branch no
+    longer touches `index.css` and only passes props through `MessagesTimeline`. Resolution
+    pattern: adopt upstream's newer architecture and splice side chat into it. Don't trust the
     auto-merged (non-conflicting) hunks blindly — this has twice produced silent bugs a
     conflict marker wouldn't catch (a duplicate type import, a dropped `data-*` attribute), only
     caught by running typecheck after resolving.
@@ -227,9 +251,9 @@ original PR, not pile up here as one-off fixes.
       the main composer. Reuses the existing `submitSideQuestion`/`askSideQuestion` path, no new
       server-side plumbing. Already merged into `patch/pr8296-side-questions`.
     - "Ask in side chat" on the assistant text-selection toolbar (2026-09-03) — a second button
-      next to "Cite" (`AssistantSelectionToolbar.tsx`, now a two-button glass pill instead of a
-      single button) that opens/reuses the side chat and seeds its draft with the same citation
-      token "Cite" inserts into the main composer (`ChatView.tsx`'s `askSelectionInSideChat`,
+      next to "Cite" (`AssistantSelectionToolbar.tsx`; plain upstream buttons since the V2
+      port's lint rules, shared with scratchpad's "Add to scratchpad") that opens/reuses the side chat and seeds its draft with the same citation
+      token "Cite" inserts into the main composer (`useSideChat.tsx`'s `askSelection`,
       `SideQuestionPanel.tsx`'s nonce-gated `draftSeed` prop so repeat clicks prepend a fresh
       citation instead of wiping the conversation). Committed straight onto
       `patch/pr8296-side-questions` rather than a dedicated `upstream-pr-8296`-based branch like
