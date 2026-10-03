@@ -527,6 +527,7 @@ describe("rightPanelStore", () => {
           surfaces: [{ id: "diff", kind: "diff" }],
         },
       },
+      threadPanelVisibilityByThreadKey: {},
     });
   });
 
@@ -542,6 +543,7 @@ describe("rightPanelStore", () => {
           surfaces: [],
         },
       },
+      threadPanelVisibilityByThreadKey: {},
     });
   });
 

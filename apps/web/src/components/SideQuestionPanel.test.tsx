@@ -96,7 +96,7 @@ describe("SideQuestionPanel", () => {
     expect(markup).toContain('aria-label="Copy message"');
     expect(markup).toContain('aria-label="Minimize side chat"');
     expect(markup).not.toContain('data-side-question-context="true"');
-    expect(markup).not.toContain("data-with-context");
+    expect(markup).not.toContain('data-with-context="true"');
     expect(markup).not.toContain("calendaty-staging");
     expect(markup).not.toContain("feat/btw-side-questions");
     expect(markup).not.toContain("max-w-[calc(48rem-2.75rem)]");

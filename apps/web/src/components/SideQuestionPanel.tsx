@@ -146,7 +146,7 @@ export function SideQuestionPanel(props: {
           {props.turns.map((turn) => (
             <div key={turn.id} className="space-y-2.5">
               <div className="group flex flex-col items-end gap-1">
-                <div className="relative max-w-[80%] whitespace-pre-wrap wrap-break-word rounded-2xl bg-message p-3 text-message-foreground text-sm">
+                <div className="relative max-w-[80%] rounded-2xl bg-message p-3 text-message-foreground text-sm whitespace-pre-wrap wrap-break-word">
                   {turn.question}
                 </div>
                 <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100">
