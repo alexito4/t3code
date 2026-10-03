@@ -14,6 +14,8 @@ export type DiffPanelSelection =
   | { kind: "unstaged" }
   | { kind: "unstaged-only" }
   | { kind: "staged" }
+  // Fork: one commit, with the base of the Commits list it was picked from.
+  | { kind: "commit"; commitSha: string; baseRef: string | null }
   | { kind: "turn"; turnId: RunId; filePath: string | null; revealRequestId: number };
 
 // "branch" is the Changes view: everything this checkout changed since its base.
@@ -24,8 +26,14 @@ interface DiffPanelStoreState {
   branchBaseRefByThreadKey: Record<string, string | null>;
   selectGitScope: (ref: ScopedThreadRef, scope: DiffPanelGitScope) => void;
   selectBranchBaseRef: (ref: ScopedThreadRef, baseRef: string | null) => void;
+  selectCommit: (ref: ScopedThreadRef, commitSha: string, baseRef: string | null) => void;
   selectTurn: (ref: ScopedThreadRef, turnId: RunId, filePath?: string) => void;
   reconcileTurnSelection: (ref: ScopedThreadRef, availableTurnIds: ReadonlyArray<RunId>) => void;
+  reconcileCommitSelection: (
+    ref: ScopedThreadRef,
+    availableCommitShas: ReadonlyArray<string>,
+    listIsComplete: boolean,
+  ) => void;
   removeThread: (ref: ScopedThreadRef) => void;
 }
 
@@ -74,6 +82,21 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
             },
           };
         }),
+      selectCommit: (ref, commitSha, baseRef) =>
+        set((state) => {
+          const threadKey = scopedThreadKey(ref);
+          const previous = state.byThreadKey[threadKey];
+          return {
+            byThreadKey: {
+              ...state.byThreadKey,
+              [threadKey]: { kind: "commit", commitSha, baseRef },
+            },
+            branchBaseRefByThreadKey:
+              previous?.kind === "branch"
+                ? { ...state.branchBaseRefByThreadKey, [threadKey]: previous.baseRef }
+                : state.branchBaseRefByThreadKey,
+          };
+        }),
       selectTurn: (ref, turnId, filePath) =>
         set((state) => {
           const threadKey = scopedThreadKey(ref);
@@ -106,6 +129,29 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
             byThreadKey: {
               ...state.byThreadKey,
               [threadKey]: { ...previous, turnId: latestTurnId },
+            },
+          };
+        }),
+      reconcileCommitSelection: (ref, availableCommitShas, listIsComplete) =>
+        set((state) => {
+          const threadKey = scopedThreadKey(ref);
+          const previous = state.byThreadKey[threadKey];
+          // A capped listing cannot prove the commit left the range, but a complete one can,
+          // including a complete listing that is empty. Changes takes over with its own base.
+          if (
+            previous?.kind !== "commit" ||
+            !listIsComplete ||
+            availableCommitShas.includes(previous.commitSha)
+          ) {
+            return state;
+          }
+          return {
+            byThreadKey: {
+              ...state.byThreadKey,
+              [threadKey]: {
+                kind: "branch",
+                baseRef: state.branchBaseRefByThreadKey[threadKey] ?? null,
+              },
             },
           };
         }),
