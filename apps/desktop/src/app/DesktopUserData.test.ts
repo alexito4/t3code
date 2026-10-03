@@ -71,3 +71,24 @@ it.effect.each(["t3code", "T3 Code (Alpha)"])(
       );
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 );
+
+it.effect("keeps personal fork builds out of the official profile", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const directory = yield* fs.makeTempDirectoryScoped({ prefix: "t3-personal-profile-" });
+    const destination = path.join(directory, "t3code-personal-v2");
+    yield* fs.makeDirectory(path.join(directory, "t3code"), { recursive: true });
+    yield* fs.writeFileString(path.join(directory, "t3code", "Local State"), "official state");
+    yield* fs.makeDirectory(path.join(directory, "t3code-personal"), { recursive: true });
+    yield* fs.writeFileString(
+      path.join(directory, "t3code-personal", "Local State"),
+      "personal state",
+    );
+    const input = { appDataDirectory: directory, isDevelopment: false, isPersonalBuild: true };
+
+    assert.equal(yield* resolveUserDataPath({ ...input, platform: "darwin" }), destination);
+    assert.equal(yield* resolveUserDataPath({ ...input, platform: "win32" }), destination);
+    assert.equal(yield* fs.readFileString(path.join(destination, "Local State")), "personal state");
+  }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+);

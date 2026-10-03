@@ -245,6 +245,20 @@ const ICON_VARIANTS = [
       windowsIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
     },
   },
+  {
+    label: "personal",
+    source: BRAND_ASSET_PATHS.personalIconComposerProject,
+    outputs: {
+      ios: BRAND_ASSET_PATHS.personalIosIconPng,
+      macos: BRAND_ASSET_PATHS.personalMacIconPng,
+      universal: BRAND_ASSET_PATHS.personalLinuxIconPng,
+      appleTouch: BRAND_ASSET_PATHS.personalWebAppleTouchIconPng,
+      favicon16: BRAND_ASSET_PATHS.personalWebFavicon16Png,
+      favicon32: BRAND_ASSET_PATHS.personalWebFavicon32Png,
+      faviconIco: BRAND_ASSET_PATHS.personalWebFaviconIco,
+      windowsIco: BRAND_ASSET_PATHS.personalWindowsIconIco,
+    },
+  },
 ] as const satisfies ReadonlyArray<IconVariant>;
 
 const MACOS_EXPORT_CODEX_PROMPT = [

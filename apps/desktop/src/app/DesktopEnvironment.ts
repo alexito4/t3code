@@ -18,6 +18,13 @@ import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePat
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
 import type { OtlpProtocol } from "@t3tools/shared/observability";
 
+// Personal fork builds (T3CODE_DESKTOP_PERSONAL_BUILD=1) show a "Personal"
+// stage label so they're recognizable next to an official install. Their
+// separate Electron profile lives in DesktopUserData.ts.
+declare const __T3CODE_DESKTOP_PERSONAL_BUILD__: boolean | undefined;
+const isPersonalBuild =
+  typeof __T3CODE_DESKTOP_PERSONAL_BUILD__ !== "undefined" && __T3CODE_DESKTOP_PERSONAL_BUILD__;
+
 export interface MakeDesktopEnvironmentInput {
   readonly dirname: string;
   readonly homeDirectory: string;
@@ -101,6 +108,10 @@ function resolveDesktopAppStageLabel(input: {
 }): DesktopAppStageLabel {
   if (input.isDevelopment) {
     return "Dev";
+  }
+
+  if (isPersonalBuild) {
+    return "Personal";
   }
 
   return isNightlyDesktopVersion(input.appVersion) ? "Nightly" : "Alpha";
