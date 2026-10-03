@@ -111,6 +111,8 @@ import {
   VcsListRefsInput,
   VcsListRefsResult,
   GitManagerServiceError,
+  GitFilePathInput,
+  GitFilePathResult,
   GitPreparePullRequestThreadInput,
   GitPreparePullRequestThreadResult,
   VcsPullInput,
@@ -393,6 +395,9 @@ export const WS_METHODS = {
   gitRunStackedAction: "git.runStackedAction",
   gitResolvePullRequest: "git.resolvePullRequest",
   gitPreparePullRequestThread: "git.preparePullRequestThread",
+  gitStageFile: "git.stageFile",
+  gitUnstageFile: "git.unstageFile",
+  gitDiscardFile: "git.discardFile",
 
   // Review methods
   reviewGetDiffPreview: "review.getDiffPreview",
@@ -1279,6 +1284,24 @@ const WsGitPreparePullRequestThreadRpc = Rpc.make(WS_METHODS.gitPreparePullReque
   error: Schema.Union([GitManagerServiceError, EnvironmentAuthorizationError]),
 });
 
+const WsGitStageFileRpc = Rpc.make(WS_METHODS.gitStageFile, {
+  payload: GitFilePathInput,
+  success: GitFilePathResult,
+  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
+});
+
+const WsGitUnstageFileRpc = Rpc.make(WS_METHODS.gitUnstageFile, {
+  payload: GitFilePathInput,
+  success: GitFilePathResult,
+  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
+});
+
+const WsGitDiscardFileRpc = Rpc.make(WS_METHODS.gitDiscardFile, {
+  payload: GitFilePathInput,
+  success: GitFilePathResult,
+  error: Schema.Union([GitCommandError, EnvironmentAuthorizationError]),
+});
+
 const WsVcsListRefsRpc = Rpc.make(WS_METHODS.vcsListRefs, {
   payload: VcsListRefsInput,
   success: VcsListRefsResult,
@@ -1802,6 +1825,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsGitRunStackedActionRpc,
   WsGitResolvePullRequestRpc,
   WsGitPreparePullRequestThreadRpc,
+  WsGitStageFileRpc,
+  WsGitUnstageFileRpc,
+  WsGitDiscardFileRpc,
   WsVcsListRefsRpc,
   WsVcsCreateWorktreeRpc,
   WsVcsRemoveWorktreeRpc,

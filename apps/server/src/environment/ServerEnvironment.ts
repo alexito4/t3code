@@ -223,6 +223,8 @@ export const make = Effect.gen(function* () {
       pullRequestChecks: true,
       // This fork's Staged and Unstaged diff views, absent on official builds.
       reviewStagedAndUnstaged: true,
+      // This fork's per-file stage, unstage, and discard actions, absent on official builds.
+      reviewFileActions: true,
       inlineMessageContext: true,
       requiredWorktreeBootstrap: true,
       threadSettlement: true,
