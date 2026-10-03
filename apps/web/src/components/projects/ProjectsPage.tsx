@@ -7,6 +7,7 @@ import { isElectron } from "../../env";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { useThreadShells } from "../../state/entities";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
+import { isSidebarSubagentThread } from "../Sidebar.logic";
 import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
 import { ProjectActivityChart, type ProjectActivitySeries } from "./ProjectActivityChart";
 import { ProjectFavicon } from "../ProjectFavicon";
@@ -60,6 +61,8 @@ function useProjectStatsByKey(
     const projectKeyByRef = buildProjectKeyByRef(groups);
     const stats = new Map<string, ProjectStats>();
     for (const thread of threads) {
+      // Subagent children belong to their parent's work, as in the sidebar.
+      if (isSidebarSubagentThread(thread)) continue;
       const projectKey = projectKeyByRef.get(`${thread.environmentId}:${thread.projectId}`);
       if (!projectKey) continue;
       const existing = stats.get(projectKey) ?? { activeThreadCount: 0, lastActivityAt: null };
@@ -100,6 +103,7 @@ function useProjectActivityData(groups: readonly SidebarProjectSnapshot[]): Proj
     const totalByProjectKey = new Map<string, number>();
     const dayAndProjectKeyToCount = new Map<string, Map<string, number>>();
     for (const thread of threads) {
+      if (isSidebarSubagentThread(thread)) continue;
       const projectKey = projectKeyByRef.get(`${thread.environmentId}:${thread.projectId}`);
       if (!projectKey) continue;
       const day = (thread.latestUserMessageAt ?? thread.updatedAt).slice(0, 10);
