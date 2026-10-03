@@ -31,18 +31,29 @@ export class DesktopUserDataInitializationError extends Schema.TaggedError<Deskt
   }
 }
 
+// Personal fork builds (T3CODE_DESKTOP_PERSONAL_BUILD=1) get their own profile,
+// and with it their own single-instance lock, so they run beside an official
+// install instead of deferring to it. The shared T3 home is unaffected.
+declare const __T3CODE_DESKTOP_PERSONAL_BUILD__: boolean | undefined;
+const isPersonalBuild =
+  typeof __T3CODE_DESKTOP_PERSONAL_BUILD__ !== "undefined" && __T3CODE_DESKTOP_PERSONAL_BUILD__;
+
 /** Select Electron's profile independently of the server's T3 home. */
 export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPath")(
   function* (input: {
     readonly appDataDirectory: string;
     readonly isDevelopment: boolean;
     readonly platform: NodeJS.Platform;
+    /** Defaults to the build-time personal fork flag. */
+    readonly isPersonalBuild?: boolean;
   }) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const names = input.isDevelopment
-      ? { current: "t3code-dev", legacy: "T3 Code (Dev)" }
-      : { current: "t3code-v2", legacy: "T3 Code (Alpha)" };
+      ? { current: "t3code-dev", legacy: "T3 Code (Dev)", v1: "t3code-dev" }
+      : (input.isPersonalBuild ?? isPersonalBuild)
+        ? { current: "t3code-personal-v2", legacy: "T3 Code (Personal)", v1: "t3code-personal" }
+        : { current: "t3code-v2", legacy: "T3 Code (Alpha)", v1: "t3code" };
     const destinationPath = path.join(input.appDataDirectory, names.current);
     const legacyPath = path.join(input.appDataDirectory, names.legacy);
     const inspect = (resourcePath: string) =>
@@ -63,7 +74,7 @@ export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPa
     const legacyState = path.join(legacyPath, "Local State");
     const sourceState = (yield* inspect(legacyState))
       ? legacyState
-      : path.join(input.appDataDirectory, "t3code", "Local State");
+      : path.join(input.appDataDirectory, names.v1, "Local State");
     if (!(yield* inspect(sourceState))) return destinationPath;
     // Windows safeStorage keys live here. Copy only these preferences, never locked databases.
     const state = yield* fs
