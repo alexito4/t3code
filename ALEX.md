@@ -21,7 +21,27 @@ Two ways to update, both in `alex.sh`:
   (small, isolated conflicts, one per branch), then discards `main` and rebuilds it from fresh
   `upstream/main` plus the current patch branch set. Use this when a plain `sync` conflict gets
   messy, or when adding/removing a line from `PATCH_BRANCHES` — dropping a feature is just
-  removing its line and running `rebuild`.
+  removing its line and running `rebuild`. Stacked branches (see `patch_base` in `alex.sh`) merge
+  their parent branch instead of `upstream/main`, so the parent's fixes flow up instead of being
+  retyped in each child's merge.
+
+`./alex.sh dist` runs `pnpm install` itself, so a sync that changes dependencies needs nothing
+extra before building.
+
+**Orchestration V2 (2026-10-02/03).** Upstream replaced the whole orchestration layer in one squash
+(`de34391427`, ~1900 files): the V1 decider, projection pipeline, `packages/contracts/src/orchestration.ts`
+and `apps/server/src/server.test.ts` are gone. Every branch below was ported on 2026-10-03 by
+merging upstream into it (no history rewrite); the pre-port tips are kept locally as
+`refs/backup/pre-v2/<branch>`. Two consequences that shape every fork feature now:
+
+- V2 servers use `~/.t3/userdata/statev2.sqlite`, copied once from V1's `state.sqlite` on first V2
+  launch and never re-synced. This fork's V2 build shares `statev2.sqlite` with the official V2
+  app, but **never run both at once**: each server's startup/shutdown recovery ends every
+  in-flight run recorded in the database, including the other app's. Quit one before opening the
+  other.
+- Fork-only server state must never become V2 orchestration events or commands. The official app
+  decodes `orchestration_events` against a closed union, so one unknown event type breaks its
+  stream and projection rebuilds. Use a plain repository + RPC instead (scratchpad is the template).
 
 ## Features
 
@@ -32,18 +52,29 @@ buildable/runnable for personal use (see Fork infrastructure below).
   full staged/unstaged/committed diff-source split, per-file stage/revert buttons, and a
   collapsible file-tree browser with git-status badges. Split into four independently-droppable
   branches, each its own concern:
-  - `patch/review-diff-staged-unstaged` — splits the old combined "Working tree" scope into
-    Uncommitted/Unstaged/Staged, end to end (contracts, server git plumbing, web dropdown,
-    mobile section menu including `ReviewSheet.tsx` UI wiring).
+  - `patch/review-diff-staged-unstaged` — adds Unstaged and Staged diff views, end to end
+    (contracts, server git plumbing, web dropdown, mobile section menu including `ReviewSheet.tsx`
+    UI wiring). Upstream #15005 (2026-10-02) renamed its own views to "Changes" (merge-base vs
+    working tree, incl. untracked; now the default) and "Uncommitted" (HEAD vs working tree), and
+    still uses `{kind:"unstaged"}` to mean Uncommitted. Since the V2 port the fork keeps both
+    upstream views and that key's meaning, and adds new keys for Unstaged/Staged (menu order:
+    Changes, Uncommitted, Unstaged, Staged). The port also moved staged/unstaged onto upstream's
+    stats/lazy per-file loading instead of computing both full patches on every request.
   - `patch/review-diff-committed-mode` — adds a "Committed" per-commit diff mode, adapted from
-    upstream PR https://github.com/pingdotgg/t3code/pull/6102 (open, unmerged as of 2026-09-02).
-    Depends on `patch/review-diff-staged-unstaged`'s scope structure, so it's built on top of
-    that branch rather than independently on `upstream/main`. Mobile only gets the data-model
-    update (`ReviewSectionKind`), matching #6102's own scope — no mobile "Commits" picker UI.
-  - `patch/review-diff-file-actions` — per-file stage/unstage/discard buttons in the diff header.
-    `discardFile` runs a silent `git stash push -- <path>` immediately before the destructive
-    checkout/clean, left unpopped, purely as a recovery net — no confirmation dialog, the
-    one-click UX matches Codex exactly. Web + desktop only, deliberately no mobile UI.
+    upstream PR https://github.com/pingdotgg/t3code/pull/6102 (closed unmerged 2026-09-30 for
+    lacking maintainer approval, so this is permanent fork code). Commits are listed from the
+    review's merge base to `HEAD`. Mobile only gets the data-model update (`ReviewSectionKind`),
+    matching #6102's own scope — no mobile "Commits" picker UI.
+  - `patch/review-diff-file-actions` — per-file stage/unstage/discard buttons in the diff header,
+    shown only in the working-tree views (Uncommitted/Unstaged/Staged), not Changes or
+    Committed. `discardFile` runs a silent `git stash push -- <path>` immediately before the
+    destructive checkout/clean, left unpopped, purely as a recovery net — no confirmation dialog,
+    the one-click UX matches Codex exactly. Web + desktop only, deliberately no mobile UI.
+  - **Stacked since the V2 port**: committed-mode and file-actions each sit on top of
+    staged-unstaged and get updates by merging it (`patch_base` in `alex.sh`), not
+    `upstream/main`. Before that, each carried its own retyped copy of staged-unstaged, so every
+    sync resolved the same conflicts three times. Dropping staged-unstaged now means dropping all
+    three.
   - `patch/review-diff-file-tree` — a collapsible file-tree sidebar in the diff panel using
     `@pierre/trees`' `gitStatus` option (installed, unused elsewhere in the codebase before this)
     for added/modified/deleted/renamed/untracked badges. **Dropped 2026-09-03**: upstream shipped
@@ -65,9 +96,10 @@ buildable/runnable for personal use (see Fork infrastructure below).
   next to "Ask a question" / "Explain this PR", backed by a user-editable checklist in
   Settings → Source Control → Pull requests. On branch `feat/pull-request-review-checklist`
   (based on `upstream/main`) and composed into `main` via `PATCH_BRANCHES` as of 2026-09-02 —
-  wanted in daily use now rather than waiting on upstream. Sent upstream:
-  https://github.com/pingdotgg/t3code/pull/9099 (open). Once merged, drop the branch from
-  `PATCH_BRANCHES` and `rebuild`.
+  wanted in daily use now rather than waiting on upstream. Sent upstream as
+  https://github.com/pingdotgg/t3code/pull/9099, closed unmerged 2026-09-30 for lacking prior
+  maintainer approval (CONTRIBUTING.md "Prior approval"), so it stays a fork feature unless an
+  Ideas discussion gets the direction approved first.
 
 - **Codex usage undercount fix** — the Usage screen's Codex scan only read
   `~/.codex/sessions`, never `~/.codex/archived_sessions` (where Codex CLI rotates completed
@@ -76,20 +108,24 @@ buildable/runnable for personal use (see Fork infrastructure below).
   mobile. Unlike the PR-review-checklist entry above, this one is wanted in daily use now, so
   it's on branch `fix/codex-usage-archived-sessions` (based on `upstream/main`, no `patch/`
   rename needed — the prefix is convention, not a requirement) and _is_ composed into `main` via
-  `PATCH_BRANCHES`. Sent upstream: https://github.com/pingdotgg/t3code/pull/9226 (open). Once
-  merged, drop the branch from `PATCH_BRANCHES` and `rebuild` — `main` will already have it via
-  `upstream/main` at that point.
+  `PATCH_BRANCHES`. Sent upstream as https://github.com/pingdotgg/t3code/pull/9226, closed
+  2026-09-04 in favor of #7096 (which also deduplicated rollouts moving between session roots),
+  and #7096 was itself closed unmerged. As of the V2 port upstream still scans only `sessions`, so
+  this stays a fork fix. Check upstream's `UsageService.ts` scan roots before each port in case
+  that changes.
 
 - **Projects list page** — there was no way to see all projects at a glance, only a per-project
   settings screen reachable one at a time. Adds a `/projects` page listing every project
   (favicon, workspace path, thread count, last activity) plus an "Activity" section showing
   threads active per day over the last 30 days, styled to match the existing Usage page
   (headline stat + legend on the left, chart beside it, no card wrapper). Also adds a "Projects"
-  icon to the sidebar's bottom-left utility bar and makes the "Projects" breadcrumb segment on
-  the per-project settings page a real link back to the list. On branch
+  icon to the sidebar's bottom-left utility bar. (It also linked the per-project settings
+  breadcrumb back to the list until upstream #13139 removed that breadcrumb.) V2 thread shells
+  include subagent child threads, so counts and the chart skip them (`isSidebarSubagentThread`);
+  the no-project "Scratch" project is listed like any other. On branch
   `feat/projects-list-page` (based on `upstream/main`) and composed into `main` via
-  `PATCH_BRANCHES`. Sent upstream: https://github.com/pingdotgg/t3code/pull/9238 (open). Once
-  merged, drop the branch from `PATCH_BRANCHES` and `rebuild`.
+  `PATCH_BRANCHES`. Sent upstream as https://github.com/pingdotgg/t3code/pull/9238, closed
+  unmerged 2026-09-30 for lacking prior maintainer approval, so this is permanent fork code.
 
 - **Export a thread** — no existing way to show a colleague what happened in a thread without
   giving them access to the environment (confirmed by checking upstream: nothing solves this,
@@ -113,12 +149,19 @@ buildable/runnable for personal use (see Fork infrastructure below).
   Files panel, including its exact line-selection → inline-comment-box → cite flow (reusing
   `buildFileReviewComment`'s sibling `buildScratchpadReviewComment`, which shapes a cited excerpt
   as a `ReviewCommentContext` with `sectionId: "scratchpad:<threadId>"` — no new
-  `ComposerContextRecord` kind needed). Content persists server-side in its own projection table
-  (`projection_thread_scratchpads`, created by its repository layer rather than a numbered
-  migration — see "Adding a new entry" — plus a `thread.scratchpad.set` command/event pair) fetched on
-  demand via `orchestration.getThreadScratchpad`, deliberately never added to the in-memory
-  `OrchestrationThread` snapshot or thread-shell broadcast, so a large scratchpad never slows down
-  the thread list. Since this only works against a server built from this fork, it's gated behind
+  `ComposerContextRecord` kind needed). The assistant-message selection toolbar also gets "Add to
+  scratchpad", which appends the selection (read-then-write on the client, serialized per thread
+  with the editor's own saves). Content persists server-side in `projection_thread_scratchpads`,
+  created by its repository layer (`apps/server/src/persistence/ThreadScratchpads.ts`) rather
+  than a numbered migration — see "Adding a new entry". It's served by two plain RPCs,
+  `threadScratchpad.get` / `threadScratchpad.set`, fetched on demand and never part of the
+  thread snapshot or shell broadcast, so a large scratchpad never slows down the thread list.
+  Before V2 this was a `thread.scratchpad.set` orchestration command/event pair. The V2 port
+  dropped that path, because a fork event type would break the official app sharing the
+  database. The table name stayed so existing notes carried over; V2 keeps V1 thread IDs. The port
+  also bumped the right panel's persisted storage version to 15: upstream independently used 14,
+  and fork users already at the fork's 14 would otherwise skip the migration that strips the
+  removed "Agents" surface. Since this only works against a server built from this fork, it's gated behind
   a new `scratchpad` server capability flag (`ExecutionEnvironmentCapabilities`) — clients hide
   the tab entirely when connected to an unpatched/upstream server (e.g. a remote machine running
   the official nightly) instead of offering one that would fail. On branch
@@ -136,8 +179,11 @@ buildable/runnable for personal use (see Fork infrastructure below).
   commits `.pnpm-store`, and also rescales fixed-px labels and composer approval panels,
   which is more than this needs). On branch `feat/conversation-font-size` (based on
   `upstream/main`) and composed into `main` via `PATCH_BRANCHES`. Sent upstream:
-  https://github.com/pingdotgg/t3code/pull/13234 (open).
-  Once merged, drop the branch from `PATCH_BRANCHES` and `rebuild`.
+  https://github.com/pingdotgg/t3code/pull/13234 (open; this branch is the PR's head, so keep it
+  free of fork-only changes, and remember that pushing it updates the PR). Known conflict spot:
+  `MessagesTimeline.tsx`, where `.conversation-text` sits on the timeline viewport and the
+  working row uses `min-h-6`. V2's timeline cards use `text-3xs` badges, which deliberately don't
+  scale. Once merged, drop the branch from `PATCH_BRANCHES` and `rebuild`.
 
 ## Merged early from open upstream PRs
 
@@ -203,12 +249,21 @@ the official one. Never meant to merge upstream.
   none of it is meaningfully droppable on its own (unlike a feature, there's no scenario where
   I'd want "the desktop identity but not alex.sh"). Covers:
   - **`alex.sh`** — this script.
-  - **Personal desktop build identity** (`apps/desktop/src/app/DesktopEnvironment.ts`,
-    `scripts/build-desktop-artifact.ts`, `apps/desktop/vite.config.ts`) — a build made via
-    `alex.sh dist` gets its own bundle id (`com.t3tools.t3code.personal`) and Electron
-    `userData` dir (`t3code-personal`), gated behind `T3CODE_DESKTOP_PERSONAL_BUILD=1`, so it
-    can run alongside an official install instead of colliding with it. Shared app state
-    (`~/.t3/userdata`) is untouched, so projects/threads stay shared as normal.
+  - **Personal desktop build identity** (`apps/desktop/src/app/DesktopUserData.ts`,
+    `apps/desktop/src/app/DesktopEnvironment.ts`, `scripts/build-desktop-artifact.ts`,
+    `apps/desktop/vite.config.ts`) — a build made via `alex.sh dist` gets its own bundle id
+    (`com.t3tools.t3code.personal`) and Electron profile dir, gated behind
+    `T3CODE_DESKTOP_PERSONAL_BUILD=1`, so it can be installed next to an official build instead
+    of colliding with it (same profile = same single-instance lock = the second app silently
+    quits). Since V2 the profile dir is chosen in `DesktopUserData.ts` (upstream: `t3code-v2`
+    packaged, `t3code-dev` in dev) and the personal build uses `t3code-personal-v2`. Taking
+    upstream's side of a `DesktopEnvironment.ts` conflict compiles fine but silently drops this,
+    so check `DesktopUserData.ts` after every port. On macOS, as with upstream's own V2 switch,
+    the first V2 launch starts with a fresh Electron profile (website and T3 Connect sign-ins
+    again). App state (`~/.t3/userdata`) is resolved independently; see the V2 note at the top
+    for how the database is shared and why the two apps must not run at the same time. `alex.sh
+pair` writes into whichever database this checkout's server uses, so from a V2 `main` it
+    only pairs with V2 servers.
   - **Personal build branding** — same idea as the official Nightly channel's distinctive
     visuals, so a personal build is recognizable at a glance next to an official install:
     - App icon: `assets/personal/app-icon.icon` (Icon Composer project, warm orange solid fill
@@ -250,12 +305,18 @@ New personal _feature_ (not infra): give it its own `patch/<name>` branch based 
 `main` for the first time, document it here in "Features". Default to a new branch — the
 ability to drop a feature independently is the reason this scheme exists.
 
-Schema changes: never add a numbered migration on a fork branch. `~/.t3/userdata/state.sqlite`
-is shared with the official app, and the migrator skips every ID at or below the highest one
-recorded, so a fork migration ID silently hides upstream's next migration with that number, in
-both apps. That happened once: the scratchpad table was recorded as 53/54 in the live DB, and
-upstream's own 54 (`auto_settle_disabled_at`) would never have run. Create fork-only tables
-idempotently (`CREATE TABLE IF NOT EXISTS`) where the owning repository layer is built instead.
+Schema changes: never add a numbered migration on a fork branch. `~/.t3/userdata/statev2.sqlite`
+(V1: `state.sqlite`) is shared with the official app, and the migrator skips every ID at or below
+the highest one recorded, so a fork migration ID silently hides upstream's next migration with
+that number, in both apps. That happened once: the scratchpad table was recorded as 53/54 in the
+live DB, and upstream's own 54 (`auto_settle_disabled_at`) would never have run. Upstream now
+documents the same trap for forks (`docs/internals/legacy-orchestration-migration.md`, "Divergent
+migration ids"). Create fork-only tables idempotently (`CREATE TABLE IF NOT EXISTS`) where the
+owning repository layer is built instead.
+
+Server state: never add V2 orchestration event or command types on a fork branch (see the V2 note
+at the top). Persist fork-only state through a plain repository + RPC, gated by a server
+capability flag so clients hide the feature on official servers.
 
 New _infra_ work: commit it directly onto `patch/fork-infra`, document it in "Fork
 infrastructure" above. No new branch, no `PATCH_BRANCHES` change needed.

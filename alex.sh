@@ -29,6 +29,18 @@ PATCH_BRANCHES=(
     feat/conversation-font-size
 )
 
+# What `rebuild` merges into a patch branch. Stacked branches merge their
+# parent (listed above them, so already refreshed by then) instead of
+# upstream/main: the parent's fixes flow up, and upstream comes along with it.
+patch_base() {
+    case "$1" in
+        patch/review-diff-committed-mode | patch/review-diff-file-actions)
+            echo patch/review-diff-staged-unstaged
+            ;;
+        *) echo upstream/main ;;
+    esac
+}
+
 usage() {
     echo "Usage: alex.sh <dev|connect|sync|rebuild|dist|pair> [args...]" >&2
     echo "  dev      Run pnpm dev with T3CODE_HOST=0.0.0.0 (LAN-reachable)" >&2
@@ -94,9 +106,10 @@ case "$cmd" in
             awk '/^PATCH_BRANCHES=\(/{f=1;next} /^\)/{f=0} f{print $1}')
 
         for branch in "${PATCH_BRANCHES[@]}"; do
-            echo "==> Merging upstream/main into $branch"
+            base="$(patch_base "$branch")"
+            echo "==> Merging $base into $branch"
             git checkout "$branch"
-            git merge upstream/main
+            git merge "$base"
         done
 
         echo "==> Rebuilding main"
@@ -129,6 +142,10 @@ case "$cmd" in
         }
         trap cleanup_dist EXIT
         pnpm config set minimumReleaseAge 0 --location user
+
+        # A sync can change dependencies (V2 added several); build against
+        # exactly what the lockfile says.
+        pnpm install
 
         export T3CODE_DESKTOP_PERSONAL_BUILD=1
         pnpm build:desktop
