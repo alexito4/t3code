@@ -317,10 +317,17 @@ pair` writes into whichever database this checkout's server uses, so from a V2 `
     infrastructure, only for features or merged-early upstream PRs (see the sections above).
 
 Run `./alex.sh` with no args for the current subcommand list (`dev`, `connect`, `sync`,
-`rebuild`, `dist`, `pair`). `./alex.sh dist` is the local desktop update workflow: it builds the
+`sync-nightly`, `rebuild`, `dist`, `pair`). `./alex.sh dist` is the local desktop update workflow: it builds the
 personal arm64 app, replaces `/Applications/T3 Code (Personal).app`, and removes its temporary
 packaging artifacts. Close the installed app before reopening it to use the new build; do not use
 the generated DMG or ZIP for local updates.
+
+`sync-nightly` tracks upstream's nightly releases rather than `upstream/main`'s tip, so the
+personal build sits on the same tested commits as the official Nightly app. Since 2026-10-03 a
+T3 scheduled task ("Sync personal build with upstream nightly", every 3 hours, posting into the
+thread that set it up) runs it, resolves conflicts on the owning patch branches, typechecks,
+pushes, and runs `dist`. Manage it in the app's scheduled tasks. Each new build needs one Finder
+double-click on first launch.
 
 ## Adding a new entry
 
