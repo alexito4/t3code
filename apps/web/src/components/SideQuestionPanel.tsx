@@ -22,7 +22,6 @@ import { TraitsPicker } from "./chat/TraitsPicker";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { Spinner } from "./ui/spinner";
-import { Textarea } from "./ui/textarea";
 
 export type SideQuestionTurn = {
   readonly question: string;
@@ -175,18 +174,16 @@ export function SideQuestionPanel(props: {
         </div>
       </ScrollArea>
 
-      <div data-side-question-composer-dock="true" className="shrink-0 px-3 pt-3 pb-[3.25rem]">
+      <div data-side-question-composer-dock="true" className="shrink-0 px-3 pt-3 pb-13">
         <form data-side-question-composer-shell="true" onSubmit={submit}>
           <ComposerSurface.Shell>
             <ComposerSurface.Host>
               <ComposerSurface.Main>
                 <div data-chat-composer-surface="true" className="rounded-3xl">
                   <div className="relative px-3 pb-2 pt-3.5 sm:px-4 sm:pt-4">
-                    <Textarea
-                      unstyled
-                      className="block text-sm [&_[data-slot=textarea]]:max-h-50 [&_[data-slot=textarea]]:overflow-y-auto [&_[data-slot=textarea]]:p-0"
+                    <textarea
+                      className="field-sizing-content block max-h-50 min-h-17.5 w-full resize-none overflow-y-auto bg-transparent p-0 text-sm outline-none max-sm:min-h-20.5"
                       value={draft}
-                      style={{ resize: "none" }}
                       aria-label={
                         props.turns.length === 0 ? "Start a side chat" : "Continue the side chat"
                       }
@@ -267,10 +264,9 @@ export function SideQuestionPanel(props: {
                         </svg>
                       </button>
                     ) : (
-                      <Button
+                      <button
                         type="submit"
-                        size="icon"
-                        className="rounded-full border-transparent bg-message-action text-message-action-foreground transition-transform hover:scale-105 hover:bg-message-action-hover"
+                        className="relative isolate flex size-9 items-center justify-center overflow-hidden rounded-full bg-message-action text-message-action-foreground shadow-xs transition-all duration-150 enabled:cursor-pointer enabled:shadow-message-action/24 enabled:inset-shadow-control-highlight hover:scale-105 hover:bg-message-action-hover active:inset-shadow-control-pressed active:shadow-none disabled:pointer-events-none disabled:opacity-64 disabled:shadow-none sm:size-8 [&_svg]:pointer-events-none"
                         disabled={draft.trim().length === 0}
                         aria-label="Ask follow-up"
                       >
@@ -290,7 +286,7 @@ export function SideQuestionPanel(props: {
                             strokeLinejoin="round"
                           />
                         </svg>
-                      </Button>
+                      </button>
                     )}
                   </div>
                 </div>

@@ -4046,6 +4046,7 @@ export default function ChatView(props: ChatViewProps) {
     settings,
     composerDraftTarget,
   });
+  const onSideChatSurfacesClosed = sideChat.onSurfacesClosed;
   useLayoutEffect(() => {
     if (
       threadDetailLoading ||
@@ -5608,7 +5609,7 @@ export default function ChatView(props: ChatViewProps) {
   const cleanupRightPanelSurfaces = useCallback(
     (surfaces: readonly RightPanelSurface[]) => {
       if (!activeThreadRef) return;
-      sideChat.onSurfacesClosed(surfaces);
+      onSideChatSurfacesClosed(surfaces);
       for (const surface of surfaces) {
         if (surface.kind === "preview" && surface.resourceId) {
           void closePreviewSession({
@@ -5634,7 +5635,7 @@ export default function ChatView(props: ChatViewProps) {
       activePreviewState.sessions,
       closePreview,
       closeTerminalMutation,
-      sideChat.onSurfacesClosed,
+      onSideChatSurfacesClosed,
       storeCloseTerminal,
     ],
   );

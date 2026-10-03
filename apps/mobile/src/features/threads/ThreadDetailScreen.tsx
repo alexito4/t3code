@@ -1596,7 +1596,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                                   selectable
                                   className={
                                     turn.status === "error"
-                                      ? "text-sm text-rose-700 dark:text-rose-300"
+                                      ? "text-sm text-danger-foreground"
                                       : "text-sm text-foreground"
                                   }
                                 >

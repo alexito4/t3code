@@ -79,15 +79,13 @@ describe("SideQuestionPanel", () => {
     expect(markup).not.toContain('<div class="font-medium text-sm">Side chat</div>');
     expect(markup).toContain('data-side-question-composer-shell="true"');
     expect(markup).toContain('data-side-question-composer-dock="true"');
-    expect(markup).toContain("pb-[3.25rem]");
+    expect(markup).toContain("pb-13");
     expect(markup).toContain("relative px-3 pb-2 pt-3.5 sm:px-4 sm:pt-4");
     expect(markup).toContain('data-chat-composer-main-surface="true"');
     expect(markup).toContain('aria-label="Continue the side chat"');
-    expect(markup).toContain('data-size="default"');
     expect(markup).toContain("min-h-17.5");
     expect(markup).not.toContain("min-h-16.5");
-    expect(markup).toContain("[&amp;_[data-slot=textarea]]:p-0");
-    expect(markup).toContain('style="resize:none"');
+    expect(markup).toContain("resize-none");
     expect(markup).toContain("Continue the side chat…");
     expect(markup).toContain('aria-label="Ask follow-up"');
     expect(markup).toContain('class="size-3.5"');
