@@ -386,6 +386,7 @@ import {
   serverEnvironment,
 } from "../state/server";
 import { terminalEnvironment } from "../state/terminal";
+import { orchestrationEnvironment } from "../state/orchestration";
 import { threadEnvironment } from "../state/threads";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
 import { vcsEnvironment } from "../state/vcs";
@@ -5043,7 +5044,7 @@ export default function ChatView(props: ChatViewProps) {
     if (!activeThreadRef || !scratchpadAvailable) return;
     useRightPanelStore.getState().open(activeThreadRef, "scratchpad");
   }, [activeThreadRef, scratchpadAvailable]);
-  const appendScratchpad = useAtomCommand(threadEnvironment.appendScratchpad, {
+  const appendScratchpad = useAtomCommand(orchestrationEnvironment.appendThreadScratchpad, {
     reportFailure: false,
   });
   const addSelectionToScratchpad = useCallback(

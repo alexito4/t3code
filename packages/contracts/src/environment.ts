@@ -196,7 +196,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       must keep telling the user to update the app on that machine. */
   desktopAppUpdate: Schema.optionalKey(Schema.Boolean),
   /** Server persists a freeform per-thread scratchpad and understands
-      thread.scratchpad.set / orchestration.getThreadScratchpad. Absent on
+      threadScratchpad.get / threadScratchpad.set. Absent on
       servers without this fork's changes, so clients hide the Scratchpad
       panel instead of offering a tab that would fail against them. */
   scratchpad: Schema.optionalKey(Schema.Boolean),

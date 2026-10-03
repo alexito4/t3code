@@ -1,7 +1,7 @@
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { createRef, useEffect, useMemo } from "react";
 
-import { threadEnvironment } from "~/state/threads";
+import { orchestrationEnvironment } from "~/state/orchestration";
 import { useAtomCommand } from "~/state/use-atom-command";
 
 import { FileSaveCoordinator } from "../files/fileSaveCoordinator";
@@ -17,7 +17,7 @@ export function useScratchpadSaveCoordinator({
   environmentId,
   threadId,
 }: ScratchpadSaveOptions): Pick<FileSaveCoordinator, "change"> {
-  const setScratchpad = useAtomCommand(threadEnvironment.setScratchpad);
+  const setScratchpad = useAtomCommand(orchestrationEnvironment.setThreadScratchpad);
   const session = useMemo(() => {
     const coordinatorRef = createRef<FileSaveCoordinator>();
     return {

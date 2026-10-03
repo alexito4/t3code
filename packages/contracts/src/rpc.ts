@@ -334,6 +334,12 @@ import {
 } from "./sourceControl.ts";
 import { VcsError } from "./vcs.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
+import {
+  ThreadScratchpad,
+  ThreadScratchpadError,
+  ThreadScratchpadGetInput,
+  ThreadScratchpadSetInput,
+} from "./threadScratchpad.ts";
 
 export const WS_METHODS = {
   // Project registry methods
@@ -508,6 +514,10 @@ export const WS_METHODS = {
   pullRequestsRequestReviewers: "pullRequests.requestReviewers",
   pullRequestsLabelCandidates: "pullRequests.labelCandidates",
   pullRequestsSetLabels: "pullRequests.setLabels",
+
+  // Thread scratchpad methods (this fork only; see the `scratchpad` capability)
+  threadScratchpadGet: "threadScratchpad.get",
+  threadScratchpadSet: "threadScratchpad.set",
 
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
@@ -1070,6 +1080,18 @@ const WsPullRequestsSetLabelsRpc = Rpc.make(WS_METHODS.pullRequestsSetLabels, {
   payload: PullRequestLabelChangeInput,
   success: Schema.Void,
   error: PullRequestRpcError,
+});
+
+const WsThreadScratchpadGetRpc = Rpc.make(WS_METHODS.threadScratchpadGet, {
+  payload: ThreadScratchpadGetInput,
+  success: ThreadScratchpad,
+  error: Schema.Union([ThreadScratchpadError, EnvironmentAuthorizationError]),
+});
+
+const WsThreadScratchpadSetRpc = Rpc.make(WS_METHODS.threadScratchpadSet, {
+  payload: ThreadScratchpadSetInput,
+  success: Schema.Void,
+  error: Schema.Union([ThreadScratchpadError, EnvironmentAuthorizationError]),
 });
 
 const WsSourceControlLookupRepositoryRpc = Rpc.make(WS_METHODS.sourceControlLookupRepository, {
@@ -1770,6 +1792,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsPullRequestsRequestReviewersRpc,
   WsPullRequestsLabelCandidatesRpc,
   WsPullRequestsSetLabelsRpc,
+  WsThreadScratchpadGetRpc,
+  WsThreadScratchpadSetRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,
