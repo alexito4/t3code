@@ -107,6 +107,25 @@ describe("diffPanelStore", () => {
     ).toEqual({ kind: "branch", baseRef: "origin/main" });
   });
 
+  it("keeps the branch base while visiting the Staged and Unstaged views", () => {
+    const store = useDiffPanelStore.getState();
+    store.selectBranchBaseRef(THREAD_REF, "origin/main");
+    store.selectGitScope(THREAD_REF, "staged");
+    expect(
+      selectThreadDiffPanelSelection(useDiffPanelStore.getState().byThreadKey, THREAD_REF),
+    ).toEqual({ kind: "staged" });
+
+    store.selectGitScope(THREAD_REF, "unstaged-only");
+    expect(
+      selectThreadDiffPanelSelection(useDiffPanelStore.getState().byThreadKey, THREAD_REF),
+    ).toEqual({ kind: "unstaged-only" });
+
+    store.selectGitScope(THREAD_REF, "branch");
+    expect(
+      selectThreadDiffPanelSelection(useDiffPanelStore.getState().byThreadKey, THREAD_REF),
+    ).toEqual({ kind: "branch", baseRef: "origin/main" });
+  });
+
   it("reconciles a missing turn selection to the latest available turn", () => {
     const missingTurnId = RunId.make("turn-missing");
     const latestTurnId = RunId.make("turn-latest");
