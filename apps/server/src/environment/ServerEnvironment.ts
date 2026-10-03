@@ -221,6 +221,8 @@ export const make = Effect.gen(function* () {
       fileAttachments: { maxUploadBytes: PROVIDER_SEND_TURN_MAX_FILE_BYTES },
       pullRequests: true,
       pullRequestChecks: true,
+      // This fork's per-commit diff view, absent on official builds.
+      reviewCommits: true,
       // This fork's Staged and Unstaged diff views, absent on official builds.
       reviewStagedAndUnstaged: true,
       inlineMessageContext: true,
