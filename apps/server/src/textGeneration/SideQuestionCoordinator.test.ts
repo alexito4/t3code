@@ -140,6 +140,7 @@ it.layer(NodeServices.layer)("SideQuestionCoordinator", (it) => {
     Effect.scoped(
       Effect.gen(function* () {
         const rolledBackRunId = RunId.make("run:rolled-back");
+        const cancelledRunId = RunId.make("run:cancelled");
         const received: Array<TextGeneration.SideQuestionGenerationInput> = [];
         const filters: Array<ProjectionRecordFilter | undefined> = [];
         const sideModelSelection: ModelSelection = {
@@ -150,7 +151,10 @@ it.layer(NodeServices.layer)("SideQuestionCoordinator", (it) => {
         // Only the record read is stubbed, so any dispatch to the thread would die.
         const coordinator = yield* makeCoordinator({
           worktreePath: "/repo/.worktrees/side",
-          runs: [{ id: rolledBackRunId, status: "rolled_back" }],
+          runs: [
+            { id: rolledBackRunId, status: "rolled_back" },
+            { id: cancelledRunId, status: "cancelled" },
+          ],
           turnItems: [
             userMessage("older", 1, "Older context"),
             {
@@ -163,6 +167,10 @@ it.layer(NodeServices.layer)("SideQuestionCoordinator", (it) => {
             },
             assistantMessage("current", 3, "Current context"),
             userMessage("undone", 4, "Undone by a checkpoint restore", rolledBackRunId),
+            {
+              ...userMessage("queued", 5, "Cancelled before it was sent", cancelledRunId),
+              inputIntent: "queued_turn",
+            } as OrchestrationV2TurnItem,
           ],
           onRead: (filter) => filters.push(filter),
           answer: (generation) =>
@@ -190,6 +198,7 @@ it.layer(NodeServices.layer)("SideQuestionCoordinator", (it) => {
         assert.include(generation.context, "grep -rn token");
         assert.notInclude(generation.context, "FULL_TOOL_OUTPUT");
         assert.notInclude(generation.context, "Undone by a checkpoint restore");
+        assert.notInclude(generation.context, "Cancelled before it was sent");
         assert.isBelow(
           generation.context.indexOf("Older context"),
           generation.context.indexOf("Current context"),

@@ -4,6 +4,7 @@ import {
   TextGenerationError,
   ThreadId,
 } from "@t3tools/contracts";
+import { isOrchestrationV2TurnItemVisible } from "@t3tools/shared/orchestrationV2Timeline";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
@@ -283,14 +284,17 @@ export const make: Effect.Effect<
         });
       }
 
-      // Turns undone by a checkpoint restore are no longer part of the conversation.
-      const rolledBackRunIds = new Set(
-        records.runs.filter((run) => run.status === "rolled_back").map((run) => run.id),
-      );
+      // Only what the timeline shows: no turns undone by a checkpoint restore and no cancelled
+      // queued messages. Attempts only decide interrupt results, which are not side context.
       const threadContext = fitSideQuestionContext(
         sideQuestionContextEntries(
-          records.turnItems.filter(
-            (item) => item.runId === null || !rolledBackRunIds.has(item.runId),
+          records.turnItems.filter((item) =>
+            isOrchestrationV2TurnItemVisible({
+              item,
+              runs: records.runs,
+              attempts: [],
+              items: records.turnItems,
+            }),
           ),
         ),
         contextBudget,
