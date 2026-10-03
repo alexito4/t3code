@@ -79,7 +79,15 @@ az extension add --name azure-devops
 az login
 ```
 
-## Clone or publish a project
+## Start, clone, or publish a project
+
+To start from nothing, choose **New project** in the command palette (`Cmd/Ctrl+K`), or
+**New project** under **Add Project** on any client, and type a name. T3 Code makes a Git
+repository in `~/.t3/projects` (the `projects` folder of your T3 data directory) with a README,
+an icon, and a first commit, then opens a new thread in it. The folder is named after the project,
+like `pinball-stats` for "Pinball Stats". Turn on **Create private repository on GitHub** to also
+publish it. If Git has no name or email on that machine, the project is created without the
+first commit.
 
 Use **Add Project** in the command palette (`Cmd/Ctrl+K`) to clone a repository. Choose a hosting
 provider or paste a Git URL, then choose where to save it. The project opens right away while the
@@ -141,9 +149,6 @@ server, but the host's own site will not show them, and the count reads **viewed
 The **Code** tab is a web and desktop surface. The mobile app reports a pull request's status but
 does not show its diff, so marks are made and read on web and desktop.
 
-In the Diff pane, open the scope menu and pick a commit under **Commits** to review local branch
-changes one commit at a time, scoped to the current branch comparison (up to the 100 most recent).
-
 ## Troubleshooting
 
 - **Not authenticated:** run the provider's login command on the server, then rescan. For Bitbucket,
@@ -175,6 +180,13 @@ row menu. An unlinked stack layer stays out of later syncs. Open linked reviews 
 closed reviews refresh periodically so reopening one on the host is detected. Merged reviews refresh
 when requested. With **Auto-settle merged threads** enabled, a thread can settle after every linked
 review is terminal. An open or unsynced link keeps it active.
+
+Ask the agent to watch, monitor, or babysit a pull request and it calls `watch_pull_request`. While
+the thread is active, the server checks the pull request every minute and wakes the agent when a check
+fails, the required checks pass, someone else comments or reviews, or the branch starts to conflict.
+Comments from your own account do not wake it. Watching ends when the pull request merges or closes,
+after 10 wakes in a row that bring only comments, or when the server cannot read the pull request for
+15 minutes. To start or stop it yourself, use the row menu in the **Linked pull requests** panel.
 
 Cross-repository links use a project on the same host. Azure DevOps reviews require a project checked
 out from the matching organization and repository.
