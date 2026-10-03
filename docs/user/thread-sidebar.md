@@ -180,8 +180,9 @@ so they can review what happened or pick up the work themselves, even without ac
 to your environment.
 
 Tool activity lists each command, file change, and tool call, but not command output.
-Agent reasoning is left out. Code changes appear as one diff of the whole thread. Threads
-outside a Git repository, or migrated from an older version of T3 Code, export without one.
+Agent reasoning is left out of the readable transcript but kept in the file's embedded
+data block. Code changes appear as one diff of the whole thread. Threads outside a Git
+repository, or migrated from an older version of T3 Code, export without one.
 
 The export is not a live link: it is a snapshot at the moment you export it, and it
 is not redacted. Anything in the thread, including pasted secrets, goes into the file
