@@ -253,6 +253,8 @@ export const make = Effect.gen(function* () {
       threadPullRequestLinking: true,
       serverResolvedCommandContext: true,
       environmentIcon: true,
+      // This fork's own personal patch, absent on official/upstream builds.
+      scratchpad: true,
       projectCloneTracking: true,
       ...(serverSelfUpdate === null ? {} : { serverSelfUpdate }),
       // V2 restart recovery uses the environment-owned opt-in. The old

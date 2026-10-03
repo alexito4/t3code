@@ -408,6 +408,8 @@ interface MessagesTimelineProps {
   ) => boolean;
   onAskInSideChat?: (citation: AssistantCitation) => boolean;
   askInSideChatAvailable?: boolean;
+  onAddToScratchpad?: (citation: AssistantCitation) => boolean;
+  addToScratchpadAvailable?: boolean;
   isWorking: boolean;
   /** The live work belongs to a runless root turn (a provider-native subagent). */
   runlessWorkActive?: boolean;
@@ -494,6 +496,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onCiteAssistantText,
   onAskInSideChat,
   askInSideChatAvailable = false,
+  onAddToScratchpad,
+  addToScratchpadAvailable = false,
   isWorking,
   runlessWorkActive = false,
   activeTurnInProgress,
@@ -1319,6 +1323,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
               threadRef={citationThreadRef}
               onCite={onCiteAssistantText}
               {...(onAskInSideChat ? { onAskInSideChat, askInSideChatAvailable } : {})}
+              {...(onAddToScratchpad ? { onAddToScratchpad, addToScratchpadAvailable } : {})}
             />
           ) : null}
           <LegendList<MessagesTimelineRow>

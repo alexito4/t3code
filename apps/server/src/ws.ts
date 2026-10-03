@@ -92,6 +92,7 @@ import {
   type ProviderDriverKind,
   type ProviderInstanceId,
   ThreadId,
+  ThreadScratchpadError,
   type TerminalAttachStreamEvent,
   type TerminalError,
   type TerminalEvent,
@@ -218,6 +219,7 @@ import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
+import * as ThreadScratchpads from "./persistence/ThreadScratchpads.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
 import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -1216,6 +1218,7 @@ const makeWsRpcLayer = (
       const pullRequests = yield* PullRequestService.PullRequestService;
       const pullRequestSync = yield* PullRequestSyncReactor.PullRequestSyncReactor;
       const sideQuestions = yield* SideQuestionCoordinator.SideQuestionCoordinator;
+      const threadScratchpads = yield* ThreadScratchpads.ThreadScratchpadRepository;
       const deviceService = yield* DeviceService.DeviceService;
       const deviceHostContext =
         yield* Effect.context<Effect.Services<ReturnType<typeof remoteSshDeviceHosts>>>();
@@ -2950,6 +2953,34 @@ const makeWsRpcLayer = (
             {
               "rpc.aggregate": "pull-requests",
             },
+          ),
+        // Fetched on demand, never part of the thread snapshot, so a long scratchpad costs
+        // nothing until its panel opens.
+        [WS_METHODS.threadScratchpadGet]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.threadScratchpadGet,
+            threadScratchpads
+              .get(input.threadId)
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ThreadScratchpadError({ message: "Could not read the scratchpad.", cause }),
+                ),
+              ),
+            { "rpc.aggregate": "thread-scratchpad" },
+          ),
+        [WS_METHODS.threadScratchpadSet]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.threadScratchpadSet,
+            threadScratchpads
+              .set(input)
+              .pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ThreadScratchpadError({ message: "Could not save the scratchpad.", cause }),
+                ),
+              ),
+            { "rpc.aggregate": "thread-scratchpad" },
           ),
         [WS_METHODS.sourceControlLookupRepository]: (input) =>
           observeRpcEffect(

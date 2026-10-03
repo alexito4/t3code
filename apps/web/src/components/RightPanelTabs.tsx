@@ -22,6 +22,7 @@ import {
   Files,
   Globe2,
   MessageCirclePlus,
+  NotebookPen,
   Plus,
   TerminalSquare,
   Volume2,
@@ -125,6 +126,7 @@ interface RightPanelTabsProps {
   onAddPullRequests: () => void;
   onAddSideQuestion: () => void;
   onAddDevice: () => void;
+  onAddScratchpad: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -133,6 +135,7 @@ interface RightPanelTabsProps {
   pullRequestsAvailable: boolean;
   sideQuestionAvailable: boolean;
   deviceAvailable: boolean;
+  scratchpadAvailable: boolean;
   pullRequestStatusSeeds?: Readonly<Record<string, PullRequestTabStatusSeed>>;
   children: ReactNode;
 }
@@ -163,6 +166,7 @@ const SURFACE_DISABLED_REASONS = {
   sideQuestion:
     "Side chats need a running thread with no pending input, on a server with this fork's changes.",
   device: "Devices are only available from a thread.",
+  scratchpad: "Scratchpad is only available from a thread on a server with this fork's changes.",
 } as const;
 
 /** Overlays that must win over the launcher's letter shortcuts. */
@@ -188,6 +192,7 @@ const SURFACE_UNAVAILABLE_HINTS = {
   sideQuestion:
     "Needs a running thread with no pending input, on a server with this fork's changes.",
   device: "Available from a thread.",
+  scratchpad: "Available from a thread on a server with this fork's changes.",
 } as const;
 
 type TabContextMenuAction =
@@ -328,6 +333,7 @@ function RightPanelEmptyState(props: {
   onAddPullRequests: () => void;
   onAddSideQuestion: () => void;
   onAddDevice: () => void;
+  onAddScratchpad: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -336,6 +342,7 @@ function RightPanelEmptyState(props: {
   pullRequestsAvailable: boolean;
   sideQuestionAvailable: boolean;
   deviceAvailable: boolean;
+  scratchpadAvailable: boolean;
 }) {
   // -1 means no highlight: it only appears on hover or arrow use.
   const [highlight, setHighlight] = useState(-1);
@@ -406,6 +413,15 @@ function RightPanelEmptyState(props: {
       available: props.deviceAvailable,
       disabledReason: SURFACE_UNAVAILABLE_HINTS.device,
       onClick: props.onAddDevice,
+    },
+    {
+      label: "Scratchpad",
+      description: "Keep notes about this thread.",
+      icon: NotebookPen,
+      shortcut: "S",
+      available: props.scratchpadAvailable,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.scratchpad,
+      onClick: props.onAddScratchpad,
     },
   ] as const;
 
@@ -618,6 +634,8 @@ function surfaceTitle(
       return "Side chat";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
+    case "scratchpad":
+      return "Scratchpad";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -709,6 +727,8 @@ function SurfaceIcon({
       ) : (
         <Smartphone className="size-3 shrink-0" />
       );
+    case "scratchpad":
+      return <NotebookPen className="size-3 shrink-0" />;
   }
 }
 
@@ -918,6 +938,14 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       available: props.deviceAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.device,
       onClick: props.onAddDevice,
+    },
+    {
+      label: "Scratchpad",
+      icon: NotebookPen,
+      shortcut: "S",
+      available: props.scratchpadAvailable,
+      disabledReason: SURFACE_DISABLED_REASONS.scratchpad,
+      onClick: props.onAddScratchpad,
     },
   ] as const;
 
@@ -1403,6 +1431,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddPullRequests={props.onAddPullRequests}
             onAddSideQuestion={props.onAddSideQuestion}
             onAddDevice={props.onAddDevice}
+            onAddScratchpad={props.onAddScratchpad}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}
             diffAvailable={props.diffAvailable}
@@ -1411,6 +1440,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             pullRequestsAvailable={props.pullRequestsAvailable}
             sideQuestionAvailable={props.sideQuestionAvailable}
             deviceAvailable={props.deviceAvailable}
+            scratchpadAvailable={props.scratchpadAvailable}
           />
         ) : (
           props.children
