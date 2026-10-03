@@ -232,7 +232,7 @@ export function ProjectActivityChart({ series, days, countsByDay }: ProjectActiv
           {ticks.map((tick) => (
             <span
               key={tick}
-              className="absolute right-0 -translate-y-1/2 text-[10px] text-muted-foreground tabular-nums"
+              className="absolute right-0 -translate-y-1/2 text-3xs text-muted-foreground tabular-nums"
               style={{ top: `${(toY(tick) / VIEW_HEIGHT) * 100}%` }}
             >
               {tick === 0 ? "0" : formatCount(tick)}
@@ -335,7 +335,7 @@ export function ProjectActivityChart({ series, days, countsByDay }: ProjectActiv
         </div>
       </div>
 
-      <div className="flex justify-between pl-12 text-[10px] text-muted-foreground uppercase">
+      <div className="flex justify-between pl-12 text-3xs text-muted-foreground uppercase">
         <span>{days[0] === undefined ? "" : formatDayShort(days[0])}</span>
         <span>
           {days[Math.floor(days.length / 2)] === undefined
