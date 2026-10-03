@@ -82,13 +82,21 @@ case "$cmd" in
         # the official Nightly app ships, a few times a day) instead of
         # upstream/main's tip. Exits without touching anything when main
         # already has it, so it's safe to run on a schedule.
-        tag="$(gh release list --repo pingdotgg/t3code --limit 30 --json tagName \
-            --jq '[.[] | select(.tagName | test("-nightly\\."))][0].tagName')"
+        #
+        # Tags are read over anonymous HTTPS, not gh or the SSH remote: both go
+        # through the login keychain, and unattended gh hangs on it instead of
+        # failing. Only the final push needs credentials.
+        upstream_url="https://github.com/pingdotgg/t3code.git"
+        nightly_tags="$(GIT_TERMINAL_PROMPT=0 git -c credential.helper= ls-remote --tags \
+            --refs --sort=-v:refname "$upstream_url" 'v*-nightly.*')"
+        tag="${nightly_tags%%$'\n'*}"
+        tag="${tag##*refs/tags/}"
         [[ -n "$tag" ]] || {
             echo "No nightly release found" >&2
             exit 1
         }
-        git fetch upstream "refs/tags/$tag:refs/tags/$tag"
+        GIT_TERMINAL_PROMPT=0 git -c credential.helper= fetch "$upstream_url" \
+            "refs/tags/$tag:refs/tags/$tag"
         if git merge-base --is-ancestor "$tag^{commit}" main; then
             echo "main already has $tag"
             exit 0
