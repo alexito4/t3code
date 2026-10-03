@@ -1,12 +1,38 @@
-import { ORCHESTRATION_V2_WS_METHODS } from "@t3tools/contracts";
+import {
+  ORCHESTRATION_SIDE_QUESTION_MAX_PREVIOUS_TURNS,
+  ORCHESTRATION_V2_WS_METHODS,
+  SIDE_QUESTION_WS_METHODS,
+  type OrchestrationCancelSideQuestionResult,
+} from "@t3tools/contracts";
 import { Atom } from "effect/unstable/reactivity";
 
 import {
+  type AtomCommandResult,
   createEnvironmentRpcCommand,
   createEnvironmentRpcQueryAtomFamily,
   createEnvironmentRpcSubscriptionAtomFamily,
 } from "./runtime.ts";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
+
+export function parseSideQuestion(value: string): string | null {
+  const match = /^\/btw(?:\s+([\s\S]*))?$/.exec(value);
+  return match ? (match[1]?.trim() ?? "") : null;
+}
+
+export function sideQuestionPreviousTurns(
+  turns: ReadonlyArray<{ question: string; answer: string; status: string }>,
+) {
+  return turns
+    .filter((turn) => turn.status === "success")
+    .slice(-ORCHESTRATION_SIDE_QUESTION_MAX_PREVIOUS_TURNS)
+    .map((turn) => ({ question: turn.question, answer: turn.answer }));
+}
+
+export function sideQuestionCancellationSucceeded(
+  result: AtomCommandResult<OrchestrationCancelSideQuestionResult, unknown>,
+): boolean {
+  return result._tag === "Success" && result.value.cancelled;
+}
 
 export function createOrchestrationEnvironmentAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | R, E>,
@@ -57,6 +83,18 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
     archivedShellSnapshot: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:orchestration:archived-shell-snapshot",
       tag: ORCHESTRATION_V2_WS_METHODS.getArchivedShellSnapshot,
+    }),
+    askSideQuestion: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:orchestration:ask-side-question",
+      tag: SIDE_QUESTION_WS_METHODS.askSideQuestion,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input]),
+      },
+    }),
+    cancelSideQuestion: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:orchestration:cancel-side-question",
+      tag: SIDE_QUESTION_WS_METHODS.cancelSideQuestion,
     }),
   };
 }

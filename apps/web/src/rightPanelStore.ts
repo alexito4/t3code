@@ -29,6 +29,7 @@ const RIGHT_PANEL_KINDS = [
   "terminal",
   "pull-request",
   "pull-requests",
+  "side-question",
 ] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
@@ -84,7 +85,8 @@ export type RightPanelSurface =
       url?: string;
     }
   /** The thread's linked pull requests, one singleton tab beside any number of `pull-request` tabs. */
-  | { id: "pull-requests"; kind: "pull-requests" };
+  | { id: "pull-requests"; kind: "pull-requests" }
+  | { id: "side-question"; kind: "side-question" };
 
 const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
 // v9 removed the "plan" surface kind (plans render inline in the transcript).
@@ -185,6 +187,15 @@ interface RightPanelStoreState {
   removeThread: (ref: ScopedThreadRef) => void;
 }
 
+const persistableThreadState = (current: ThreadRightPanelState): ThreadRightPanelState | null => {
+  const surfaces = current.surfaces.filter((surface) => surface.kind !== "side-question");
+  if (surfaces.length === 0) return current.surfaces.length === 0 ? current : null;
+  const activeSurfaceId = surfaces.some((surface) => surface.id === current.activeSurfaceId)
+    ? current.activeSurfaceId
+    : surfaces[0]!.id;
+  return { ...current, surfaces, activeSurfaceId };
+};
+
 const EMPTY_THREAD_STATE: ThreadRightPanelState = {
   isOpen: false,
   activeSurfaceId: null,
@@ -206,6 +217,8 @@ const singletonSurface = (
       return { id: "files", kind };
     case "pull-requests":
       return { id: "pull-requests", kind };
+    case "side-question":
+      return { id: "side-question", kind };
     case "device":
       return { id: "device", kind };
   }
@@ -993,9 +1006,11 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
       ),
       partialize: (state) => ({
         byThreadKey: Object.fromEntries(
-          Object.entries(state.byThreadKey).filter(
-            ([threadKey]) => !isPullRequestsPanelKey(threadKey),
-          ),
+          Object.entries(state.byThreadKey).flatMap(([threadKey, threadState]) => {
+            if (isPullRequestsPanelKey(threadKey)) return [];
+            const persisted = persistableThreadState(threadState);
+            return persisted ? [[threadKey, persisted]] : [];
+          }),
         ),
         threadPanelVisibilityByThreadKey: Object.fromEntries(
           Object.entries(state.threadPanelVisibilityByThreadKey).flatMap(

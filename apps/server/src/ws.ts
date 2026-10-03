@@ -52,6 +52,7 @@ import {
   OrchestrationSearchThreadsError,
   OrchestrationGetTurnDiffError,
   ORCHESTRATION_V2_WS_METHODS,
+  SIDE_QUESTION_WS_METHODS,
   ORCHESTRATION_PROTOCOL_QUERY_PARAM,
   ORCHESTRATION_PROTOCOL_VERSION,
   OrchestrationV2DispatchCommandError,
@@ -156,6 +157,7 @@ import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
 import * as ThreadSearch from "./orchestration-v2/ThreadSearch.ts";
 import * as OrchestrationEventStore from "./persistence/Services/OrchestrationEventStore.ts";
 import { userFacingDispatchErrorMessage } from "./orchestration-v2/UserFacingErrors.ts";
+import * as SideQuestionCoordinator from "./textGeneration/SideQuestionCoordinator.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
   observeRpcStream as instrumentRpcStream,
@@ -1213,6 +1215,7 @@ const makeWsRpcLayer = (
       const scheduledTasks = yield* ScheduledTasks.ScheduledTaskService;
       const pullRequests = yield* PullRequestService.PullRequestService;
       const pullRequestSync = yield* PullRequestSyncReactor.PullRequestSyncReactor;
+      const sideQuestions = yield* SideQuestionCoordinator.SideQuestionCoordinator;
       const deviceService = yield* DeviceService.DeviceService;
       const deviceHostContext =
         yield* Effect.context<Effect.Services<ReturnType<typeof remoteSshDeviceHosts>>>();
@@ -1875,6 +1878,16 @@ const makeWsRpcLayer = (
                 ? { "orchestration_v2.source_thread_id": command.sourceThreadId }
                 : {}),
             },
+          ),
+        [SIDE_QUESTION_WS_METHODS.askSideQuestion]: (input) =>
+          observeRpcEffect(SIDE_QUESTION_WS_METHODS.askSideQuestion, sideQuestions.ask(input), {
+            "rpc.aggregate": "orchestration",
+          }),
+        [SIDE_QUESTION_WS_METHODS.cancelSideQuestion]: (input) =>
+          observeRpcEffect(
+            SIDE_QUESTION_WS_METHODS.cancelSideQuestion,
+            sideQuestions.cancel(input).pipe(Effect.map((cancelled) => ({ cancelled }))),
+            { "rpc.aggregate": "orchestration" },
           ),
         [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: (input) =>
           observeRpcEffect(
@@ -3803,6 +3816,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
     const previewAutomationBroker = yield* PreviewAutomationBroker.PreviewAutomationBroker;
     const serverSelfUpdate = yield* ServerSelfUpdate.ServerSelfUpdate;
     const pullRequests = yield* PullRequestService.PullRequestService;
+    const sideQuestions = yield* SideQuestionCoordinator.SideQuestionCoordinator;
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
       "GET",
@@ -3858,6 +3872,10 @@ export const websocketRpcRouteLayer = Layer.unwrap(
               Layer.provide(Layer.succeed(SqlClient.SqlClient, sql)),
               Layer.provide(AgentSessionScanner.layer),
               Layer.provide(ProviderMaintenanceRunner.layer),
+              // One server-lifetime coordinator, so a stop from any connection reaches the answer.
+              Layer.provide(
+                Layer.succeed(SideQuestionCoordinator.SideQuestionCoordinator, sideQuestions),
+              ),
               Layer.provide(Layer.succeed(ServerSelfUpdate.ServerSelfUpdate, serverSelfUpdate)),
               // One server-lifetime service means clients share the same PR caches, and a WS
               // mutation invalidates the HTTP diff cache that every client reads from.

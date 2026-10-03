@@ -80,6 +80,8 @@ import {
   detectComposerTrigger,
   expandCollapsedComposerCursor,
   formatAssistantCitationForComposer,
+  canOfferComposerSideQuestionCommand,
+  parseComposerSideQuestion,
   replaceTextRange,
 } from "../../composer-logic";
 import { DISCONNECTED_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
@@ -1360,6 +1362,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   } | null;
   isRunning: boolean;
   canInterrupt: boolean;
+  isSideQuestion: boolean;
   followUpBehavior: "queue" | "steer";
   alternateShortcutLabel: string | null;
   showPlanFollowUpPrompt: boolean;
@@ -1399,6 +1402,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         pendingAction={props.pendingAction}
         isRunning={props.isRunning}
         canInterrupt={props.canInterrupt}
+        isSideQuestion={props.isSideQuestion}
         followUpBehavior={props.followUpBehavior}
         alternateShortcutLabel={props.alternateShortcutLabel}
         showPlanFollowUpPrompt={props.showPlanFollowUpPrompt}
@@ -1520,6 +1524,8 @@ export interface ChatComposerProps {
   /** Timeline messages including optimistic sends, for ArrowUp prompt recall. */
   promptHistoryMessages: ReadonlyArray<ChatMessage>;
   isServerThread: boolean;
+  /** The environment advertises side chat (`/btw`); otherwise `/btw` goes to the agent. */
+  sideQuestionsSupported: boolean;
   isLocalDraftThread: boolean;
   forceExpandedOnMobile: boolean;
   projectSelectionRequired: boolean;
@@ -1623,6 +1629,8 @@ export interface ChatComposerProps {
 
   // Queued runs strip rendered above the composer (v2 queue/steer).
   queuedRunsControl?: ReactNode;
+  // Minimized side chat, attached above the composer.
+  sideChatBanner?: ReactNode;
   // Queued-message edit mode: attachments already stored on the message being
   // edited. Rendered in the attachment strip with a remove control; removal is
   // client state in ChatView until the edit is saved.
@@ -1698,7 +1706,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     activeThreadEnvironmentId: _activeThreadEnvironmentId,
     activeThread,
     promptHistoryMessages,
-    isServerThread: _isServerThread,
+    isServerThread,
+    sideQuestionsSupported,
     isLocalDraftThread: _isLocalDraftThread,
     forceExpandedOnMobile,
     projectSelectionRequired,
@@ -2598,6 +2607,22 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           label: "/model",
           description: "Switch response model for this thread",
         },
+        ...(canOfferComposerSideQuestionCommand({
+          trigger: composerTrigger,
+          sideQuestionsSupported,
+          isServerThread,
+          hasPendingUserInput: activePendingProgress !== null,
+        })
+          ? ([
+              {
+                id: "slash:btw",
+                type: "slash-command",
+                command: "btw",
+                label: "/btw",
+                description: "Ask a side question without interrupting the agent",
+              },
+            ] as const)
+          : []),
         ...(planModeUiEnabled
           ? ([
               {
@@ -2719,12 +2744,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     }
     return [];
   }, [
+    activePendingProgress,
     activeThreadId,
     compactSlashCommandAvailable,
     composerTrigger,
     environmentId,
     environmentThreadShells,
     exactPullRequestLookup.data,
+    isServerThread,
     planModeUiEnabled,
     pullRequestLookup.data,
     pullRequestProjectId,
@@ -2735,6 +2762,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     selectedProviderSlashCommands,
     selectedProviderStatus,
     settings.showSkillsInSlashMenu,
+    sideQuestionsSupported,
     workspaceEntries.entries,
   ]);
 
@@ -2935,8 +2963,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   );
   const showResumeAction =
     canResume && !composerDraftHasUserContent(composerDraft) && !isEditingQueuedMessage;
+  const isSideQuestionDraft =
+    parseComposerSideQuestion(prompt.trim(), {
+      sideQuestionsSupported,
+      isServerThread,
+      hasPendingUserInput: activePendingProgress !== null,
+    }) !== null;
   const collapsedComposerPrimaryActionDisabled =
-    phase === "running" ||
+    (phase === "running" && !isSideQuestionDraft) ||
     isSendBusy ||
     isSendDisabled ||
     isConnecting ||
@@ -2944,7 +2978,11 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     projectSelectionRequired ||
     environmentUnavailable !== null ||
     (!composerSendState.hasSendableContent && !showResumeAction);
-  const collapsedComposerPrimaryActionLabel = showResumeAction ? "Resume thread" : "Send message";
+  const collapsedComposerPrimaryActionLabel = showResumeAction
+    ? "Resume thread"
+    : isSideQuestionDraft
+      ? "Ask side question"
+      : "Send message";
   const showMobilePendingAnswerActions =
     isMobileViewport && !isComposerCollapsedMobile && pendingPrimaryAction !== null;
 
@@ -3899,6 +3937,24 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
           if (applied) {
             setComposerHighlightedItemId(null);
             setIsComposerModelPickerOpen(true);
+          }
+          return;
+        }
+        if (item.command === "btw") {
+          const replacement = "/btw ";
+          const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
+            snapshot.value,
+            trigger.rangeEnd,
+            replacement,
+          );
+          const applied = applyPromptReplacement(
+            trigger.rangeStart,
+            replacementRangeEnd,
+            replacement,
+            { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
+          );
+          if (applied) {
+            setComposerHighlightedItemId(null);
           }
           return;
         }
@@ -6567,6 +6623,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         : null}
       <ComposerBanner.Dock>
         <ComposerBanner.Column>
+          {props.sideChatBanner}
           {props.queuedRunsControl}
           <ComposerBannerStack
             key={activeThreadId}
@@ -7475,6 +7532,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     pendingAction={pendingPrimaryAction}
                     isRunning={phase === "running"}
                     canInterrupt={canInterrupt}
+                    isSideQuestion={isSideQuestionDraft}
                     followUpBehavior={settings.followUpBehavior}
                     alternateShortcutLabel={shortcutLabelForCommand(
                       keybindings,

@@ -222,6 +222,8 @@ export const make = Effect.gen(function* () {
       pullRequests: true,
       pullRequestChecks: true,
       inlineMessageContext: true,
+      // This fork's side chat (closed upstream PR #8296), absent on official builds.
+      sideQuestions: true,
       requiredWorktreeBootstrap: true,
       threadSettlement: true,
       threadAutoSettlement: true,

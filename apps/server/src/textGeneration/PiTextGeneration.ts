@@ -24,6 +24,7 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildSideQuestionPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
 import {
@@ -53,7 +54,8 @@ export const makePiTextGeneration = Effect.fn("makePiTextGeneration")(function* 
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "answerSideQuestion";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -247,10 +249,27 @@ export const makePiTextGeneration = Effect.fn("makePiTextGeneration")(function* 
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const answerSideQuestion: TextGeneration.TextGeneration["Service"]["answerSideQuestion"] =
+    Effect.fn("PiTextGeneration.answerSideQuestion")(function* (input) {
+      const { prompt, outputSchema } = buildSideQuestionPrompt({
+        question: input.question,
+        context: input.context,
+      });
+      const generated = yield* runPiJson({
+        operation: "answerSideQuestion",
+        cwd: input.cwd,
+        prompt,
+        outputSchemaJson: outputSchema,
+        modelSelection: input.modelSelection,
+      });
+      return { answer: generated.answer.trim() };
+    });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    answerSideQuestion,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

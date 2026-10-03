@@ -21,6 +21,7 @@ import {
   FileDiff,
   Files,
   Globe2,
+  MessageCirclePlus,
   Plus,
   TerminalSquare,
   Volume2,
@@ -122,6 +123,7 @@ interface RightPanelTabsProps {
   onAddFiles: () => void;
   onAddPullRequest: () => void;
   onAddPullRequests: () => void;
+  onAddSideQuestion: () => void;
   onAddDevice: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
@@ -129,6 +131,7 @@ interface RightPanelTabsProps {
   filesAvailable: boolean;
   pullRequestAvailable: boolean;
   pullRequestsAvailable: boolean;
+  sideQuestionAvailable: boolean;
   deviceAvailable: boolean;
   pullRequestStatusSeeds?: Readonly<Record<string, PullRequestTabStatusSeed>>;
   children: ReactNode;
@@ -157,6 +160,8 @@ const SURFACE_DISABLED_REASONS = {
   diff: "Diff is only available for server threads in Git repositories.",
   pullRequest: "This thread's branch has no pull request yet.",
   pullRequests: "No linked pull requests are available for this thread.",
+  sideQuestion:
+    "Side chats need a running thread with no pending input, on a server with this fork's changes.",
   device: "Devices are only available from a thread.",
 } as const;
 
@@ -180,6 +185,8 @@ const SURFACE_UNAVAILABLE_HINTS = {
   diff: "Available for Git repositories.",
   pullRequest: "No pull request on this branch yet.",
   pullRequests: "No linked pull requests available.",
+  sideQuestion:
+    "Needs a running thread with no pending input, on a server with this fork's changes.",
   device: "Available from a thread.",
 } as const;
 
@@ -319,6 +326,7 @@ function RightPanelEmptyState(props: {
   onAddFiles: () => void;
   onAddPullRequest: () => void;
   onAddPullRequests: () => void;
+  onAddSideQuestion: () => void;
   onAddDevice: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
@@ -326,6 +334,7 @@ function RightPanelEmptyState(props: {
   filesAvailable: boolean;
   pullRequestAvailable: boolean;
   pullRequestsAvailable: boolean;
+  sideQuestionAvailable: boolean;
   deviceAvailable: boolean;
 }) {
   // -1 means no highlight: it only appears on hover or arrow use.
@@ -379,6 +388,15 @@ function RightPanelEmptyState(props: {
       available: props.pullRequestsAvailable,
       disabledReason: SURFACE_UNAVAILABLE_HINTS.pullRequests,
       onClick: props.onAddPullRequests,
+    },
+    {
+      label: "Side chat",
+      description: "Ask without interrupting the agent.",
+      icon: MessageCirclePlus,
+      shortcut: "Q",
+      available: props.sideQuestionAvailable,
+      disabledReason: SURFACE_UNAVAILABLE_HINTS.sideQuestion,
+      onClick: props.onAddSideQuestion,
     },
     {
       label: "Device",
@@ -596,6 +614,8 @@ function surfaceTitle(
       return `#${surface.number}`;
     case "pull-requests":
       return "Pull requests";
+    case "side-question":
+      return "Side chat";
     case "device":
       return surface.title ?? surface.target?.name ?? "Device";
     case "preview": {
@@ -679,6 +699,8 @@ function SurfaceIcon({
       );
     case "pull-requests":
       return <PullRequestGlyph.link className="size-3 shrink-0" />;
+    case "side-question":
+      return <MessageCirclePlus className="size-3 shrink-0" />;
     case "device":
       return surface.target?.platform === "ios" ? (
         <AppleIcon className="size-3 shrink-0" />
@@ -880,6 +902,14 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
       available: props.pullRequestsAvailable,
       disabledReason: SURFACE_DISABLED_REASONS.pullRequests,
       onClick: props.onAddPullRequests,
+    },
+    {
+      label: "Side chat",
+      icon: MessageCirclePlus,
+      shortcut: "Q",
+      available: props.sideQuestionAvailable,
+      disabledReason: SURFACE_DISABLED_REASONS.sideQuestion,
+      onClick: props.onAddSideQuestion,
     },
     {
       label: "Device",
@@ -1371,6 +1401,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddFiles={props.onAddFiles}
             onAddPullRequest={props.onAddPullRequest}
             onAddPullRequests={props.onAddPullRequests}
+            onAddSideQuestion={props.onAddSideQuestion}
             onAddDevice={props.onAddDevice}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}
@@ -1378,6 +1409,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             filesAvailable={props.filesAvailable}
             pullRequestAvailable={props.pullRequestAvailable}
             pullRequestsAvailable={props.pullRequestsAvailable}
+            sideQuestionAvailable={props.sideQuestionAvailable}
             deviceAvailable={props.deviceAvailable}
           />
         ) : (
