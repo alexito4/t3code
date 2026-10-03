@@ -42,10 +42,11 @@ patch_base() {
 }
 
 usage() {
-    echo "Usage: alex.sh <dev|connect|sync|rebuild|dist|pair> [args...]" >&2
+    echo "Usage: alex.sh <dev|connect|sync|sync-nightly|rebuild|dist|pair> [args...]" >&2
     echo "  dev      Run pnpm dev with T3CODE_HOST=0.0.0.0 (LAN-reachable)" >&2
     echo "  connect  Run \`t3 connect\` from source (extra args forwarded, e.g. \`connect status\`)" >&2
     echo "  sync     Merge upstream/main into main and fast-forward-push to origin (the routine path)" >&2
+    echo "  sync-nightly  Same, but merge the newest upstream nightly release; no-op if main has it" >&2
     echo "  rebuild  Merge upstream/main into every patch branch, then rebuild main from scratch" >&2
     echo "           (fallback for a messy sync conflict, or for adding/removing a patch branch)" >&2
     echo "  dist     Build, sign, and install a local arm64 build to /Applications" >&2
@@ -74,6 +75,26 @@ case "$cmd" in
         git fetch upstream main
         git checkout main
         git merge upstream/main
+        git push origin main:main
+        ;;
+    sync-nightly)
+        # Like sync, but merges the commit of the newest nightly release (what
+        # the official Nightly app ships, a few times a day) instead of
+        # upstream/main's tip. Exits without touching anything when main
+        # already has it, so it's safe to run on a schedule.
+        tag="$(gh release list --repo pingdotgg/t3code --limit 30 --json tagName \
+            --jq '[.[] | select(.tagName | test("-nightly\\."))][0].tagName')"
+        [[ -n "$tag" ]] || {
+            echo "No nightly release found" >&2
+            exit 1
+        }
+        git fetch upstream "refs/tags/$tag:refs/tags/$tag"
+        if git merge-base --is-ancestor "$tag^{commit}" main; then
+            echo "main already has $tag"
+            exit 0
+        fi
+        git checkout main
+        git merge --no-edit -m "Merge nightly $tag" "$tag^{commit}"
         git push origin main:main
         ;;
     rebuild)
