@@ -144,8 +144,9 @@ case "$cmd" in
         pnpm config set minimumReleaseAge 0 --location user
 
         # A sync can change dependencies (V2 added several); build against
-        # exactly what the lockfile says.
-        pnpm install
+        # exactly what the lockfile says. A toolchain bump can make pnpm want
+        # to recreate node_modules, which it refuses to do without a TTY.
+        pnpm install --config.confirm-modules-purge=false
 
         export T3CODE_DESKTOP_PERSONAL_BUILD=1
         pnpm build:desktop
