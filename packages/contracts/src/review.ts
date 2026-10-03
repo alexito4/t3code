@@ -7,11 +7,17 @@ export const ReviewDiffPreviewInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   baseRef: Schema.optional(TrimmedNonEmptyString),
   ignoreWhitespace: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Fork: also return the Staged and Unstaged halves of Uncommitted. Opt-in so clients that
+   * do not know those source kinds never receive them; servers without the
+   * `reviewStagedAndUnstaged` capability ignore it.
+   */
+  includeStagedAndUnstaged: Schema.optionalKey(Schema.Boolean),
   file: Schema.optionalKey(
     Schema.Struct({
       path: Schema.NonEmptyString,
       previousPath: Schema.NullOr(Schema.NonEmptyString),
-      sourceKind: Schema.Literals(["working-tree", "branch-range"]),
+      sourceKind: Schema.Literals(["working-tree", "staged", "unstaged", "branch-range"]),
     }),
   ),
 });
