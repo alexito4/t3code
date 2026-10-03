@@ -66,6 +66,9 @@ const exportThread = Effect.fn("clientRuntime.state.exportThread")(function* (in
       : yield* request(ORCHESTRATION_V2_WS_METHODS.getFullThreadDiff, {
           threadId: input.threadId,
           toTurnCount,
+          // The server hides whitespace-only changes by default; an export keeps the exact
+          // changes so a future re-import can apply the diff.
+          ignoreWhitespace: false,
         }).pipe(
           Effect.map((result) => result.diff),
           Effect.catch((error) =>

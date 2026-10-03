@@ -203,7 +203,9 @@ describe("createThreadExportCommand", () => {
         `/api/orchestration/threads/${v2ThreadId}`,
         "/api/assets/screenshot",
       ]);
-      expect(diffRequests).toEqual([{ threadId: v2ThreadId, toTurnCount: 1 }]);
+      expect(diffRequests).toEqual([
+        { threadId: v2ThreadId, toTurnCount: 1, ignoreWhitespace: false },
+      ]);
       expect(markdown).toContain("+added");
       expect(markdown).toContain("![screenshot.png](data:image/png;base64,UE5H)");
     }),
