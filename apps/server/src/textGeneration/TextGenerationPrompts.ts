@@ -10,9 +10,14 @@ import * as Schema from "effect/Schema";
 import * as NodeBuffer from "node:buffer";
 import * as Effect from "effect/Effect";
 import { limitTitleMessage } from "./ThreadTitleContext.ts";
-import type { ChatAttachment } from "@t3tools/contracts";
+import type {
+  BranchNamingOptions,
+  ChatAttachment,
+  OrchestrationV2TurnItem,
+} from "@t3tools/contracts";
 
 import { limitSection } from "./TextGenerationUtils.ts";
+import { projectTurnItemForWire } from "../orchestration-v2/WireProjection.ts";
 import type { TextGenerationPolicy } from "./TextGenerationPolicy.ts";
 
 const EARLIER_CONTENT_TRUNCATION_MARKER = "[Earlier content truncated]\n\n";
@@ -145,6 +150,7 @@ export function buildPrContentPrompt(input: PrContentPromptInput) {
 // ---------------------------------------------------------------------------
 
 export interface BranchNamePromptInput {
+  naming?: BranchNamingOptions | undefined;
   message: string;
   attachments?: ReadonlyArray<ChatAttachment> | undefined;
   policy?: TextGenerationPolicy | undefined;
@@ -191,13 +197,29 @@ export function buildBranchNamePrompt(input: BranchNamePromptInput) {
     responseShape: "Return a JSON object with key: branch.",
     rules: [
       "Branch should describe the requested work from the user message.",
-      "Keep it short and specific (2-6 words).",
-      "Use plain words only, no issue prefixes and no punctuation-heavy text.",
+      "Return a valid Git branch name without spaces.",
+      ...(input.naming?.mode === "custom"
+        ? [
+            "Return the complete branch name, following the user's naming instructions. No prefix or suffix will be added.",
+          ]
+        : [
+            "Keep it short and specific (2-6 words), in lowercase with hyphen-separated words.",
+            ...(input.naming?.mode === "semantic"
+              ? [
+                  "Include a semantic prefix and a slash in the branch name, for example feat/add-search, fix/login-error, refactor/auth, docs/setup, or chore/update-deps. Choose the prefix that best describes the work.",
+                ]
+              : [
+                  "Return only the descriptive branch fragment, without a prefix or namespace. The application adds the configured prefix.",
+                ]),
+          ]),
       "If images are attached, use them as primary context for visual/UI issues.",
     ],
     message: input.message,
     attachments: input.attachments,
-    additionalInstructions: input.policy?.branchInstructions,
+    additionalInstructions:
+      input.naming?.mode === "custom"
+        ? input.naming.instructions
+        : input.policy?.branchInstructions,
   });
   const outputSchema = Schema.Struct({
     branch: Schema.String,
@@ -329,47 +351,67 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
   return { prompt, outputSchema };
 }
 
-interface SideQuestionContextInput {
-  messages: ReadonlyArray<{
-    role: "user" | "assistant" | "system" | "reasoning";
-    text: string;
-    streaming: boolean;
-    createdAt: string;
-  }>;
-  activities: ReadonlyArray<{
-    kind: string;
-    summary: string;
-    payload: unknown;
-    createdAt: string;
-  }>;
-}
-
 export const SIDE_QUESTION_CONTEXT_MAX_BYTES = 512 * 1024;
+
+/**
+ * Turn items a side question is answered against: the conversation and the tool calls the
+ * agent made. Thinking traces are working notes, not conversation — see ThreadTitleContext.ts.
+ */
+export const SIDE_QUESTION_CONTEXT_ITEM_TYPES = [
+  "user_message",
+  "assistant_message",
+  "command_execution",
+  "file_change",
+  "file_search",
+  "web_search",
+  "dynamic_tool",
+] as const satisfies ReadonlyArray<OrchestrationV2TurnItem["type"]>;
 
 export function isSideQuestionContextWithinLimit(context: string): boolean {
   return NodeBuffer.Buffer.byteLength(context, "utf8") <= SIDE_QUESTION_CONTEXT_MAX_BYTES;
 }
 
-/** Formatted context entries, oldest first. */
-export function sideQuestionContextEntries(input: SideQuestionContextInput): Array<string> {
-  return [
-    ...input.messages
-      // Thinking traces are working notes, not conversational content a side
-      // question should be answered against — see ThreadTitleContext.ts.
-      .filter((message) => !message.streaming && message.role !== "reasoning")
-      .map((message) => ({
-        createdAt: message.createdAt,
-        text: message.role.toUpperCase() + ":\n" + message.text,
-      })),
-    ...input.activities
-      .filter((activity) => activity.kind === "tool.completed")
-      .map((activity) => ({
-        createdAt: activity.createdAt,
-        text: "TOOL:\n" + activity.summary + "\n" + JSON.stringify(activity.payload),
-      })),
-  ]
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
-    .map((entry) => entry.text);
+/** A finished tool call as the timeline shows it, without full outputs or diffs. */
+function sideQuestionToolDetail(item: OrchestrationV2TurnItem): unknown {
+  const projected = projectTurnItemForWire(item);
+  switch (projected.type) {
+    case "command_execution":
+      return { command: projected.input, exitCode: projected.exitCode };
+    case "file_change":
+      return {
+        file: projected.fileName,
+        additions: projected.additions,
+        deletions: projected.deletions,
+      };
+    case "file_search":
+      return { pattern: projected.pattern, results: projected.results };
+    case "web_search":
+      return { queries: projected.patterns, results: projected.results };
+    case "dynamic_tool":
+      return { tool: projected.toolName, input: projected.input, output: projected.output };
+    default:
+      return undefined;
+  }
+}
+
+/** Formatted context entries from turn items in thread order, oldest first. */
+export function sideQuestionContextEntries(
+  items: ReadonlyArray<OrchestrationV2TurnItem>,
+): Array<string> {
+  return items.flatMap((item) => {
+    switch (item.type) {
+      case "user_message":
+        return [`USER:\n${item.text}`];
+      case "assistant_message":
+        return item.streaming ? [] : [`ASSISTANT:\n${item.text}`];
+      default: {
+        const detail = item.status === "completed" ? sideQuestionToolDetail(item) : undefined;
+        return detail === undefined
+          ? []
+          : [`TOOL:\n${item.title ?? item.type}\n${JSON.stringify(detail)}`];
+      }
+    }
+  });
 }
 
 /** Bytes left for thread context once the earlier side conversation is included. */
@@ -380,17 +422,13 @@ export function sideQuestionThreadContextBudget(conversationSection: string): nu
 
 /**
  * Keeps the newest entries that fit in `maxBytes`, so a long thread loses its oldest context
- * instead of failing the side question. `full` means older entries would not fit either.
+ * instead of failing the side question.
  */
-export function fitSideQuestionContext(
-  entries: ReadonlyArray<string>,
-  maxBytes: number,
-  hasOlderEntries: boolean,
-): { readonly context: string; readonly full: boolean } {
+export function fitSideQuestionContext(entries: ReadonlyArray<string>, maxBytes: number): string {
   const budget = maxBytes - NodeBuffer.Buffer.byteLength(EARLIER_CONTENT_TRUNCATION_MARKER);
   const kept: Array<string> = [];
   let used = 0;
-  let full = false;
+  let truncated = false;
   for (const entry of entries.toReversed()) {
     const size = NodeBuffer.Buffer.byteLength(entry) + (kept.length > 0 ? 2 : 0);
     if (used + size > budget) {
@@ -400,17 +438,14 @@ export function fitSideQuestionContext(
         const head = NodeBuffer.Buffer.from(entry).subarray(0, budget);
         kept.push(new TextDecoder().decode(head, { stream: true }));
       }
-      full = true;
+      truncated = true;
       break;
     }
     kept.push(entry);
     used += size;
   }
   const context = kept.toReversed().join("\n\n");
-  return {
-    context: full || hasOlderEntries ? `${EARLIER_CONTENT_TRUNCATION_MARKER}${context}` : context,
-    full,
-  };
+  return truncated ? `${EARLIER_CONTENT_TRUNCATION_MARKER}${context}` : context;
 }
 
 export interface SideQuestionPromptInput {

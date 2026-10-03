@@ -16,7 +16,7 @@ vi.mock("../SidebarStageBackdrop", () => ({
 }));
 
 import { parseComposerSideQuestion } from "../../composer-logic";
-import { ComposerPrimaryActions, formatPendingPrimaryActionLabel } from "./ComposerPrimaryActions";
+import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 
 function renderPendingActions(isRunning: boolean, isSideQuestion = false) {
   return renderToStaticMarkup(
@@ -30,6 +30,7 @@ function renderPendingActions(isRunning: boolean, isSideQuestion = false) {
         isComplete: true,
       },
       isRunning,
+      canInterrupt: isRunning,
       isSideQuestion,
       showPlanFollowUpPrompt: false,
       promptHasText: false,
@@ -39,27 +40,6 @@ function renderPendingActions(isRunning: boolean, isSideQuestion = false) {
       isEnvironmentUnavailable: false,
       isPreparingWorktree: false,
       hasSendableContent: false,
-      onPreviousPendingQuestion: () => {},
-      onInterrupt: () => {},
-      onImplementPlanInNewThread: () => {},
-    }),
-  );
-}
-
-function renderRunningActions(hasSendableContent: boolean) {
-  return renderToStaticMarkup(
-    createElement(ComposerPrimaryActions, {
-      compact: true,
-      pendingAction: null,
-      isRunning: true,
-      showPlanFollowUpPrompt: false,
-      promptHasText: hasSendableContent,
-      isSendBusy: false,
-      sendDisabledReason: null,
-      isConnecting: false,
-      isEnvironmentUnavailable: false,
-      isPreparingWorktree: false,
-      hasSendableContent,
       onPreviousPendingQuestion: () => {},
       onInterrupt: () => {},
       onImplementPlanInNewThread: () => {},
@@ -77,6 +57,7 @@ function renderSendButton(
       compact: true,
       pendingAction: null,
       isRunning: false,
+      canInterrupt: false,
       isSideQuestion,
       showPlanFollowUpPrompt,
       promptHasText: true,
@@ -149,20 +130,5 @@ describe("ComposerPrimaryActions", () => {
     const markup = renderSendButton();
 
     expect(markup).not.toContain("stage-nightly");
-  });
-
-  it("renders a queue action alongside stop while running with a sendable draft", () => {
-    const markup = renderRunningActions(true);
-
-    expect(markup).toContain('aria-label="Stop generation"');
-    expect(markup).toContain('aria-label="Queue message"');
-    expect(markup).toContain('type="submit"');
-  });
-
-  it("keeps stop as the only action while running with an empty composer", () => {
-    const markup = renderRunningActions(false);
-
-    expect(markup).toContain('aria-label="Stop generation"');
-    expect(markup).not.toContain('aria-label="Queue message"');
   });
 });

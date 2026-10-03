@@ -70,11 +70,10 @@ describe("SideQuestionPanel", () => {
 
     expect(markup).toContain("Why SQLite?");
     expect(markup).toContain("It keeps local state durable.");
-    expect(markup).toContain('data-user-message-bubble="true"');
     expect(markup).toContain("max-w-[80%] rounded-2xl bg-message p-3");
     expect(markup).toContain("whitespace-pre-wrap");
     expect(markup).toContain("wrap-break-word");
-    expect(markup).toContain("chat-composer-glass-shell");
+    expect(markup).toContain('data-slot="composer-shell"');
     expect(markup).toContain('data-surface-subheader="true"');
     expect(markup).toContain("in-data-[preview-panel-mode=inline]:h-7");
     expect(markup).not.toContain('<div class="font-medium text-sm">Side chat</div>');
@@ -94,11 +93,10 @@ describe("SideQuestionPanel", () => {
     expect(markup).toContain('class="size-3.5"');
     expect(markup).toContain('aria-label="Side chat model"');
     expect(markup).toContain("High");
-    expect(markup).toContain('data-user-message-actions="true"');
     expect(markup).toContain('aria-label="Copy message"');
     expect(markup).toContain('aria-label="Minimize side chat"');
     expect(markup).not.toContain('data-side-question-context="true"');
-    expect(markup).not.toContain("chat-composer-glass-shell-with-context");
+    expect(markup).not.toContain("data-with-context");
     expect(markup).not.toContain("calendaty-staging");
     expect(markup).not.toContain("feat/btw-side-questions");
     expect(markup).not.toContain("max-w-[calc(48rem-2.75rem)]");
@@ -115,7 +113,8 @@ describe("SideQuestionPanel", () => {
 
     expect(markup.match(/<textarea[^>]*>/)?.[0]).not.toContain("disabled");
     expect(markup).toContain('aria-label="Stop side chat"');
-    expect(markup).toContain("size-9 sm:size-8");
+    expect(markup).toContain("size-9");
+    expect(markup).toContain("sm:size-8");
   });
 
   it("keeps model, effort, and Stop controls when the saved provider is unavailable", () => {
@@ -146,7 +145,7 @@ describe("SideQuestionPanel", () => {
       />,
     );
 
-    expect(markup).toContain("chat-composer-top-drawer");
+    expect(markup).toContain('data-composer-banner-surface="attached"');
     expect(markup).toContain("Side chat");
     expect(markup).toContain("Why SQLite?");
     expect(markup).toContain('aria-label="Open side chat"');

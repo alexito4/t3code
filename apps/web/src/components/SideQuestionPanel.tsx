@@ -1,10 +1,9 @@
 import type { ModelSelection, ScopedThreadRef, ServerProvider } from "@t3tools/contracts";
 import type { UnifiedSettings } from "@t3tools/contracts/settings";
 import { createModelSelection } from "@t3tools/shared/model";
-import { MessageCirclePlus, Minimize2Icon, XIcon } from "lucide-react";
+import { MessageCirclePlus, Minimize2Icon } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import { composerSubmissionIntentForEnter } from "../composer-logic";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import ChatMarkdown from "./ChatMarkdown";
 import { getAppModelOptionsForInstance } from "../modelSelection";
@@ -14,17 +13,12 @@ import {
   resolveSelectableProviderInstanceEntry,
   sortProviderInstanceEntries,
 } from "../providerInstances";
-import { ComposerStopButton } from "./chat/ComposerPrimaryActions";
-import {
-  ComposerGlassHost,
-  ComposerGlassMainSurface,
-  ComposerGlassSurface,
-} from "./chat/ComposerGlass";
+import { ComposerBanner } from "./chat/ComposerBanner";
+import { ComposerSurface } from "./chat/ComposerSurface";
 import { getComposerProviderState } from "./chat/composerProviderState";
 import { MessageCopyButton } from "./chat/MessageCopyButton";
 import { ProviderModelPicker } from "./chat/ProviderModelPicker";
 import { TraitsPicker } from "./chat/TraitsPicker";
-import { UserMessageActions, UserMessageBubble } from "./chat/UserMessageBubble";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { Spinner } from "./ui/spinner";
@@ -152,12 +146,12 @@ export function SideQuestionPanel(props: {
           {props.turns.map((turn) => (
             <div key={turn.id} className="space-y-2.5">
               <div className="group flex flex-col items-end gap-1">
-                <UserMessageBubble className="whitespace-pre-wrap wrap-break-word text-sm">
+                <div className="relative max-w-[80%] whitespace-pre-wrap wrap-break-word rounded-2xl bg-message p-3 text-message-foreground text-sm">
                   {turn.question}
-                </UserMessageBubble>
-                <UserMessageActions>
+                </div>
+                <div className="flex w-full max-w-[80%] items-center justify-end pe-1 text-xs tabular-nums opacity-0 transition-opacity duration-200 pointer-coarse:opacity-100 focus-within:opacity-100 group-hover:opacity-100">
                   <MessageCopyButton text={turn.question} variant="ghost" />
-                </UserMessageActions>
+                </div>
               </div>
               {turn.status === "loading" ? (
                 <div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -182,117 +176,127 @@ export function SideQuestionPanel(props: {
       </ScrollArea>
 
       <div data-side-question-composer-dock="true" className="shrink-0 px-3 pt-3 pb-[3.25rem]">
-        <form
-          data-side-question-composer-shell="true"
-          className="chat-composer-glass-shell relative"
-          onSubmit={submit}
-        >
-          <ComposerGlassHost>
-            <ComposerGlassMainSurface>
-              <ComposerGlassSurface>
-                <div className="relative px-3 pb-2 pt-3.5 sm:px-4 sm:pt-4">
-                  <Textarea
-                    unstyled
-                    className="block text-sm [&_[data-slot=textarea]]:max-h-50 [&_[data-slot=textarea]]:overflow-y-auto [&_[data-slot=textarea]]:p-0"
-                    value={draft}
-                    style={{ resize: "none" }}
-                    aria-label={
-                      props.turns.length === 0 ? "Start a side chat" : "Continue the side chat"
-                    }
-                    placeholder={
-                      props.turns.length === 0
-                        ? "Ask without interrupting the agent…"
-                        : "Continue the side chat…"
-                    }
-                    onChange={(event) => setDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.nativeEvent.isComposing || event.key !== "Enter") return;
-                      const submissionIntent = composerSubmissionIntentForEnter({
-                        isMobileViewport,
-                        shiftKey: event.shiftKey,
-                        modifierKey: event.metaKey || event.ctrlKey,
-                        isDraftThread: false,
-                      });
-                      if (!submissionIntent) return;
-                      event.preventDefault();
-                      submitDraft();
-                    }}
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-2 px-3 pb-3 sm:px-4 sm:pb-4">
-                  <div className="flex min-w-0 items-center gap-1">
-                    {activeEntry ? (
-                      <>
-                        <ProviderModelPicker
-                          size="xs"
-                          activeInstanceId={activeModelSelection.instanceId}
-                          model={activeModelSelection.model}
-                          lockedProvider={null}
-                          instanceEntries={providerEntries}
-                          modelOptionsByInstance={modelOptionsByInstance}
-                          terminalOpen={false}
-                          triggerAriaLabel="Side chat model"
-                          onInstanceModelChange={selectModel}
-                        />
-                        <TraitsPicker
-                          provider={activeEntry.driverKind}
-                          instanceId={activeEntry.instanceId}
-                          models={activeEntry.models}
-                          model={activeModelSelection.model}
-                          prompt=""
-                          onPromptChange={() => undefined}
-                          modelOptions={activeModelSelection.options}
-                          allowPromptInjectedEffort={false}
-                          planModeEnabled={props.settings.planModeEnabled}
-                          onModelOptionsChange={(options) =>
-                            props.onModelSelectionChange(
-                              createModelSelection(
-                                activeModelSelection.instanceId,
-                                activeModelSelection.model,
-                                options,
-                              ),
-                            )
-                          }
-                        />
-                      </>
-                    ) : null}
-                  </div>
-                  {pending ? (
-                    <ComposerStopButton
-                      ariaLabel="Stop side chat"
-                      className="size-9 sm:size-8"
-                      onClick={props.onStop}
+        <form data-side-question-composer-shell="true" onSubmit={submit}>
+          <ComposerSurface.Shell>
+            <ComposerSurface.Host>
+              <ComposerSurface.Main>
+                <div data-chat-composer-surface="true" className="rounded-3xl">
+                  <div className="relative px-3 pb-2 pt-3.5 sm:px-4 sm:pt-4">
+                    <Textarea
+                      unstyled
+                      className="block text-sm [&_[data-slot=textarea]]:max-h-50 [&_[data-slot=textarea]]:overflow-y-auto [&_[data-slot=textarea]]:p-0"
+                      value={draft}
+                      style={{ resize: "none" }}
+                      aria-label={
+                        props.turns.length === 0 ? "Start a side chat" : "Continue the side chat"
+                      }
+                      placeholder={
+                        props.turns.length === 0
+                          ? "Ask without interrupting the agent…"
+                          : "Continue the side chat…"
+                      }
+                      onChange={(event) => setDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        // Enter asks, Shift+Enter adds a line; touch keyboards keep Return for lines.
+                        if (
+                          event.nativeEvent.isComposing ||
+                          event.key !== "Enter" ||
+                          event.shiftKey ||
+                          isMobileViewport
+                        ) {
+                          return;
+                        }
+                        event.preventDefault();
+                        submitDraft();
+                      }}
                     />
-                  ) : (
-                    <Button
-                      type="submit"
-                      size="icon"
-                      className="rounded-full border-transparent bg-message-action text-message-action-foreground transition-transform hover:scale-105 hover:bg-message-action-hover"
-                      disabled={draft.trim().length === 0}
-                      aria-label="Ask follow-up"
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 14 14"
-                        fill="none"
-                        aria-hidden="true"
-                        className="size-3.5"
+                  </div>
+                  <div className="flex items-center justify-between gap-2 px-3 pb-3 sm:px-4 sm:pb-4">
+                    <div className="flex min-w-0 items-center gap-1">
+                      {activeEntry ? (
+                        <>
+                          <ProviderModelPicker
+                            size="xs"
+                            activeInstanceId={activeModelSelection.instanceId}
+                            model={activeModelSelection.model}
+                            lockedProvider={null}
+                            instanceEntries={providerEntries}
+                            modelOptionsByInstance={modelOptionsByInstance}
+                            terminalOpen={false}
+                            triggerAriaLabel="Side chat model"
+                            onInstanceModelChange={selectModel}
+                          />
+                          <TraitsPicker
+                            provider={activeEntry.driverKind}
+                            instanceId={activeEntry.instanceId}
+                            models={activeEntry.models}
+                            model={activeModelSelection.model}
+                            prompt=""
+                            onPromptChange={() => undefined}
+                            modelOptions={activeModelSelection.options}
+                            allowPromptInjectedEffort={false}
+                            planModeEnabled={props.settings.planModeEnabled}
+                            onModelOptionsChange={(options) =>
+                              props.onModelSelectionChange(
+                                createModelSelection(
+                                  activeModelSelection.instanceId,
+                                  activeModelSelection.model,
+                                  options,
+                                ),
+                              )
+                            }
+                          />
+                        </>
+                      ) : null}
+                    </div>
+                    {pending ? (
+                      <button
+                        type="button"
+                        className="flex size-9 cursor-pointer items-center justify-center rounded-full bg-destructive/90 text-white shadow-xs shadow-destructive/24 inset-shadow-control-highlight transition-all duration-150 hover:scale-105 hover:bg-destructive active:inset-shadow-control-pressed active:shadow-none sm:size-8"
+                        aria-label="Stop side chat"
+                        onClick={props.onStop}
                       >
-                        <path
-                          d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </Button>
-                  )}
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 12 12"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <rect x="2" y="2" width="8" height="8" rx="1.5" />
+                        </svg>
+                      </button>
+                    ) : (
+                      <Button
+                        type="submit"
+                        size="icon"
+                        className="rounded-full border-transparent bg-message-action text-message-action-foreground transition-transform hover:scale-105 hover:bg-message-action-hover"
+                        disabled={draft.trim().length === 0}
+                        aria-label="Ask follow-up"
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 14 14"
+                          fill="none"
+                          aria-hidden="true"
+                          className="size-3.5"
+                        >
+                          <path
+                            d="M7 11.5V2.5M7 2.5L3 6.5M7 2.5L11 6.5"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </ComposerGlassSurface>
-            </ComposerGlassMainSurface>
-          </ComposerGlassHost>
+              </ComposerSurface.Main>
+            </ComposerSurface.Host>
+          </ComposerSurface.Shell>
         </form>
       </div>
     </div>
@@ -306,45 +310,46 @@ export function SideQuestionMinimized(props: {
   readonly onRestore: () => void;
 }) {
   return (
-    <div
-      className="chat-composer-top-drawer"
-      data-chat-composer-side-question="true"
-      data-variant={props.status === "error" ? "error" : "info"}
-    >
-      <div className="flex items-center gap-1 px-3 py-1.5 sm:px-4">
-        <button
-          type="button"
-          aria-label="Open side chat"
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 self-stretch text-left text-xs text-muted-foreground hover:text-foreground"
-          onClick={props.onRestore}
-          onPointerDown={(event) => event.preventDefault()}
-        >
-          <MessageCirclePlus aria-hidden className="size-3.5 shrink-0" />
-          <span className="shrink-0 font-medium text-foreground">Side chat</span>
-          <span className="min-w-0 flex-1 truncate">{props.question}</span>
-          {props.status === "loading" ? (
-            <Spinner aria-hidden="true" className="size-3.5 shrink-0" />
-          ) : (
-            <span className="shrink-0">
-              {props.status === "error"
-                ? "Needs attention"
-                : props.status === "stopped"
-                  ? "Stopped"
-                  : "Answered"}
-            </span>
-          )}
-        </button>
-        <Button
-          type="button"
-          size="icon-micro"
-          variant="ghost-muted"
-          aria-label="Dismiss side chat"
-          onClick={props.onDismiss}
-          onPointerDown={(event) => event.preventDefault()}
-        >
-          <XIcon aria-hidden className="size-3" />
-        </Button>
-      </div>
-    </div>
+    <ComposerBanner.Attachment>
+      <ComposerBanner.Root
+        data-chat-composer-side-question="true"
+        variant={props.status === "error" ? "error" : "info"}
+        className="relative z-0"
+      >
+        <ComposerBanner.Row>
+          <ComposerBanner.Content>
+            <button
+              type="button"
+              aria-label="Open side chat"
+              className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 self-stretch text-left text-muted-foreground hover:text-foreground"
+              onClick={props.onRestore}
+              onPointerDown={(event) => event.preventDefault()}
+            >
+              <MessageCirclePlus aria-hidden className="size-3.5 shrink-0" />
+              <span className="shrink-0 font-medium text-foreground">Side chat</span>
+              <span className="min-w-0 flex-1 truncate">{props.question}</span>
+              {props.status === "loading" ? (
+                <Spinner aria-hidden="true" className="size-3.5 shrink-0" />
+              ) : (
+                <span className="shrink-0">
+                  {props.status === "error"
+                    ? "Needs attention"
+                    : props.status === "stopped"
+                      ? "Stopped"
+                      : "Answered"}
+                </span>
+              )}
+            </button>
+          </ComposerBanner.Content>
+          <ComposerBanner.Actions>
+            <ComposerBanner.Dismiss
+              aria-label="Dismiss side chat"
+              onClick={props.onDismiss}
+              onPointerDown={(event) => event.preventDefault()}
+            />
+          </ComposerBanner.Actions>
+        </ComposerBanner.Row>
+      </ComposerBanner.Root>
+    </ComposerBanner.Attachment>
   );
 }

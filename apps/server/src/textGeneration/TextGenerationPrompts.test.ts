@@ -17,7 +17,14 @@ import {
   sanitizeThreadTitle,
   toJsonSchemaObject,
 } from "./TextGenerationUtils.ts";
-import { TextGenerationError } from "@t3tools/contracts";
+import {
+  MessageId,
+  type OrchestrationV2TurnItem,
+  TextGenerationError,
+  ThreadId,
+  TurnItemId,
+} from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 
 describe("buildCommitMessagePrompt", () => {
   it("includes staged patch and summary in the prompt", () => {
@@ -124,6 +131,39 @@ describe("buildPrContentPrompt", () => {
 });
 
 describe("buildBranchNamePrompt", () => {
+  it("requests a semantic prefix as part of the same branch response", () => {
+    const { prompt, outputSchema } = buildBranchNamePrompt({
+      message: "Add search",
+      naming: { mode: "semantic", prefix: "ignored", instructions: "ignored instruction" },
+    });
+    expect(prompt).toContain("feat/add-search");
+    expect(prompt).not.toContain("ignored instruction");
+    expect(toJsonSchemaObject(outputSchema)).toMatchObject({ required: ["branch"] });
+  });
+  it("appends custom instructions without imposing a prefix, case or word limit", () => {
+    const { prompt } = buildBranchNamePrompt({
+      message: "Add search",
+      naming: {
+        mode: "custom",
+        prefix: "ignored",
+        instructions: "Use Julius/ABC-123 and preserve capitalization.",
+      },
+    });
+    expect(prompt).toContain("Use Julius/ABC-123 and preserve capitalization.");
+    expect(prompt).toContain("complete branch name");
+    expect(prompt).not.toContain("2-6 words");
+    expect(prompt).not.toContain("lowercase");
+    expect(prompt).not.toContain("no issue prefixes");
+  });
+  it("asks for just the fragment in static mode", () => {
+    const { prompt } = buildBranchNamePrompt({
+      message: "Add search",
+      naming: { mode: "static", prefix: "team", instructions: "ignored instruction" },
+    });
+    expect(prompt).toContain("without a prefix or namespace");
+    expect(prompt).not.toContain("ignored instruction");
+  });
+
   it("includes the user message in the prompt", () => {
     const result = buildBranchNamePrompt({
       message: "Fix the login timeout bug",
@@ -243,91 +283,96 @@ describe("side questions", () => {
     );
   });
 
-  it("uses completed messages and tool results without exposing streaming assistant text or thinking traces", () => {
-    const context = sideQuestionContextEntries({
-      messages: [
-        {
-          role: "user",
-          text: "Find the reconnect bug",
-          streaming: false,
-          createdAt: "2026-08-26T10:00:00.000Z",
-        },
-        {
-          role: "assistant",
-          text: "The stable finding",
-          streaming: false,
-          createdAt: "2026-08-26T10:00:01.000Z",
-        },
-        {
-          role: "assistant",
-          text: "unfinished reply",
-          streaming: true,
-          createdAt: "2026-08-26T10:00:03.000Z",
-        },
-        {
-          role: "reasoning",
-          text: "Let me consider token expiry",
-          streaming: false,
-          createdAt: "2026-08-26T10:00:00.500Z",
-        },
-      ],
-      activities: [
-        {
-          kind: "tool.started",
-          summary: "Read started",
-          payload: { path: "session.ts" },
-          createdAt: "2026-08-26T10:00:01.500Z",
-        },
-        {
-          kind: "tool.completed",
-          summary: "Read session.ts",
-          payload: { detail: "stale token found" },
-          createdAt: "2026-08-26T10:00:02.000Z",
-        },
-      ],
-    }).join("\n\n");
+  it("uses the conversation and finished tool calls without unfinished replies or tool output", () => {
+    const at = DateTime.makeUnsafe("2026-08-26T10:00:00.000Z");
+    const base = (id: string, ordinal: number) => ({
+      id: TurnItemId.make(id),
+      threadId: ThreadId.make("thread-side-question"),
+      runId: null,
+      nodeId: null,
+      providerThreadId: null,
+      providerTurnId: null,
+      nativeItemRef: null,
+      parentItemId: null,
+      ordinal,
+      status: "completed" as const,
+      title: null,
+      startedAt: at,
+      completedAt: at,
+      updatedAt: at,
+    });
+    const items: ReadonlyArray<OrchestrationV2TurnItem> = [
+      {
+        ...base("user", 1),
+        type: "user_message",
+        createdBy: "user",
+        creationSource: "web",
+        messageId: MessageId.make("message-user"),
+        inputIntent: "turn_start",
+        text: "Find the reconnect bug",
+        attachments: [],
+      },
+      {
+        ...base("command", 2),
+        type: "command_execution",
+        title: "Ran grep",
+        input: "grep -rn token session.ts",
+        output: "FULL_COMMAND_OUTPUT",
+        exitCode: 0,
+      },
+      {
+        ...base("running", 3),
+        status: "running",
+        type: "command_execution",
+        title: "Running tests",
+        input: "pnpm test",
+      },
+      {
+        ...base("answer", 4),
+        type: "assistant_message",
+        messageId: MessageId.make("message-answer"),
+        text: "The stored token was stale",
+        streaming: false,
+      },
+      {
+        ...base("streaming", 5),
+        type: "assistant_message",
+        messageId: MessageId.make("message-streaming"),
+        text: "unfinished reply",
+        streaming: true,
+      },
+    ];
+
+    const context = sideQuestionContextEntries(items).join("\n\n");
 
     expect(context).toContain("USER:\nFind the reconnect bug");
-    expect(context).toContain("ASSISTANT:\nThe stable finding");
-    expect(context).toContain("TOOL:\nRead session.ts");
-    expect(context).toContain("stale token found");
+    expect(context).toContain("TOOL:\nRan grep\n");
+    expect(context).toContain("grep -rn token session.ts");
+    expect(context).toContain("ASSISTANT:\nThe stored token was stale");
+    expect(context).not.toContain("FULL_COMMAND_OUTPUT");
+    expect(context).not.toContain("Running tests");
     expect(context).not.toContain("unfinished reply");
-    expect(context).not.toContain("Read started");
-    expect(context).not.toContain("Let me consider token expiry");
+    expect(context.indexOf("Find the reconnect bug")).toBeLessThan(context.indexOf("Ran grep"));
   });
 
   it("keeps the newest context entries that fit and marks what was dropped", () => {
-    const fitted = fitSideQuestionContext(
-      ["USER:\noldest", "USER:\nmiddle", "USER:\nnewest"],
-      50,
-      false,
+    expect(fitSideQuestionContext(["USER:\noldest", "USER:\nmiddle", "USER:\nnewest"], 50)).toBe(
+      "[Earlier content truncated]\n\nUSER:\nnewest",
     );
-
-    expect(fitted).toEqual({
-      context: "[Earlier content truncated]\n\nUSER:\nnewest",
-      full: true,
-    });
   });
 
-  it("leaves context that fits untouched unless older pages were never read", () => {
-    const entries = ["USER:\nfirst", "ASSISTANT:\nsecond"];
-
-    expect(fitSideQuestionContext(entries, 1_000, false)).toEqual({
-      context: "USER:\nfirst\n\nASSISTANT:\nsecond",
-      full: false,
-    });
-    expect(fitSideQuestionContext(entries, 1_000, true).context).toBe(
-      "[Earlier content truncated]\n\nUSER:\nfirst\n\nASSISTANT:\nsecond",
+  it("leaves context that fits untouched", () => {
+    expect(fitSideQuestionContext(["USER:\nfirst", "ASSISTANT:\nsecond"], 1_000)).toBe(
+      "USER:\nfirst\n\nASSISTANT:\nsecond",
     );
   });
 
   it("clips an oversized newest entry within the byte budget", () => {
-    const fitted = fitSideQuestionContext([`TOOL:\n${"é".repeat(100)}`], 64, false);
+    const fitted = fitSideQuestionContext([`TOOL:\n${"é".repeat(100)}`], 64);
 
-    expect(fitted.full).toBe(true);
-    expect(fitted.context.startsWith("[Earlier content truncated]\n\nTOOL:\né")).toBe(true);
-    expect(Buffer.byteLength(fitted.context)).toBeLessThanOrEqual(64);
-    expect(fitted.context).not.toContain("\uFFFD");
+    expect(fitted.startsWith("[Earlier content truncated]\n\nTOOL:\né")).toBe(true);
+    expect(Buffer.byteLength(fitted)).toBeLessThanOrEqual(64);
+    expect(fitted).not.toContain("\uFFFD");
   });
 
   it("asks for a tool-free answer that stays outside the main conversation", () => {

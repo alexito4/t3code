@@ -1,16 +1,34 @@
 import type { ReactNode } from "react";
 
-export function ComposerContextLabel(props: { readonly children: ReactNode }) {
+import { cn } from "../lib/utils";
+
+/** Keeps text measurable while the composer's outer label box collapses. */
+export function ComposerContextLabel({
+  children,
+  displayMode = "toolbar",
+}: {
+  children: ReactNode;
+  displayMode?: "toolbar" | "panel";
+}) {
   return (
     <span
       data-composer-label
-      className="min-w-0 max-w-[240px] group-data-[compact]/composer-context:max-w-0"
+      className={cn(
+        "min-w-0",
+        displayMode === "panel"
+          ? "flex-1 truncate text-left"
+          : "max-w-[240px] group-data-[compact]/composer-context:max-w-0",
+      )}
     >
       <span
         data-composer-label-motion
-        className="block w-full min-w-0 max-w-[240px] origin-left truncate transition-[opacity,transform] duration-180 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-[compact]/composer-context:[transform:translateX(-0.25rem)_scaleX(0.95)] group-data-[compact]/composer-context:opacity-0 motion-reduce:transform-none motion-reduce:transition-opacity"
+        className={cn(
+          "block w-full min-w-0 truncate",
+          displayMode === "toolbar" &&
+            "max-w-[240px] transition-opacity duration-180 ease-drawer group-data-[compact]/composer-context:opacity-0 motion-reduce:transition-none",
+        )}
       >
-        {props.children}
+        {children}
       </span>
     </span>
   );
