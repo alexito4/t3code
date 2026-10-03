@@ -1125,10 +1125,11 @@ describe("UsageService", () => {
       const summary = yield* service.readSummary(WINDOW);
       assert.strictEqual(totalOutputTokens(summary), 50);
 
+      const resolvedArchivedDir = yield* Effect.promise(() => NodeFSP.realpath(archivedDir));
       const archivedSource = summary.sources.find(
         (source) =>
           source.fingerprint.provider === "codex" &&
-          source.fingerprint.resolvedHomePath === archivedDir,
+          source.fingerprint.resolvedHomePath === resolvedArchivedDir,
       );
       assert.isDefined(archivedSource);
       assert.strictEqual(archivedSource?.status, "ok");
