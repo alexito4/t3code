@@ -154,8 +154,8 @@ import {
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import { vcsEnvironment } from "../state/vcs";
 import { threadEnvironment } from "../state/threads";
-import { orchestrationEnvironment } from "../state/orchestration";
-import { downloadTextFile } from "../lib/downloadTextFile";
+import { exportThreadCommand } from "../state/orchestration";
+import { downloadPlanAsTextFile } from "../proposedPlan";
 import { useEnvironmentQuery } from "../state/query";
 import { useThreadSearch } from "../state/queries";
 import { useAtomCommand } from "../state/use-atom-command";
@@ -2316,12 +2316,7 @@ export default function Sidebar() {
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
-  const exportThread = useAtomCommand(orchestrationEnvironment.exportThread, {
-    reportFailure: false,
-  });
-  const exportThreadFallback = useAtomCommand(orchestrationEnvironment.exportThreadFallback, {
-    reportFailure: false,
-  });
+  const exportThread = useAtomCommand(exportThreadCommand, { reportFailure: false });
   const { copyToClipboard: copyPathToClipboard } = useCopyToClipboard<{ path: string }>({
     onCopy: ({ path }) => {
       toastManager.add({
@@ -4299,8 +4294,6 @@ export default function Sidebar() {
         const supportsTitleRegeneration =
           serverConfigs.get(thread.environmentId)?.environment.capabilities
             .threadTitleRegeneration === true;
-        const supportsThreadExport =
-          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadExport === true;
         const isRegeneratingTitle = thread.titleRegeneration != null;
         const isSettled = settledThreadKeysRef.current.has(threadKey);
         const isSnoozed = snoozedThreadKeysRef.current.has(threadKey);
@@ -4470,15 +4463,10 @@ export default function Sidebar() {
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
           case "export": {
-            const result = supportsThreadExport
-              ? await exportThread({
-                  environmentId: threadRef.environmentId,
-                  input: { threadId: threadRef.threadId },
-                })
-              : await exportThreadFallback({
-                  environmentId: threadRef.environmentId,
-                  input: { threadId: threadRef.threadId },
-                });
+            const result = await exportThread({
+              environmentId: threadRef.environmentId,
+              input: { threadId: threadRef.threadId },
+            });
             if (result._tag === "Failure") {
               if (!isAtomCommandInterrupted(result)) {
                 const error = squashAtomCommandFailure(result);
@@ -4492,7 +4480,7 @@ export default function Sidebar() {
               }
               return;
             }
-            downloadTextFile(result.value.suggestedFileName, result.value.markdown);
+            downloadPlanAsTextFile(result.value.suggestedFileName, result.value.markdown);
             return;
           }
           case "archive": {
@@ -4570,7 +4558,6 @@ export default function Sidebar() {
       copyThreadIdToClipboard,
       deleteThread,
       exportThread,
-      exportThreadFallback,
       handleMultiSelectContextMenu,
       markThreadUnread,
       openProjectSettings,

@@ -179,6 +179,10 @@ self-contained and readable by a person or any coding agent — send it to a col
 so they can review what happened or pick up the work themselves, even without access
 to your environment.
 
+Tool activity lists each command, file change, and tool call, but not command output.
+Agent reasoning is left out. Code changes appear as one diff of the whole thread. Threads
+outside a Git repository, or migrated from an older version of T3 Code, export without one.
+
 The export is not a live link: it is a snapshot at the moment you export it, and it
 is not redacted. Anything in the thread, including pasted secrets, goes into the file
 as written, so review it before sharing.

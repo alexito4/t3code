@@ -177,9 +177,8 @@ export function buildThreadActionMenuItems(
         { id: "copy-thread-id", label: "Thread ID", icon: "hash" },
       ],
     },
-    // Always offered: the caller picks the fast RPC path or the client-only
-    // fallback (any official server already supports the fallback's
-    // underlying requests), so there's no server capability to gate this on.
+    // Always offered: export uses only requests any official server answers,
+    // so there's no server capability to gate this on.
     { id: "export", label: "Export thread…", icon: "download" },
     { id: "project-settings", label: "Project settings", icon: "settings" },
     // Archive removes the thread from the sidebar while keeping its

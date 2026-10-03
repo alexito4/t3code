@@ -24,20 +24,19 @@ import {
   readEnvironmentSupportsPinning,
   readEnvironmentSupportsSettlement,
   readEnvironmentSupportsSnooze,
-  readEnvironmentSupportsThreadExport,
   readEnvironmentSupportsTitleRegeneration,
   readThreadShell,
   useProjects,
 } from "../state/entities";
 import { usePrimaryEnvironmentId } from "../state/environments";
-import { downloadTextFile } from "../lib/downloadTextFile";
 import { readLocalApi } from "../localApi";
 import {
   deriveLogicalProjectKeyFromSettings,
   derivePhysicalProjectKey,
   selectProjectGroupingSettings,
 } from "../logicalProject";
-import { orchestrationEnvironment } from "../state/orchestration";
+import { exportThreadCommand } from "../state/orchestration";
+import { downloadPlanAsTextFile } from "../proposedPlan";
 import { buildPhysicalToLogicalProjectKeyMap } from "../sidebarProjectGrouping";
 import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
 import { useCopyToClipboard } from "./useCopyToClipboard";
@@ -100,12 +99,7 @@ export function useThreadActionMenu(input: {
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
-  const exportThread = useAtomCommand(orchestrationEnvironment.exportThread, {
-    reportFailure: false,
-  });
-  const exportThreadFallback = useAtomCommand(orchestrationEnvironment.exportThreadFallback, {
-    reportFailure: false,
-  });
+  const exportThread = useAtomCommand(exportThreadCommand, { reportFailure: false });
   const handleNewThread = useNewThreadHandler();
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
@@ -148,7 +142,6 @@ export function useThreadActionMenu(input: {
           pinning: readEnvironmentSupportsPinning(threadRef.environmentId),
           titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
         };
-        const supportsThreadExport = readEnvironmentSupportsThreadExport(threadRef.environmentId);
         const isRegeneratingTitle = thread.titleRegeneration != null;
         const snoozePresets = resolveSnoozePresets(now, timestampFormat);
         const items = buildThreadActionMenuItems({
@@ -282,22 +275,17 @@ export function useThreadActionMenu(input: {
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
           case "export": {
-            const result = supportsThreadExport
-              ? await exportThread({
-                  environmentId: threadRef.environmentId,
-                  input: { threadId: threadRef.threadId },
-                })
-              : await exportThreadFallback({
-                  environmentId: threadRef.environmentId,
-                  input: { threadId: threadRef.threadId },
-                });
+            const result = await exportThread({
+              environmentId: threadRef.environmentId,
+              input: { threadId: threadRef.threadId },
+            });
             if (result._tag === "Failure") {
               if (!isAtomCommandInterrupted(result)) {
                 failureToast("Failed to export thread", squashAtomCommandFailure(result));
               }
               return;
             }
-            downloadTextFile(result.value.suggestedFileName, result.value.markdown);
+            downloadPlanAsTextFile(result.value.suggestedFileName, result.value.markdown);
             return;
           }
           case "archive": {
@@ -362,7 +350,6 @@ export function useThreadActionMenu(input: {
       copyThreadIdToClipboard,
       deleteThread,
       exportThread,
-      exportThreadFallback,
       handleNewThread,
       logicalProjectKeyByPhysicalKey,
       markThreadUnread,
