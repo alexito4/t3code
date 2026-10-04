@@ -153,6 +153,7 @@ import {
   type ExistingThreadSettingsRouteSession,
   useExistingThreadSettingsRoutePresentation,
 } from "./ThreadSettingsSheet";
+import { useGlobalVoiceInput } from "../voice-input/VoiceInputProvider";
 
 export interface ThreadDetailScreenProps {
   readonly worktreeSetup?: WorktreeSetupCardProps | null;
@@ -339,6 +340,7 @@ type SideQuestionState = {
 
 export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: ThreadDetailScreenProps) {
   const navigation = useNavigation();
+  const { session: voiceInputSession } = useGlobalVoiceInput();
   const reportedModelSelection = useThreadReportedModelSelection({
     environmentId: props.environmentId,
     threadId: props.selectedThread.id,
@@ -1677,7 +1679,10 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                   >
                     <ComposerQueuedEditBanner
                       saving={props.isSavingQueuedEdit}
-                      onCancel={props.onCancelQueuedRunEdit}
+                      onCancel={() => {
+                        voiceInputSession.cancel(props.composerDraftKey);
+                        props.onCancelQueuedRunEdit();
+                      }}
                     />
                   </Animated.View>
                 ) : null}
