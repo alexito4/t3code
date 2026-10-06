@@ -228,6 +228,12 @@ function renderTurnItem(item: OrchestrationV2TurnItem, context: RenderContext): 
       return `*Forked into thread ${item.targetThreadId}*`;
     case "thread_created":
       return `*Started thread ${item.targetThreadId} (${item.targetModel})*`;
+    // The value never reaches orchestration, so there is nothing secret here to leave out.
+    case "secret_request":
+      return paragraphs([
+        `**Secret requested**: ${item.label} — ${item.secretStatus}`,
+        item.reason.trim().length > 0 ? blockquote(item.reason) : null,
+      ]);
     default:
       item satisfies never;
       return null;

@@ -13,7 +13,7 @@ import {
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
-import * as Encoding from "effect/Encoding";
+import * as Base64 from "effect/encoding/Base64";
 import * as Option from "effect/Option";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import { HttpClient } from "effect/http";
@@ -98,7 +98,7 @@ const exportThread = Effect.fn("clientRuntime.state.exportThread")(function* (in
       if (url === null) return Option.none<string>();
       const response = yield* httpClient.get(url);
       const bytes = new Uint8Array(yield* response.arrayBuffer);
-      return Option.some(`data:${attachment.mimeType};base64,${Encoding.encodeBase64(bytes)}`);
+      return Option.some(`data:${attachment.mimeType};base64,${Base64.encode(bytes)}`);
     }).pipe(Effect.orElseSucceed(Option.none<string>));
     if (Option.isSome(dataUrl)) imageDataUrlsByAttachmentId.set(attachment.id, dataUrl.value);
   }
