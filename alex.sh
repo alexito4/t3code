@@ -166,9 +166,15 @@ case "$cmd" in
         # then restore the user's normal policy even if the build fails.
         minimum_release_age="$(pnpm config get minimumReleaseAge)"
         build_dir="$(mktemp -d)"
+        # Mirrors releasePackageFiles in scripts/update-release-package-versions.ts.
+        release_package_files=(apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json)
+        stamped_version=""
         cleanup_dist() {
             pnpm config set minimumReleaseAge "$minimum_release_age" --location user
             rm -rf "$build_dir"
+            if [[ -n "$stamped_version" ]]; then
+                git checkout HEAD -- "${release_package_files[@]}"
+            fi
         }
         trap cleanup_dist EXIT
         pnpm config set minimumReleaseAge 0 --location user
@@ -177,6 +183,30 @@ case "$cmd" in
         # exactly what the lockfile says. A toolchain bump can make pnpm want
         # to recreate node_modules, which it refuses to do without a TTY.
         pnpm install --config.confirm-modules-purge=false
+
+        # Upstream's package.json versions only move at stable releases;
+        # official nightlies stamp `<next>-nightly.<date>.<run>` before
+        # building. Unstamped, this build reports the previous stable version
+        # and the model manifest applies that release's provider compatibility
+        # (OpenCode 2 showed as a known broken version). Stamp the newest
+        # nightly main contains under a `personal` identifier: compatibility
+        # ranges compare only the version core, and a non-nightly identifier
+        # keeps nightly branding and update-channel logic out of this build.
+        nightly_tag="$(git for-each-ref --merged HEAD --sort=-v:refname --count=1 \
+            --format='%(refname:strip=2)' 'refs/tags/v*-nightly.*')"
+        if [[ -n "$nightly_tag" ]]; then
+            if ! git diff --quiet HEAD -- "${release_package_files[@]}"; then
+                echo "Release package.json files have local changes; commit or stash them before dist." >&2
+                exit 1
+            fi
+            personal_version="${nightly_tag#v}"
+            personal_version="${personal_version/-nightly./-personal.}"
+            stamped_version="$personal_version"
+            node scripts/update-release-package-versions.ts "$personal_version"
+            echo "Building version $personal_version (from $nightly_tag)"
+        else
+            echo "No merged nightly tag found; building with package.json's version." >&2
+        fi
 
         export T3CODE_DESKTOP_PERSONAL_BUILD=1
         pnpm build:desktop
