@@ -197,6 +197,24 @@ buildable/runnable for personal use (see Fork infrastructure below).
   working row uses `min-h-6`. V2's timeline cards use `text-3xs` badges, which deliberately don't
   scale. Once merged, drop the branch from `PATCH_BRANCHES` and `rebuild`.
 
+- **Hide viewed files in the PR Code tab** — the Code tab had GitHub-style Viewed checkboxes but
+  no way to hide the files already read, the one review habit that kept me on github.com. Adds a
+  "Hide viewed files" toggle (crossed-out eye, next to the whitespace button) that removes viewed
+  files from the diff and the file tree. The count reads "6 of 11 files", and when everything is
+  read the tab says so, with a "Show viewed files" button instead of claiming there are no
+  changes. Ticking a file while it's on hides it straight away. A file pushed to since it was
+  ticked reads as unviewed (`dismissed`) and comes back. Remembered in localStorage
+  (`t3code.pullRequestHideViewedFiles`), offered only where the host keeps viewed marks.
+  Web + desktop only (the mobile app has no Code tab). Checked upstream first (2026-10-06): no
+  code, PR, issue or branch for this; nearest are open #13280 (keep viewed files folded on
+  reopen) and #14954 (viewed ticks after a partial batch failure). On branch
+  `feat/pull-request-hide-viewed-files` (based on the nightly `main` was on) and composed into
+  `main` via `PATCH_BRANCHES`. An upstream PR from this branch was prepared on 2026-10-06 for me
+  to review and submit by hand. Once it's open, this branch is its head: keep it free of
+  fork-only changes, and remember that pushing it updates the PR. Screenshots are hosted on the
+  orphan branch `pr-assets/hide-viewed-files`. Once merged, drop it from `PATCH_BRANCHES` and
+  `rebuild`.
+
 ## Merged early from open upstream PRs
 
 Features from someone else's still-open, unmerged upstream PR, pulled onto `main` ahead of
