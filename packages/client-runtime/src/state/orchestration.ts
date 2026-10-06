@@ -4,7 +4,7 @@ import {
   SIDE_QUESTION_WS_METHODS,
   type OrchestrationCancelSideQuestionResult,
 } from "@t3tools/contracts";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 
 import {
   type AtomCommandResult,
