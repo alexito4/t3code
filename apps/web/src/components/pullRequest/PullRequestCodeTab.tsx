@@ -434,12 +434,21 @@ function PullRequestCodeTab({
     isStale: isFileViewedStale,
   } = filesViewed;
   // Only where the host keeps viewed marks; anywhere else every file stays listed. A file pushed
-  // to since it was ticked no longer reads as viewed, so it comes back on its own.
+  // to since it was ticked no longer reads as viewed, so it comes back on its own. The file holding
+  // a comment being written stays until it is posted or dropped: hiding it would unmount the box
+  // and lose the text.
   const hidingViewedFiles = hideViewedFiles && filesViewedEnabled;
+  const draftPath = draft?.path ?? null;
+  const isHiddenAsViewed = useCallback(
+    (path: string) => hidingViewedFiles && path !== draftPath && isFileViewed(path),
+    [draftPath, hidingViewedFiles, isFileViewed],
+  );
   const visibleFiles = useMemo(
     () =>
-      hidingViewedFiles ? files.filter((file) => !isFileViewed(resolveFileDiffPath(file))) : files,
-    [files, hidingViewedFiles, isFileViewed],
+      hidingViewedFiles
+        ? files.filter((file) => !isHiddenAsViewed(resolveFileDiffPath(file)))
+        : files,
+    [files, hidingViewedFiles, isHiddenAsViewed],
   );
   const hiddenViewedFileCount = files.length - visibleFiles.length;
   // The button goes around the host's cache, so everything the tab reads from it starts over:
@@ -577,8 +586,10 @@ function PullRequestCodeTab({
   // Filtered after the annotations rather than before, so a tick never recomputes them.
   const shownAnnotatedFiles = useMemo(
     () =>
-      hidingViewedFiles ? annotatedFiles.filter(({ path }) => !isFileViewed(path)) : annotatedFiles,
-    [annotatedFiles, hidingViewedFiles, isFileViewed],
+      hidingViewedFiles
+        ? annotatedFiles.filter(({ path }) => !isHiddenAsViewed(path))
+        : annotatedFiles,
+    [annotatedFiles, hidingViewedFiles, isHiddenAsViewed],
   );
 
   const items = useMemo<CodeViewDiffItem<ReviewAnnotationGroup>[]>(
@@ -1407,8 +1418,14 @@ function PullRequestCodeTab({
     );
   }
 
-  // Nothing on screen because everything is read, which is not the same as nothing changed.
-  if (items.length === 0 && nextCursor === null && hiddenViewedFileCount > 0) {
+  // Nothing on screen because everything is read, which is not the same as nothing changed. A raw
+  // slice the viewer could not structure carries no tick, so it still needs the full layout below.
+  if (
+    items.length === 0 &&
+    nextCursor === null &&
+    hiddenViewedFileCount > 0 &&
+    rawSlices.length === 0
+  ) {
     return withToolbar(
       <div className="flex flex-col items-start gap-3 px-4 py-5">
         <p className="text-sm text-muted-foreground">
