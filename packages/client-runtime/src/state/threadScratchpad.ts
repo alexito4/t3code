@@ -4,7 +4,7 @@
  */
 import { type EnvironmentId, type ThreadId, WS_METHODS } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 
 import type { EnvironmentRegistry } from "../connection/registry.ts";
 import { request } from "../rpc/client.ts";
