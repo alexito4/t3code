@@ -27,6 +27,7 @@ PATCH_BRANCHES=(
     feat/thread-share
     feat/scratchpad-panel
     feat/conversation-font-size
+    feat/pull-request-hide-viewed-files
 )
 
 # What `rebuild` merges into a patch branch. Stacked branches merge their
