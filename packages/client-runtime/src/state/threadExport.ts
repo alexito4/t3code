@@ -16,8 +16,8 @@ import * as Effect from "effect/Effect";
 import * as Encoding from "effect/Encoding";
 import * as Option from "effect/Option";
 import * as SubscriptionRef from "effect/SubscriptionRef";
-import { HttpClient } from "effect/unstable/http";
-import { Atom } from "effect/unstable/reactivity";
+import { HttpClient } from "effect/http";
+import { Atom } from "effect/reactivity";
 
 import * as RemoteEnvironmentAuthorization from "../authorization/service.ts";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
