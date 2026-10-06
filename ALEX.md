@@ -337,7 +337,12 @@ pair` writes into whichever database this checkout's server uses, so from a V2 `
 Run `./alex.sh` with no args for the current subcommand list (`dev`, `connect`, `sync`,
 `sync-nightly`, `rebuild`, `dist`, `pair`). `./alex.sh dist` is the local desktop update workflow: it builds the
 personal arm64 app, replaces `/Applications/T3 Code (Personal).app`, and removes its temporary
-packaging artifacts. Close the installed app before reopening it to use the new build; do not use
+packaging artifacts. It stamps the release `package.json` versions as the newest merged nightly
+tag with a `personal` identifier (e.g. `0.0.46-personal.20261005.2676`) and restores them
+afterward. Upstream's `package.json` versions stay at the previous stable release until a new
+stable release; official nightlies stamp theirs in CI. Unstamped, the build reported `0.0.45`, so
+the model manifest's `t3CodeRange` selected the pre-V2 policy and flagged OpenCode 2 as a known
+broken version (2026-10-06). Close the installed app before reopening it to use the new build; do not use
 the generated DMG or ZIP for local updates.
 
 `sync-nightly` tracks upstream's nightly releases rather than `upstream/main`'s tip, so the
