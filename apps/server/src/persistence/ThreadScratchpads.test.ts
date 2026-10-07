@@ -5,7 +5,7 @@ import * as Layer from "effect/Layer";
 import * as TestClock from "effect/testing/TestClock";
 import * as SqlClient from "effect/sql/SqlClient";
 
-import { SqlitePersistenceMemory } from "./Layers/Sqlite.ts";
+import * as SqlitePersistence from "./Sqlite.ts";
 import * as ThreadScratchpads from "./ThreadScratchpads.ts";
 
 const readScratchpad = (threadId: ThreadId) =>
@@ -45,7 +45,7 @@ it.effect("reads an untouched thread as empty, then stores and replaces its note
       updatedAt: null,
     });
   }).pipe(
-    Effect.provide(ThreadScratchpads.layer.pipe(Layer.provideMerge(SqlitePersistenceMemory))),
+    Effect.provide(ThreadScratchpads.layer.pipe(Layer.provideMerge(SqlitePersistence.layerMemory))),
   ),
 );
 
@@ -69,5 +69,5 @@ it.effect("keeps notes already stored in the table from before V2", () =>
       yield* readScratchpad(threadId).pipe(Effect.provide(ThreadScratchpads.layer)),
       { threadId, content: "notes from V1", updatedAt: "2026-03-24T00:00:01.000Z" },
     );
-  }).pipe(Effect.provide(SqlitePersistenceMemory)),
+  }).pipe(Effect.provide(SqlitePersistence.layerMemory)),
 );
