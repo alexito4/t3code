@@ -67,6 +67,21 @@ describe("mobile slash commands", () => {
     },
   );
 
+  it("offers /btw only on environments with side chat", () => {
+    const btwOffered = (offersSideQuestions: boolean) =>
+      buildComposerSlashCommandItems({
+        query: "btw",
+        atMessageStart: true,
+        hasThread: true,
+        offersSideQuestions,
+        allowInteractionMode: true,
+        selectedProviderStatus: null,
+      }).some((item) => item.type === "slash-command" && item.command === "btw");
+
+    expect(btwOffered(true)).toBe(true);
+    expect(btwOffered(false)).toBe(false);
+  });
+
   it("does not offer a native command inside the message", () => {
     expect(
       buildComposerSlashCommandItems({

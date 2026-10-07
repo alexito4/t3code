@@ -32,6 +32,8 @@ interface ComposerPrimaryActionsProps {
   isRunning: boolean;
   /** Stop can reach a run, including one still preparing or starting. */
   canInterrupt: boolean;
+  /** The draft is a `/btw` side question: it goes to the side chat, never to the run. */
+  isSideQuestion?: boolean;
   followUpBehavior?: "queue" | "steer";
   alternateShortcutLabel?: string | null;
   showPlanFollowUpPrompt: boolean;
@@ -85,6 +87,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   pendingAction,
   isRunning,
   canInterrupt,
+  isSideQuestion = false,
   followUpBehavior = "steer",
   alternateShortcutLabel = null,
   showPlanFollowUpPrompt,
@@ -109,10 +112,11 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     : undefined;
   const environmentIdentificationMode = useEnvironmentIdentificationMode();
   const shortcutModifiers = useShortcutModifierState();
+  const followsRun = isRunning && !isSideQuestion;
   const isQueuing =
     !isEditingQueuedMessage &&
     resolveComposerDispatchMode({
-      running: isRunning,
+      running: followsRun,
       activeTurnDefault: followUpBehavior,
       alternateModifier: shortcutModifiers.metaKey || shortcutModifiers.ctrlKey,
     }) === "queue";
@@ -149,7 +153,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     </Tooltip>
   );
 
-  if (pendingAction) {
+  if (pendingAction && !isSideQuestion) {
     return (
       <div className={cn("flex items-center justify-end", compact ? "gap-1.5" : "gap-2")}>
         {canInterrupt ? renderStopGenerationButton(true) : null}
@@ -199,7 +203,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     );
   }
 
-  if (showPlanFollowUpPrompt && (promptHasText || !canResume)) {
+  if (showPlanFollowUpPrompt && !isSideQuestion && (promptHasText || !canResume)) {
     if (promptHasText) {
       return (
         <button
@@ -262,13 +266,15 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   const showResume = canResume && !hasSendableContent && !isEditingQueuedMessage;
   const submitLabel = showResume
     ? "Resume thread"
-    : isEditingQueuedMessage
-      ? "Update queued message"
-      : isQueuing
-        ? "Queue message"
-        : isRunning
-          ? "Steer message"
-          : "Submit message";
+    : isSideQuestion
+      ? "Ask in side chat"
+      : isEditingQueuedMessage
+        ? "Update queued message"
+        : isQueuing
+          ? "Queue message"
+          : followsRun
+            ? "Steer message"
+            : "Submit message";
   const submitStatus = isEnvironmentUnavailable
     ? "Environment disconnected"
     : (sendDisabledReason ??
@@ -283,7 +289,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
             : null));
   const submitTooltip =
     submitStatus ??
-    (isRunning && !isEditingQueuedMessage
+    (followsRun && !isEditingQueuedMessage
       ? `Click to ${followUpBehavior}, Ctrl/⌘-click${alternateShortcutLabel ? ` or ${alternateShortcutLabel}` : ""} to ${alternateAction}`
       : submitLabel);
 
@@ -318,7 +324,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
         <PlayIcon className="size-4 fill-current" aria-hidden="true" />
       ) : isEditingQueuedMessage ? (
         <CheckIcon className="size-4" aria-hidden="true" />
-      ) : isRunning ? (
+      ) : followsRun ? (
         <MorphIcon className="size-4" icon={isQueuing ? ListPlus : CornerUpRight} />
       ) : (
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">

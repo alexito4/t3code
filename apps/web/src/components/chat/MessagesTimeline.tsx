@@ -420,6 +420,8 @@ interface MessagesTimelineProps {
     citation: AssistantCitation,
     sourceAnchor: AssistantCitationSourceAnchor,
   ) => boolean;
+  onAskInSideChat?: (citation: AssistantCitation) => boolean;
+  askInSideChatAvailable?: boolean;
   isWorking: boolean;
   /** The live work belongs to a runless root turn (a provider-native subagent). */
   runlessWorkActive?: boolean;
@@ -507,6 +509,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   citationRequest = null,
   citationHistoryLoading = false,
   onCiteAssistantText,
+  onAskInSideChat,
+  askInSideChatAvailable = false,
   isWorking,
   runlessWorkActive = false,
   activeTurnInProgress,
@@ -1337,6 +1341,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
               viewport={timelineViewportElement}
               threadRef={citationThreadRef}
               onCite={onCiteAssistantText}
+              {...(onAskInSideChat ? { onAskInSideChat, askInSideChatAvailable } : {})}
             />
           ) : null}
           <LegendList<MessagesTimelineRow>

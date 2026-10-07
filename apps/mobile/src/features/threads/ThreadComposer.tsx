@@ -2,6 +2,7 @@ import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { useAtomValue } from "@effect/atom-react";
+import { parseSideQuestion } from "@t3tools/client-runtime/state/orchestration";
 import { clampFileAttachmentUploadBytes } from "@t3tools/client-runtime/state/attachments";
 import { pastedTextDisposition, replaceTextSelection } from "@t3tools/client-runtime/text-paste";
 import {
@@ -419,16 +420,30 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       serverConfig: props.serverConfig,
       states: uploadStates,
     });
+  const sideQuestionsSupported =
+    props.serverConfig?.environment.capabilities.sideQuestions === true;
   // Every send goes through the outbox; the label says whether it leaves now
   // or waits (for the connection, an earlier queued message, or an upload).
-  const sendPresentation = resolveComposerSendPresentation({
-    editingQueuedMessage: queuedEdit !== null,
-    running: props.activeThreadBusy,
-    canSteer: props.canSteerActiveTurn,
-    followUpBehavior: props.followUpBehavior,
-    deliveryDeferred:
-      props.connectionState !== "connected" || props.queueCount > 0 || attachmentsUploading,
-  });
+  // A `/btw` draft goes to the side chat, never to the run, so it neither queues nor steers.
+  const sendPresentation: ComposerSendPresentation =
+    sideQuestionsSupported &&
+    queuedEdit === null &&
+    parseSideQuestion(props.draftMessage.trim()) !== null
+      ? {
+          label: "Ask",
+          icon: "arrow.up",
+          action: null,
+          alternate: null,
+          offersFollowUpChoice: false,
+        }
+      : resolveComposerSendPresentation({
+          editingQueuedMessage: queuedEdit !== null,
+          running: props.activeThreadBusy,
+          canSteer: props.canSteerActiveTurn,
+          followUpBehavior: props.followUpBehavior,
+          deliveryDeferred:
+            props.connectionState !== "connected" || props.queueCount > 0 || attachmentsUploading,
+        });
   const sendLabel = sendPresentation.label;
   const currentModelSelection = props.selectedThread.modelSelection;
   const currentRuntimeMode = props.selectedThread.runtimeMode;
@@ -504,6 +519,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         ? undefined
         : props.onUpdateInteractionMode,
     offersUsageLimits: usageLimitsOffered,
+    offersSideQuestions: sideQuestionsSupported,
     // With attachments aboard the pick just inserts the text, so it sends as a prompt.
     onUsageLimits:
       usageLimitsOffered && props.draftAttachments.length === 0 ? openUsageLimits : undefined,

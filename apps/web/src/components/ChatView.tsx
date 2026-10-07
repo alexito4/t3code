@@ -310,6 +310,7 @@ import {
 import { cn, randomUUID } from "~/lib/utils";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
 import { stackedThreadToast, toastManager } from "./ui/toast";
+import { useSideChat } from "./useSideChat";
 import {
   decodeProjectScriptKeybindingRule,
   keybindingValueForCommand,
@@ -4207,6 +4208,23 @@ export default function ChatView(props: ChatViewProps) {
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
   const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProjectCwd ?? undefined;
+  // Side chat is this fork's own patch: an unpatched server rejects it as an unknown RPC.
+  const sideQuestionsSupported = serverConfig?.environment.capabilities.sideQuestions === true;
+  const sideChat = useSideChat({
+    environmentId,
+    threadKey: routeThreadKey,
+    threadRef: activeThreadRef,
+    thread: activeThread,
+    supported: sideQuestionsSupported,
+    isServerThread,
+    hasPendingUserInput: activePendingProgress !== null,
+    surfaces: rightPanelState.surfaces,
+    cwd: activeWorkspaceRoot,
+    providers: providerStatuses,
+    settings,
+    composerDraftTarget,
+  });
+  const onSideChatSurfacesClosed = sideChat.onSurfacesClosed;
   useLayoutEffect(() => {
     if (
       threadDetailLoading ||
@@ -6034,6 +6052,7 @@ export default function ChatView(props: ChatViewProps) {
   const cleanupRightPanelSurfaces = useCallback(
     (surfaces: readonly RightPanelSurface[]) => {
       if (!activeThreadRef) return;
+      onSideChatSurfacesClosed(surfaces);
       for (const surface of surfaces) {
         // Without preview access only the local surface goes away. The
         // server record is in-memory bookkeeping, not a live view, and stays
@@ -6066,6 +6085,7 @@ export default function ChatView(props: ChatViewProps) {
       canOperatePreview,
       closePreview,
       closeTerminalMutation,
+      onSideChatSurfacesClosed,
       storeCloseTerminal,
     ],
   );
@@ -8767,6 +8787,20 @@ export default function ChatView(props: ChatViewProps) {
       });
       return;
     }
+    if (
+      sideChat.sendFromComposer({
+        prompt: promptRef.current,
+        sendContext: composerRef.current?.getSendContext(),
+        hasDirectAnnotation: directAnnotation !== undefined,
+        clearComposer: () => {
+          promptRef.current = "";
+          setComposerDraftPrompt(composerDraftTarget, "");
+          composerRef.current?.resetCursorState();
+        },
+      })
+    ) {
+      return;
+    }
     if (activePendingProgress) {
       if (directAnnotation) {
         notifyDirectAnnotationAttached();
@@ -10893,7 +10927,9 @@ export default function ChatView(props: ChatViewProps) {
   }
 
   const rightPanelContent = activeThreadRef ? (
-    renderedRightPanelSurface?.kind === "preview" ? (
+    renderedRightPanelSurface?.kind === "side-question" ? (
+      sideChat.panel
+    ) : renderedRightPanelSurface?.kind === "preview" ? (
       <Suspense fallback={null}>
         <PreviewPanel
           mode="embedded"
@@ -11313,6 +11349,8 @@ export default function ChatView(props: ChatViewProps) {
                 {...(!paintOnlyDisplayedTimeline
                   ? {
                       onCiteAssistantText: citeAssistantText,
+                      onAskInSideChat: sideChat.askSelection,
+                      askInSideChatAvailable: sideChat.available,
                       ...(activeProject ? { onRunShellCommand: runShellCommand } : {}),
                     }
                   : {})}
@@ -11529,6 +11567,7 @@ export default function ChatView(props: ChatViewProps) {
                               activeThreadShell={activeThreadShell}
                               promptHistoryMessages={timelineMessages}
                               isServerThread={isServerThread}
+                              sideQuestionsSupported={sideQuestionsSupported}
                               isLocalDraftThread={isLocalDraftThread}
                               forceExpandedOnMobile={
                                 forceExpandedMobileComposer && isDraftHeroState
@@ -11558,6 +11597,7 @@ export default function ChatView(props: ChatViewProps) {
                                             : projectCloneSendBlockReason
                               }
                               isPreparingWorktree={isPreparingWorktree}
+                              sideChatBanner={sideChat.minimizedBanner}
                               queuedRunsControl={
                                 isServerThread && activeThread ? (
                                   <QueuedRunsControl
@@ -11880,6 +11920,7 @@ export default function ChatView(props: ChatViewProps) {
           onAddFiles={addFilesSurface}
           onAddPullRequest={addPullRequestSurface}
           onAddPullRequests={addPullRequestsSurface}
+          onAddSideQuestion={sideChat.addSurface}
           onAddDevice={addDeviceSurface}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
@@ -11887,6 +11928,7 @@ export default function ChatView(props: ChatViewProps) {
           filesAvailable={activeProject !== null}
           pullRequestAvailable={pullRequestSurfaceAvailable}
           pullRequestsAvailable={pullRequestsSurfaceAvailable}
+          sideQuestionAvailable={sideChat.available}
           deviceAvailable={activeThreadRef !== null}
         >
           {rightPanelContent}
@@ -11938,6 +11980,7 @@ export default function ChatView(props: ChatViewProps) {
             onAddFiles={addFilesSurface}
             onAddPullRequest={addPullRequestSurface}
             onAddPullRequests={addPullRequestsSurface}
+            onAddSideQuestion={sideChat.addSurface}
             onAddDevice={addDeviceSurface}
             browserAvailable={canOperatePreview && browserAvailable}
             terminalAvailable={activeProject !== null && canOperateTerminal}
@@ -11945,6 +11988,7 @@ export default function ChatView(props: ChatViewProps) {
             filesAvailable={activeProject !== null}
             pullRequestAvailable={pullRequestSurfaceAvailable}
             pullRequestsAvailable={pullRequestsSurfaceAvailable}
+            sideQuestionAvailable={sideChat.available}
             deviceAvailable={activeThreadRef !== null}
           >
             {rightPanelContent}
