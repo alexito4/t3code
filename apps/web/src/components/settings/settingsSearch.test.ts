@@ -153,6 +153,7 @@ describe("searchSettings", () => {
     const available = filterAvailableSettingsSearchItems({
       hasCloudPublicConfig: false,
       hasEnvironment: false,
+      hasPrimaryEnvironment: false,
       hasProviderSettingsEnvironment: false,
       hasMacProviderSettingsEnvironment: false,
       canManageLocalBackend: false,
@@ -166,6 +167,7 @@ describe("searchSettings", () => {
       "network-access",
       "publish-agent-activity",
       "provider-health-check-interval",
+      "pull-request-review-instructions",
       "cursor-keychain-usage",
       "source-control-writer-model",
       "source-control-writing-style",
@@ -184,6 +186,7 @@ describe("searchSettings", () => {
     const availability = {
       hasCloudPublicConfig: false,
       hasEnvironment: true,
+      hasPrimaryEnvironment: true,
       hasProviderSettingsEnvironment: true,
       hasMacProviderSettingsEnvironment: false,
       canManageLocalBackend: false,
@@ -203,6 +206,7 @@ describe("searchSettings", () => {
     const availability = {
       hasCloudPublicConfig: true,
       hasEnvironment: true,
+      hasPrimaryEnvironment: true,
       hasProviderSettingsEnvironment: true,
       hasMacProviderSettingsEnvironment: false,
       canManageLocalBackend: false,
@@ -226,6 +230,7 @@ describe("searchSettings", () => {
     const availability = {
       hasCloudPublicConfig: true,
       hasEnvironment: true,
+      hasPrimaryEnvironment: true,
       hasProviderSettingsEnvironment: true,
       hasMacProviderSettingsEnvironment: false,
       canManageLocalBackend: true,
@@ -244,6 +249,7 @@ describe("searchSettings", () => {
     const available = filterAvailableSettingsSearchItems({
       hasCloudPublicConfig: false,
       hasEnvironment: false,
+      hasPrimaryEnvironment: false,
       hasProviderSettingsEnvironment: false,
       hasMacProviderSettingsEnvironment: false,
       canManageLocalBackend: false,
@@ -375,6 +381,7 @@ describe("searchSettings", () => {
     const available = filterAvailableSettingsSearchItems({
       hasCloudPublicConfig: false,
       hasEnvironment: true,
+      hasPrimaryEnvironment: false,
       hasProviderSettingsEnvironment: true,
       hasMacProviderSettingsEnvironment: false,
       canManageLocalBackend: false,
@@ -470,6 +477,7 @@ describe("auto-settlement search availability", () => {
     const items = filterAvailableSettingsSearchItems({
       hasCloudPublicConfig: false,
       hasEnvironment: true,
+      hasPrimaryEnvironment: true,
       hasProviderSettingsEnvironment: true,
       hasMacProviderSettingsEnvironment: false,
       canManageLocalBackend: false,

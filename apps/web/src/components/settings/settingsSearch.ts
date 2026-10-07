@@ -55,6 +55,7 @@ export interface SettingsSearchItem {
   readonly windowsOnly?: boolean;
   readonly cloudOnly?: boolean;
   readonly environmentOnly?: boolean;
+  readonly primaryOnly?: boolean;
   readonly providerSettingsOnly?: boolean;
   readonly macProviderSettingsOnly?: boolean;
   readonly localBackendManagementOnly?: boolean;
@@ -74,6 +75,7 @@ export interface SettingsSearchAvailability {
   readonly localEnvironmentDisabled?: boolean;
   readonly hasCloudPublicConfig: boolean;
   readonly hasEnvironment: boolean;
+  readonly hasPrimaryEnvironment: boolean;
   readonly hasProviderSettingsEnvironment: boolean;
   readonly hasMacProviderSettingsEnvironment: boolean;
   readonly canManageLocalBackend: boolean;
@@ -808,6 +810,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["commands scripts setup run dev server checkout worktree t3.json import"],
   },
   {
+    id: "pull-request-review-instructions",
+    title: "Pull request review checklist",
+    to: "/settings/source-control",
+    searchTerms: ["review this pr agent checklist prompt instructions"],
+    primaryOnly: true,
+  },
+  {
     id: "environment-icon",
     title: "Environment icon",
     to: "/settings/connections",
@@ -1048,6 +1057,7 @@ export function filterAvailableSettingsSearchItems(
     (item) =>
       (!item.cloudOnly || availability.hasCloudPublicConfig) &&
       (!item.environmentOnly || availability.hasEnvironment) &&
+      (!item.primaryOnly || availability.hasPrimaryEnvironment) &&
       (!item.providerSettingsOnly || availability.hasProviderSettingsEnvironment) &&
       (!item.macProviderSettingsOnly || availability.hasMacProviderSettingsEnvironment) &&
       (!item.localBackendManagementOnly || availability.canManageLocalBackend) &&

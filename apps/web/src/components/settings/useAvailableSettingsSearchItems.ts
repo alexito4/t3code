@@ -37,6 +37,7 @@ export function useAvailableSettingsSearchItems(scopeSearch: SettingsScopeSearch
         localEnvironmentDisabled,
         hasCloudPublicConfig: hasCloudPublicConfig(),
         hasEnvironment: environments.some((environment) => environment.serverConfig !== null),
+        hasPrimaryEnvironment: primaryEnvironmentId !== null,
         hasProviderSettingsEnvironment: environments.some((environment) =>
           isProviderSettingsEnvironmentAvailable({
             connectionPhase: environment.connection.phase,
@@ -69,6 +70,7 @@ export function useAvailableSettingsSearchItems(scopeSearch: SettingsScopeSearch
       desktopWsl.error,
       environments,
       localEnvironmentDisabled,
+      primaryEnvironmentId,
       scopeSearch.machine,
     ],
   );
