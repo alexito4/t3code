@@ -68,7 +68,9 @@ buildable/runnable for personal use (see Fork infrastructure below).
     (`ReviewSectionKind`), matching #6102's own scope — no mobile "Commits" picker UI.
   - `patch/review-diff-file-actions` — per-file stage/unstage/discard buttons in the diff header,
     shown only in the working-tree views (Uncommitted/Unstaged/Staged), not Changes or
-    Committed. They're gated by a `reviewFileActions` server capability. `discardFile` runs a
+    Committed. They're gated by a `reviewFileActions` server capability and, like upstream's other git
+    writes, the `source-control:write` client permission (`clientRpcPermissions.ts`, since
+    2026-10-07). `discardFile` runs a
     silent `git stash push -- <path>` immediately before the destructive checkout/clean, left
     unpopped, purely as a recovery net — no confirmation dialog, the one-click UX matches Codex
     exactly. Git runs at the repository root with literal pathspecs; the V2 port fixed a project
@@ -238,14 +240,16 @@ original PR, not pile up here as one-off fixes.
     ChatView only gains about 40 lines. `SideQuestionPanel.tsx` is built on upstream's
     `ComposerSurface`/`ComposerBanner` via a `sideChatBanner` prop on `ChatComposer`. The fork's
     467-line composer CSS, `ComposerGlass.tsx` and `UserMessageBubble.tsx` were dropped, so side
-    chat now looks like upstream's composer instead of the old glass styling. Every
-    text-generation provider answers side questions, including V2's new Pi and OpenCode2. ACP
+    chat now looks like upstream's composer instead of the old glass styling. Since
+    upstream moved every provider onto one shared runner (`TextGenerationOperations.ts`,
+    2026-10-07), `answerSideQuestion` lives once in its `fromRunner`, so every provider answers
+    side questions without per-provider code. ACP
     Registry threads have no text generation and get a clear error. Known gaps: in a V2 forked
     thread, side chat only sees the fork's own turns, not the inherited history; each question
     loads all of the thread's matching items before trimming to the budget.
   - **Known conflict set** (recurs on `rebuild` for as long as this branch is carried):
-    `ChatComposer.tsx`, `ChatView.tsx` (small since `useSideChat`), `ws.ts`, `rpc.ts`, the
-    `textGeneration/*` providers, and the mobile
+    `ChatComposer.tsx`, `ChatView.tsx` (small since `useSideChat`), `ws.ts`, `rpc.ts`, `RpcInstrumentation.ts` (one
+    tracing label per RPC), `textGeneration/TextGenerationOperations.ts`, and the mobile
     `ThreadComposer.tsx`/`ThreadDetailScreen.tsx`/`ThreadSettingsSheet.tsx` trio. The branch no
     longer touches `index.css` and only passes props through `MessagesTimeline`. Resolution
     pattern: adopt upstream's newer architecture and splice side chat into it. Don't trust the
