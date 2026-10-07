@@ -525,6 +525,34 @@ describe("rightPanelStore", () => {
     });
   });
 
+  // The fork's own v14 added the scratchpad while still holding agents tabs, so those installs
+  // migrate again at v15 and must keep their scratchpad.
+  it("keeps the scratchpad while dropping agents from fork v14 state", () => {
+    expect(
+      migratePersistedRightPanelState({
+        byThreadKey: {
+          "env-1:thread-A": {
+            isOpen: true,
+            activeSurfaceId: "agents",
+            surfaces: [
+              { id: "agents", kind: "agents" },
+              { id: "scratchpad", kind: "scratchpad" },
+            ],
+          },
+        },
+      }),
+    ).toEqual({
+      byThreadKey: {
+        "env-1:thread-A": {
+          isOpen: true,
+          activeSurfaceId: "scratchpad",
+          surfaces: [{ id: "scratchpad", kind: "scratchpad" }],
+        },
+      },
+      threadPanelVisibilityByThreadKey: {},
+    });
+  });
+
   it("persists inline preference without restoring an open popover", () => {
     expect(
       migratePersistedRightPanelState({

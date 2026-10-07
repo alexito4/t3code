@@ -134,6 +134,7 @@ function renderTabs(
       onAddFiles={() => undefined}
       onAddSideQuestion={() => undefined}
       onAddDevice={() => undefined}
+      onAddScratchpad={() => undefined}
       browserAvailable
       terminalAvailable={false}
       diffAvailable={false}
@@ -142,6 +143,7 @@ function renderTabs(
       pullRequestsAvailable={false}
       sideQuestionAvailable={false}
       deviceAvailable={false}
+      scratchpadAvailable={false}
     >
       <div>content</div>
     </RightPanelTabs>,

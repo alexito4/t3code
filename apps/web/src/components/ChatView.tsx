@@ -410,6 +410,7 @@ import {
   serverEnvironment,
 } from "../state/server";
 import { terminalEnvironment } from "../state/terminal";
+import { orchestrationEnvironment } from "../state/orchestration";
 import { threadEnvironment } from "../state/threads";
 import { workspacePreparationRetryRunIds } from "@t3tools/client-runtime/state/turn-item-presentation";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
@@ -703,6 +704,7 @@ const DevicePanel = lazy(() =>
   import("./device/DevicePanel").then((module) => ({ default: module.DevicePanel })),
 );
 const FilePreviewPanel = lazy(() => import("./files/FilePreviewPanel"));
+const ScratchpadPanel = lazy(() => import("./scratchpad/ScratchpadPanel"));
 const EMPTY_PENDING_FILE_SURFACE_IDS: ReadonlySet<string> = new Set();
 const TYPE_TO_FOCUS_EDITABLE_SELECTOR = [
   "input",
@@ -5431,6 +5433,41 @@ export default function ChatView(props: ChatViewProps) {
     if (!activeThreadRef || !activeProject) return;
     useRightPanelStore.getState().open(activeThreadRef, "files");
   }, [activeProject, activeThreadRef]);
+  // This fork's own patch: absent on servers without it, so hide the tab
+  // instead of offering one that would fail against them.
+  const scratchpadAvailable =
+    activeThreadRef !== null && serverConfig?.environment.capabilities.scratchpad === true;
+  const addScratchpadSurface = useCallback(() => {
+    if (!activeThreadRef || !scratchpadAvailable) return;
+    useRightPanelStore.getState().open(activeThreadRef, "scratchpad");
+  }, [activeThreadRef, scratchpadAvailable]);
+  const appendScratchpad = useAtomCommand(orchestrationEnvironment.appendThreadScratchpad, {
+    reportFailure: false,
+  });
+  const addSelectionToScratchpad = useCallback(
+    (citation: AssistantCitation) => {
+      if (!activeThreadRef || !scratchpadAvailable) return false;
+      void appendScratchpad({
+        environmentId: activeThreadRef.environmentId,
+        input: { threadId: activeThreadRef.threadId, text: citation.text },
+      }).then((result) => {
+        if (result._tag === "Success") {
+          toastManager.add({ type: "success", title: "Added to scratchpad" });
+        } else if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not add to scratchpad",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
+      });
+      return true;
+    },
+    [activeThreadRef, appendScratchpad, scratchpadAvailable],
+  );
   const supportsThreadPullRequests =
     serverConfig?.environment.capabilities.threadPullRequests === true;
   const visiblePullRequests = visibleThreadPullRequests(
@@ -11025,6 +11062,10 @@ export default function ChatView(props: ChatViewProps) {
       />
     ) : renderedRightPanelSurface?.kind === "pull-requests" && activeThreadRef ? (
       <ThreadPullRequestsPanel threadRef={activeThreadRef} />
+    ) : renderedRightPanelSurface?.kind === "scratchpad" && activeThreadRef ? (
+      <Suspense fallback={null}>
+        <ScratchpadPanel threadRef={activeThreadRef} composerDraftTarget={composerDraftTarget} />
+      </Suspense>
     ) : renderedRightPanelSurface?.kind === "device" ? (
       <Suspense fallback={null}>
         <DevicePanel
@@ -11351,6 +11392,8 @@ export default function ChatView(props: ChatViewProps) {
                       onCiteAssistantText: citeAssistantText,
                       onAskInSideChat: sideChat.askSelection,
                       askInSideChatAvailable: sideChat.available,
+                      onAddToScratchpad: addSelectionToScratchpad,
+                      addToScratchpadAvailable: scratchpadAvailable,
                       ...(activeProject ? { onRunShellCommand: runShellCommand } : {}),
                     }
                   : {})}
@@ -11922,6 +11965,7 @@ export default function ChatView(props: ChatViewProps) {
           onAddPullRequests={addPullRequestsSurface}
           onAddSideQuestion={sideChat.addSurface}
           onAddDevice={addDeviceSurface}
+          onAddScratchpad={addScratchpadSurface}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
           diffAvailable={isServerThread && isGitRepo}
@@ -11930,6 +11974,7 @@ export default function ChatView(props: ChatViewProps) {
           pullRequestsAvailable={pullRequestsSurfaceAvailable}
           sideQuestionAvailable={sideChat.available}
           deviceAvailable={activeThreadRef !== null}
+          scratchpadAvailable={scratchpadAvailable}
         >
           {rightPanelContent}
         </RightPanelTabs>
@@ -11982,6 +12027,7 @@ export default function ChatView(props: ChatViewProps) {
             onAddPullRequests={addPullRequestsSurface}
             onAddSideQuestion={sideChat.addSurface}
             onAddDevice={addDeviceSurface}
+            onAddScratchpad={addScratchpadSurface}
             browserAvailable={canOperatePreview && browserAvailable}
             terminalAvailable={activeProject !== null && canOperateTerminal}
             diffAvailable={isServerThread && isGitRepo}
@@ -11990,6 +12036,7 @@ export default function ChatView(props: ChatViewProps) {
             pullRequestsAvailable={pullRequestsSurfaceAvailable}
             sideQuestionAvailable={sideChat.available}
             deviceAvailable={activeThreadRef !== null}
+            scratchpadAvailable={scratchpadAvailable}
           >
             {rightPanelContent}
           </RightPanelTabs>

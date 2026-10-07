@@ -85,6 +85,7 @@ async function renderPanel(overrides: Partial<ComponentProps<typeof RightPanelTa
         onAddPullRequests={noop}
         onAddSideQuestion={noop}
         onAddDevice={noop}
+        onAddScratchpad={noop}
         browserAvailable={false}
         terminalAvailable={false}
         diffAvailable={false}
@@ -93,6 +94,7 @@ async function renderPanel(overrides: Partial<ComponentProps<typeof RightPanelTa
         pullRequestsAvailable={false}
         sideQuestionAvailable={false}
         deviceAvailable={false}
+        scratchpadAvailable={false}
         {...overrides}
       >
         content

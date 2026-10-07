@@ -224,6 +224,11 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       "server"`) and streams them over `/api/preview-stream`. Clients
       without a local browser runtime open server tabs here. */
   serverBrowser: Schema.optionalKey(Schema.Boolean),
+  /** Server persists a freeform per-thread scratchpad and understands
+      threadScratchpad.get / threadScratchpad.set. Absent on
+      servers without this fork's changes, so clients hide the Scratchpad
+      panel instead of offering a tab that would fail against them. */
+  scratchpad: Schema.optionalKey(Schema.Boolean),
 });
 export type ExecutionEnvironmentCapabilities = typeof ExecutionEnvironmentCapabilities.Type;
 

@@ -2252,6 +2252,7 @@ function PullRequestsRouteView() {
             onAddPullRequests={() => undefined}
             onAddSideQuestion={() => undefined}
             onAddDevice={() => undefined}
+            onAddScratchpad={() => undefined}
             browserAvailable={false}
             terminalAvailable={false}
             diffAvailable={false}
@@ -2260,6 +2261,7 @@ function PullRequestsRouteView() {
             pullRequestsAvailable={false}
             sideQuestionAvailable={false}
             deviceAvailable={false}
+            scratchpadAvailable={false}
             pullRequestStatusSeeds={listedPullRequestTabStatuses}
           >
             <PullRequestDetailPanel

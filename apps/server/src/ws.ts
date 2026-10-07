@@ -94,6 +94,7 @@ import {
   type ProviderDriverKind,
   type ProviderInstanceId,
   ThreadId,
+  ThreadScratchpadError,
   type TerminalAttachStreamEvent,
   type TerminalError,
   type TerminalEvent,
@@ -222,6 +223,7 @@ import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
+import * as ThreadScratchpads from "./persistence/ThreadScratchpads.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
 import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/sql/SqlClient";
@@ -1225,6 +1227,7 @@ const layerWsRpc = (
       const pullRequests = yield* PullRequestService.PullRequestService;
       const pullRequestSync = yield* PullRequestSyncReactor.PullRequestSyncReactor;
       const sideQuestions = yield* SideQuestionCoordinator.SideQuestionCoordinator;
+      const threadScratchpads = yield* ThreadScratchpads.ThreadScratchpadRepository;
       const deviceService = yield* DeviceService.DeviceService;
       const deviceHostContext =
         yield* Effect.context<Effect.Services<ReturnType<typeof remoteSshDeviceHosts>>>();
@@ -2526,6 +2529,26 @@ const layerWsRpc = (
           withPullRequestViewer(input, pullRequests.labelCandidates(input)),
         [WS_METHODS.pullRequestsSetLabels]: (input) =>
           withPullRequestViewer(input, pullRequests.setLabels(input)),
+        // Fetched on demand, never part of the thread snapshot, so a long scratchpad costs
+        // nothing until its panel opens.
+        [WS_METHODS.threadScratchpadGet]: (input) =>
+          threadScratchpads
+            .get(input.threadId)
+            .pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ThreadScratchpadError({ message: "Could not read the scratchpad.", cause }),
+              ),
+            ),
+        [WS_METHODS.threadScratchpadSet]: (input) =>
+          threadScratchpads
+            .set(input)
+            .pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ThreadScratchpadError({ message: "Could not save the scratchpad.", cause }),
+              ),
+            ),
         [WS_METHODS.sourceControlLookupRepository]: (input) =>
           sourceControlRepositories.lookupRepository(input),
         [WS_METHODS.sourceControlCloneRepository]: (input) =>

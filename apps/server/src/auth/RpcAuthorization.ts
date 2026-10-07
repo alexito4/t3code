@@ -140,6 +140,8 @@ export const RPC_REQUIRED_SCOPES = {
   // write like every other one.
   [WS_METHODS.pullRequestsReviewerCandidates]: AuthOrchestrationReadScope,
   [WS_METHODS.pullRequestsLabelCandidates]: AuthOrchestrationReadScope,
+  [WS_METHODS.threadScratchpadGet]: AuthOrchestrationReadScope,
+  [WS_METHODS.threadScratchpadSet]: AuthOrchestrationOperateScope,
   [WS_METHODS.sourceControlLookupRepository]: AuthOrchestrationReadScope,
   [WS_METHODS.subscribeProjectClones]: AuthOrchestrationReadScope,
   [WS_METHODS.projectsListEntries]: AuthFilesystemReadScope,

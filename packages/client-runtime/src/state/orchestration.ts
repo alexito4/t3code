@@ -13,6 +13,7 @@ import {
   createEnvironmentRpcSubscriptionAtomFamily,
 } from "./runtime.ts";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
+import { createThreadScratchpadAtoms } from "./threadScratchpad.ts";
 
 export function parseSideQuestion(value: string): string | null {
   const match = /^\/btw(?:\s+([\s\S]*))?$/.exec(value);
@@ -70,6 +71,7 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
       staleTimeMs: 300_000,
       idleTtlMs: 300_000,
     }),
+    ...createThreadScratchpadAtoms(runtime),
     // Keyed by the item revision, so a live row refetches as its output grows.
     turnItem: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:orchestration:turn-item",
