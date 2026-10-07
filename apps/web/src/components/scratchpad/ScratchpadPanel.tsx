@@ -1,7 +1,12 @@
 import { useAtomValue } from "@effect/atom-react";
 import type { ScopedThreadRef } from "@t3tools/contracts";
-import { type SelectedLineRange } from "@pierre/diffs";
-import { Editor } from "@pierre/diffs/editor";
+import { type FileContents, type SelectedLineRange } from "@pierre/diffs";
+import {
+  Editor,
+  type EditorChangeEvent,
+  type EditorFactory,
+  type EditorOptions,
+} from "@pierre/diffs/edit";
 import { EditProvider, File, Virtualizer } from "@pierre/diffs/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -26,22 +31,11 @@ import { installFileEditorDismissal } from "../files/fileEditorDismissal";
 import { fileContentRevision } from "../files/fileContentRevision";
 import { useScratchpadSaveCoordinator } from "./useScratchpadSaveCoordinator";
 
-// Reusing the same cache-key identity trick as `projectFileEditorCacheKey`:
-// a fresh key on every keystroke makes @pierre/diffs treat the field as a
-// brand-new file and remount its contentEditable, dropping focus after each
-// character. Keeping the prior key when the editor already holds this exact
-// content (i.e. the change came from the editor itself, not an external
-// load) keeps the DOM node -- and focus -- stable while typing.
-function scratchpadEditorCacheKey(
-  threadId: string,
-  contents: string,
-  editorFile: { cacheKey?: string; contents: string } | undefined,
-): string {
-  if (editorFile?.contents === contents && editorFile.cacheKey) {
-    return editorFile.cacheKey;
-  }
-  return `scratchpad:${threadId}:${fileContentRevision(contents)}`;
-}
+const createScratchpadEditor: EditorFactory<FileCommentAnnotationGroup, undefined> = (
+  editorType,
+  options,
+  editStateKey,
+) => new Editor(editorType, options, editStateKey);
 
 interface ScratchpadPanelProps {
   threadRef: ScopedThreadRef;
@@ -92,51 +86,60 @@ function ScratchpadEditor({
     threadId: threadRef.threadId,
   });
 
-  const [contents, setContents] = useState(initialContent);
+  // The editor owns the draft, so the file it was handed stays fixed for the
+  // panel's lifetime; edits flow out through onEditChange instead.
+  const [file] = useState<FileContents>(() => ({
+    name: "Scratchpad",
+    contents: initialContent,
+    cacheKey: `scratchpad:${threadRef.threadId}:${fileContentRevision(initialContent)}`,
+  }));
+  const contentsRef = useRef(initialContent);
   const [lineAnnotations, setLineAnnotations] = useState<FileCommentLineAnnotation[]>([]);
   const [selectedRange, setSelectedRange] = useState<SelectedLineRange | null>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
-
-  const editor = useMemo(
-    () =>
-      new Editor<FileCommentAnnotationGroup>({
-        persistState: true,
-        persistStateStorage: "inMemory",
-        onChange: (file, nextLineAnnotations) => {
-          setContents(file.contents);
-          saveCoordinator.change(file.contents);
-          if (nextLineAnnotations) {
-            const remapped = remapFileCommentAnnotations(
-              nextLineAnnotations as FileCommentLineAnnotation[],
-            );
-            setLineAnnotations(remapped);
-            for (const annotation of remapped) {
-              for (const entry of annotation.metadata.entries) {
-                if (entry.kind !== "comment") continue;
-                addReviewComment(
-                  composerDraftTarget,
-                  buildScratchpadReviewComment({
-                    id: entry.id,
-                    threadId: threadRef.threadId,
-                    startLine: entry.startLine,
-                    endLine: entry.endLine,
-                    text: entry.text,
-                    contents: file.contents,
-                  }),
-                );
-              }
-            }
-          }
-        },
-      }),
-    [addReviewComment, composerDraftTarget, saveCoordinator, threadRef.threadId],
+  const editorRef = useRef<Editor<"file", FileCommentAnnotationGroup, undefined> | null>(null);
+  const editorOptions = useMemo<EditorOptions<"file", FileCommentAnnotationGroup, undefined>>(
+    () => ({
+      onAttach: (editor) => {
+        editorRef.current = editor;
+      },
+      onComplete: () => {
+        editorRef.current = null;
+      },
+    }),
+    [],
   );
 
-  useEffect(
-    () => () => {
-      editor.cleanUp();
+  const handleEditChange = useCallback(
+    ({
+      file: editedFile,
+      lineAnnotations: nextLineAnnotations,
+    }: EditorChangeEvent<"file", FileCommentAnnotationGroup, undefined>) => {
+      if (editedFile.contents === contentsRef.current) return;
+      contentsRef.current = editedFile.contents;
+      saveCoordinator.change(editedFile.contents);
+      if (!nextLineAnnotations) return;
+      const remapped = remapFileCommentAnnotations(nextLineAnnotations);
+      // The editor hands back the array it was given until an edit moves an annotation.
+      setLineAnnotations((current) => (current === nextLineAnnotations ? current : remapped));
+      for (const annotation of remapped) {
+        for (const entry of annotation.metadata.entries) {
+          if (entry.kind !== "comment") continue;
+          addReviewComment(
+            composerDraftTarget,
+            buildScratchpadReviewComment({
+              id: entry.id,
+              threadId: threadRef.threadId,
+              startLine: entry.startLine,
+              endLine: entry.endLine,
+              text: entry.text,
+              contents: editedFile.contents,
+            }),
+          );
+        }
+      }
     },
-    [editor],
+    [addReviewComment, composerDraftTarget, saveCoordinator, threadRef.threadId],
   );
 
   const removeAnnotationEntry = useCallback(
@@ -168,7 +171,7 @@ function ScratchpadEditor({
             startLine: entry.startLine,
             endLine: entry.endLine,
             text,
-            contents,
+            contents: contentsRef.current,
           }),
         );
       }
@@ -185,41 +188,38 @@ function ScratchpadEditor({
         })),
       );
     },
-    [addReviewComment, composerDraftTarget, contents, lineAnnotations, threadRef.threadId],
+    [addReviewComment, composerDraftTarget, lineAnnotations, threadRef.threadId],
   );
 
-  const beginComment = useCallback(
-    (range: SelectedLineRange) => {
-      editor.setSelections([]);
-      editor.blur();
-      const { startLine, endLine } = normalizeFileCommentRange(range);
-      const draftEntry: FileCommentAnnotationEntry = {
-        id: nextFileCommentId(),
-        kind: "draft",
-        startLine,
-        endLine,
-        text: "",
-      };
-      setLineAnnotations((current) => {
-        const withoutDraft = current.flatMap((annotation) => {
-          const entries = annotation.metadata.entries.filter((entry) => entry.kind !== "draft");
-          return entries.length > 0 ? [{ ...annotation, metadata: { entries } }] : [];
-        });
-        const existingIndex = withoutDraft.findIndex(
-          (annotation) => annotation.lineNumber === endLine,
-        );
-        if (existingIndex < 0) {
-          return [...withoutDraft, { lineNumber: endLine, metadata: { entries: [draftEntry] } }];
-        }
-        return withoutDraft.map((annotation, index) =>
-          index === existingIndex
-            ? { ...annotation, metadata: { entries: [...annotation.metadata.entries, draftEntry] } }
-            : annotation,
-        );
+  const beginComment = useCallback((range: SelectedLineRange) => {
+    editorRef.current?.setSelections([]);
+    editorRef.current?.blur();
+    const { startLine, endLine } = normalizeFileCommentRange(range);
+    const draftEntry: FileCommentAnnotationEntry = {
+      id: nextFileCommentId(),
+      kind: "draft",
+      startLine,
+      endLine,
+      text: "",
+    };
+    setLineAnnotations((current) => {
+      const withoutDraft = current.flatMap((annotation) => {
+        const entries = annotation.metadata.entries.filter((entry) => entry.kind !== "draft");
+        return entries.length > 0 ? [{ ...annotation, metadata: { entries } }] : [];
       });
-    },
-    [editor],
-  );
+      const existingIndex = withoutDraft.findIndex(
+        (annotation) => annotation.lineNumber === endLine,
+      );
+      if (existingIndex < 0) {
+        return [...withoutDraft, { lineNumber: endLine, metadata: { entries: [draftEntry] } }];
+      }
+      return withoutDraft.map((annotation, index) =>
+        index === existingIndex
+          ? { ...annotation, metadata: { entries: [...annotation.metadata.entries, draftEntry] } }
+          : annotation,
+      );
+    });
+  }, []);
 
   const hasOpenCommentForm = lineAnnotations.some((annotation) =>
     annotation.metadata.entries.some((entry) => entry.kind === "draft"),
@@ -230,11 +230,11 @@ function ScratchpadEditor({
     if (!root) return;
     return installFileEditorDismissal({
       root,
-      editor,
+      editor: { setSelections: (selections) => editorRef.current?.setSelections(selections) },
       isBlocked: () => hasOpenCommentForm,
       onDismiss: () => setSelectedRange(null),
     });
-  }, [editor, hasOpenCommentForm]);
+  }, [hasOpenCommentForm]);
 
   const handleLineSelectionEnd = useCallback(
     (range: SelectedLineRange | null) => {
@@ -245,18 +245,17 @@ function ScratchpadEditor({
   );
 
   return (
-    <EditProvider editor={editor}>
+    <EditProvider createEditor={createScratchpadEditor}>
       <div ref={surfaceRef} className="flex min-h-0 flex-1">
         <Virtualizer
           className="file-preview-virtualizer min-h-0 flex-1 overflow-auto"
           config={{ overscrollSize: 600, intersectionObserverMargin: 1200 }}
         >
           <File<FileCommentAnnotationGroup>
-            file={{
-              name: "Scratchpad",
-              contents,
-              cacheKey: scratchpadEditorCacheKey(threadRef.threadId, contents, editor.getFile()),
-            }}
+            file={file}
+            edit
+            editorOptions={editorOptions}
+            onEditChange={handleEditChange}
             options={{
               disableFileHeader: true,
               enableGutterUtility: !hasOpenCommentForm,
@@ -287,7 +286,6 @@ function ScratchpadEditor({
               </div>
             )}
             className="min-h-full"
-            contentEditable
           />
         </Virtualizer>
       </div>
