@@ -42,6 +42,7 @@ import {
   selectProjectGroupingSettings,
 } from "../logicalProject";
 import { exportThreadCommand } from "../state/orchestration";
+import { useAtomCommand } from "../state/use-atom-command";
 import { downloadPlanAsTextFile } from "../proposedPlan";
 import { buildPhysicalToLogicalProjectKeyMap } from "../sidebarProjectGrouping";
 import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
