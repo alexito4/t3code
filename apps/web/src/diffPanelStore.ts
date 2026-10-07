@@ -5,9 +5,15 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "./lib/storage";
 
+// "unstaged" is upstream's key for the Uncommitted view (HEAD vs working tree). The fork's
+// Staged and Unstaged halves of it use "staged" and "unstaged-only".
+export type DiffPanelGitScope = "branch" | "unstaged" | "unstaged-only" | "staged";
+
 export type DiffPanelSelection =
   | { kind: "branch"; baseRef: string | null }
   | { kind: "unstaged" }
+  | { kind: "unstaged-only" }
+  | { kind: "staged" }
   | { kind: "turn"; turnId: RunId; filePath: string | null; revealRequestId: number };
 
 // "branch" is the Changes view: everything this checkout changed since its base.
@@ -16,7 +22,7 @@ const DEFAULT_SELECTION: DiffPanelSelection = { kind: "branch", baseRef: null };
 interface DiffPanelStoreState {
   byThreadKey: Record<string, DiffPanelSelection>;
   branchBaseRefByThreadKey: Record<string, string | null>;
-  selectGitScope: (ref: ScopedThreadRef, scope: "branch" | "unstaged") => void;
+  selectGitScope: (ref: ScopedThreadRef, scope: DiffPanelGitScope) => void;
   selectBranchBaseRef: (ref: ScopedThreadRef, baseRef: string | null) => void;
   selectTurn: (ref: ScopedThreadRef, turnId: RunId, filePath?: string) => void;
   reconcileTurnSelection: (ref: ScopedThreadRef, availableTurnIds: ReadonlyArray<RunId>) => void;
@@ -45,9 +51,7 @@ export const useDiffPanelStore = create<DiffPanelStoreState>()(
             byThreadKey: {
               ...state.byThreadKey,
               [threadKey]:
-                scope === "branch"
-                  ? { kind: "branch", baseRef: previousBaseRef }
-                  : { kind: "unstaged" },
+                scope === "branch" ? { kind: "branch", baseRef: previousBaseRef } : { kind: scope },
             },
             branchBaseRefByThreadKey:
               previous?.kind === "branch"

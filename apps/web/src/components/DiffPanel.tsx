@@ -7,7 +7,7 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
-import type { ScopedThreadRef, RunId } from "@t3tools/contracts";
+import type { ReviewDiffPreviewSourceKind, ScopedThreadRef, RunId } from "@t3tools/contracts";
 import {
   ArrowRightIcon,
   CheckIcon,
@@ -30,7 +30,11 @@ import { type DraftId } from "../composerDraftStore";
 import { openDiffFilePrimaryAction } from "../diffFileActions";
 import { useCheckpointDiff } from "~/lib/checkpointDiffState";
 import { cn } from "~/lib/utils";
-import { selectThreadDiffPanelSelection, useDiffPanelStore } from "../diffPanelStore";
+import {
+  type DiffPanelGitScope,
+  selectThreadDiffPanelSelection,
+  useDiffPanelStore,
+} from "../diffPanelStore";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useTheme } from "../hooks/useTheme";
 import {
@@ -118,6 +122,24 @@ interface CollapsedDiffFilesState {
 }
 
 const EMPTY_COLLAPSED_DIFF_FILE_KEYS: ReadonlySet<string> = new Set();
+
+const GIT_SCOPES: Record<
+  DiffPanelGitScope,
+  { label: string; loadingLabel: string; sourceKind: ReviewDiffPreviewSourceKind }
+> = {
+  branch: { label: "Changes", loadingLabel: "Loading changes...", sourceKind: "branch-range" },
+  unstaged: {
+    label: "Uncommitted",
+    loadingLabel: "Loading uncommitted changes...",
+    sourceKind: "working-tree",
+  },
+  "unstaged-only": {
+    label: "Unstaged",
+    loadingLabel: "Loading unstaged changes...",
+    sourceKind: "unstaged",
+  },
+  staged: { label: "Staged", loadingLabel: "Loading staged changes...", sourceKind: "staged" },
+};
 
 /** Collapse control for one file header; re-renders only when its own file changes. */
 function DiffFileCollapseToggle({
@@ -286,7 +308,12 @@ export default function DiffPanel({
   }, [diffSelection, orderedTurnDiffSummaries, routeThreadRef]);
 
   const selectedRunId = diffSelection.kind === "turn" ? diffSelection.turnId : null;
-  const selectedGitScope = diffSelection.kind === "unstaged" ? "unstaged" : "branch";
+  const selectedGitScope = diffSelection.kind === "turn" ? "branch" : diffSelection.kind;
+  // The Staged and Unstaged sources are opt-in, so only those views pay for them.
+  const includeStagedAndUnstaged =
+    selectedGitScope === "staged" || selectedGitScope === "unstaged-only";
+  const stagedAndUnstagedSupported =
+    serverConfig?.environment.capabilities.reviewStagedAndUnstaged === true;
   const selectedBaseRef = diffSelection.kind === "branch" ? diffSelection.baseRef : null;
   const selectedFilePath = diffSelection.kind === "turn" ? diffSelection.filePath : null;
   const selectedFileRevealRequestId =
@@ -302,9 +329,7 @@ export default function DiffPanel({
   const latestTurn = orderedTurnDiffSummaries[0];
   const selectedScopeLabel =
     selectedRunId === null
-      ? selectedGitScope === "unstaged"
-        ? "Uncommitted"
-        : "Changes"
+      ? GIT_SCOPES[selectedGitScope].label
       : selectedTurn?.runId === latestTurn?.runId
         ? "Latest turn"
         : `Turn ${selectedCheckpointTurnCount ?? "?"}`;
@@ -315,9 +340,7 @@ export default function DiffPanel({
   const codeViewMountKey = `${collapseScopeKey ?? reviewSectionId}:${codeViewRevision}`;
   const reviewSectionTitle = selectedTurn
     ? `Turn ${selectedCheckpointTurnCount ?? "?"}`
-    : selectedGitScope === "unstaged"
-      ? "Uncommitted"
-      : "Changes";
+    : GIT_SCOPES[selectedGitScope].label;
   const selectedCheckpointRange = useMemo(
     () =>
       typeof selectedCheckpointTurnCount === "number"
@@ -346,6 +369,7 @@ export default function DiffPanel({
           input: {
             cwd: activeCwd,
             ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
+            ...(includeStagedAndUnstaged ? { includeStagedAndUnstaged: true } : {}),
             ignoreWhitespace: diffIgnoreWhitespace,
           },
         })
@@ -363,6 +387,7 @@ export default function DiffPanel({
           input: {
             cwd: serverConfig.cwd,
             ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
+            ...(includeStagedAndUnstaged ? { includeStagedAndUnstaged: true } : {}),
             ignoreWhitespace: diffIgnoreWhitespace,
           },
         })
@@ -378,7 +403,7 @@ export default function DiffPanel({
     : null;
 
   const selectedGitSource = branchDiffPreview.data?.sources.find(
-    (source) => source.kind === (selectedGitScope === "unstaged" ? "working-tree" : "branch-range"),
+    (source) => source.kind === GIT_SCOPES[selectedGitScope].sourceKind,
   );
   const refreshPreviewQuery = branchDiffPreview.refresh;
   const refreshDiffFromUserAction = refreshPreviewQuery;
@@ -713,7 +738,7 @@ export default function DiffPanel({
     if (!routeThreadRef) return;
     useDiffPanelStore.getState().selectTurn(routeThreadRef, runId);
   };
-  const selectGitScope = (scope: "branch" | "unstaged") => {
+  const selectGitScope = (scope: DiffPanelGitScope) => {
     if (!routeThreadRef) return;
     useDiffPanelStore.getState().selectGitScope(routeThreadRef, scope);
   };
@@ -732,7 +757,12 @@ export default function DiffPanel({
         ? "latest"
         : selectedTurnValue;
   const selectScopeValue = (value: string) => {
-    if (value === "unstaged" || value === "branch") {
+    if (
+      value === "branch" ||
+      value === "unstaged" ||
+      value === "unstaged-only" ||
+      value === "staged"
+    ) {
       selectGitScope(value);
     } else if (value === "latest") {
       if (latestTurn) selectTurn(latestTurn.runId);
@@ -762,6 +792,16 @@ export default function DiffPanel({
               <DropdownMenuRadioItem value="unstaged" closeOnClick>
                 <span>Uncommitted</span>
               </DropdownMenuRadioItem>
+              {stagedAndUnstagedSupported && (
+                <>
+                  <DropdownMenuRadioItem value="unstaged-only" closeOnClick>
+                    <span>Unstaged</span>
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="staged" closeOnClick>
+                    <span>Staged</span>
+                  </DropdownMenuRadioItem>
+                </>
+              )}
               <DropdownMenuRadioItem value="latest" closeOnClick>
                 <span>Latest turn</span>
               </DropdownMenuRadioItem>
@@ -1090,9 +1130,7 @@ export default function DiffPanel({
                   label={
                     selectedTurn
                       ? "Loading checkpoint diff..."
-                      : selectedGitScope === "unstaged"
-                        ? "Loading uncommitted changes..."
-                        : "Loading changes..."
+                      : GIT_SCOPES[selectedGitScope].loadingLabel
                   }
                 />
               ) : (

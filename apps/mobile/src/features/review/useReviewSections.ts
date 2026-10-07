@@ -9,6 +9,7 @@ import {
 } from "@t3tools/client-runtime/state/thread-checkpoints";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 
+import { useEnvironmentServerConfig } from "../../state/entities";
 import { useCheckpointDiff } from "../../state/queries";
 import { useEnvironmentQuery } from "../../state/query";
 import { useEnvironmentPresentation } from "../../state/presentation";
@@ -51,11 +52,17 @@ export function useReviewSections(input: {
   const { canReadFiles } = fileAccess;
   const selectedThread = useSelectedThreadProjection();
   const { selectedThreadCwd } = useSelectedThreadWorktree();
+  const includeStagedAndUnstaged =
+    useEnvironmentServerConfig(environmentId ?? null)?.environment.capabilities
+      .reviewStagedAndUnstaged === true;
   const diffPreview = useEnvironmentQuery(
     canReadFiles && enabled && environmentId !== undefined && selectedThreadCwd !== null
       ? reviewEnvironment.diffPreview({
           environmentId,
-          input: { cwd: selectedThreadCwd },
+          input: {
+            cwd: selectedThreadCwd,
+            ...(includeStagedAndUnstaged ? { includeStagedAndUnstaged: true } : {}),
+          },
         })
       : null,
   );

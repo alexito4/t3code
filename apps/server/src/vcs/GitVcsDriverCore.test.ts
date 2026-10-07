@@ -2037,6 +2037,114 @@ it.layer(layerTest)("GitVcsDriver core integration", (it) => {
       }),
     );
 
+    it.effect("splits Uncommitted into Staged and Unstaged only when asked", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        yield* writeTextFile(cwd, "staged.txt", "staged\n");
+        yield* git(cwd, ["add", "staged.txt"]);
+        yield* writeTextFile(cwd, "README.md", "# unstaged\n");
+        yield* writeTextFile(cwd, "untracked.txt", "untracked\n");
+
+        const plain = yield* driver.getReviewDiffPreview({ cwd });
+        assert.deepStrictEqual(
+          plain.sources.map((source) => source.kind),
+          ["working-tree", "branch-range"],
+        );
+
+        const preview = yield* driver.getReviewDiffPreview({
+          cwd,
+          includeStagedAndUnstaged: true,
+        });
+        const staged = preview.sources.find((source) => source.kind === "staged")!;
+        const unstaged = preview.sources.find((source) => source.kind === "unstaged")!;
+        assert.deepStrictEqual(staged.files, [
+          { path: "staged.txt", previousPath: null, additions: 1, deletions: 0 },
+        ]);
+        assert.deepStrictEqual(unstaged.files, [
+          { path: "README.md", previousPath: null, additions: 1, deletions: 1 },
+          { path: "untracked.txt", previousPath: null, additions: 1, deletions: 0 },
+        ]);
+        assert.notInclude(staged.diff, "README.md");
+        assert.notInclude(unstaged.diff, "staged.txt");
+
+        // Per-file requests read only their own source, like the lazy loader does.
+        for (const source of [staged, unstaged]) {
+          for (const file of source.files ?? []) {
+            const individual = yield* driver.getReviewDiffPreview({
+              cwd,
+              file: { path: file.path, previousPath: file.previousPath, sourceKind: source.kind },
+            });
+            const patch = individual.sources.find((candidate) => candidate.kind === source.kind)!;
+            assert.deepStrictEqual(patch.files, [file]);
+            assert.include(patch.diff, `b/${file.path}`);
+            for (const other of individual.sources) {
+              if (other.kind !== source.kind) assert.isEmpty(other.diff);
+            }
+          }
+        }
+      }),
+    );
+
+    it.effect("splits Staged and Unstaged before the first commit", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* git(cwd, ["init"]);
+        yield* writeTextFile(cwd, "staged.txt", "staged\n");
+        yield* git(cwd, ["add", "staged.txt"]);
+        yield* writeTextFile(cwd, "untracked.txt", "untracked\n");
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+
+        const preview = yield* driver.getReviewDiffPreview({
+          cwd,
+          includeStagedAndUnstaged: true,
+        });
+
+        const paths = (kind: string) =>
+          preview.sources.find((source) => source.kind === kind)?.files?.map((file) => file.path);
+        assert.deepStrictEqual(paths("staged"), ["staged.txt"]);
+        assert.deepStrictEqual(paths("unstaged"), ["untracked.txt"]);
+      }),
+    );
+
+    it.effect("expands Staged and Unstaged files around the index", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTmpDir();
+        yield* initRepoWithCommit(cwd);
+        const driver = yield* GitVcsDriver.GitVcsDriver;
+        yield* writeTextFile(cwd, "README.md", "# staged\n");
+        yield* git(cwd, ["add", "README.md"]);
+        yield* writeTextFile(cwd, "README.md", "# unstaged\n");
+        yield* writeTextFile(cwd, "untracked.txt", "untracked\n");
+
+        assert.deepStrictEqual(
+          yield* driver.getReviewDiffFileContents(
+            makeReviewDiffFileContentsInput(cwd, { sourceKind: "staged" }),
+          ),
+          { oldContents: "# test\n", newContents: "# staged\n" },
+        );
+        assert.deepStrictEqual(
+          yield* driver.getReviewDiffFileContents(
+            makeReviewDiffFileContentsInput(cwd, { sourceKind: "unstaged", baseRef: null }),
+          ),
+          { oldContents: "# staged\n", newContents: "# unstaged\n" },
+        );
+        assert.deepStrictEqual(
+          yield* driver.getReviewDiffFileContents(
+            makeReviewDiffFileContentsInput(cwd, {
+              sourceKind: "unstaged",
+              baseRef: null,
+              changeType: "new",
+              oldPath: "untracked.txt",
+              newPath: "untracked.txt",
+            }),
+          ),
+          { oldContents: "", newContents: "untracked\n" },
+        );
+      }),
+    );
+
     it.effect("Changes combines commits, uncommitted edits, and untracked files", () =>
       Effect.gen(function* () {
         const cwd = yield* makeTmpDir();

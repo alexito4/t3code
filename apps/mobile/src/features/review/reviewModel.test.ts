@@ -108,6 +108,31 @@ describe("buildReviewSectionItems", () => {
     expect(getDefaultReviewSectionId(items)).toBe("git:branch-range");
   });
 
+  it("describes the Staged and Unstaged halves instead of their refs", () => {
+    const split = (kind: "staged" | "unstaged", title: string): ReviewDiffPreviewSource => ({
+      id: kind,
+      kind,
+      title,
+      baseRef: kind === "staged" ? "HEAD" : null,
+      headRef: null,
+      diff: `diff --git a/${kind}.ts b/${kind}.ts`,
+      diffHash: `hash-${kind}`,
+      truncated: false,
+    });
+    const items = buildReviewSectionItems({
+      checkpoints: [],
+      gitSections: [split("staged", "Staged"), split("unstaged", "Unstaged")],
+      turnDiffById: {},
+      loadingTurnIds: {},
+      loadingGitSections: false,
+    });
+
+    expect(items.map(({ id, title, subtitle }) => ({ id, title, subtitle }))).toEqual([
+      { id: "git:staged", title: "Staged", subtitle: "Staged files" },
+      { id: "git:unstaged", title: "Unstaged", subtitle: "Unstaged and untracked files" },
+    ]);
+  });
+
   it("falls back to the first turn without git sections", () => {
     const items = buildReviewSectionItems({
       checkpoints: [

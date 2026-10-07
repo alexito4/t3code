@@ -128,6 +128,13 @@ function ReviewHeader(
                     items: [
                       sectionAction(props.sectionMenu.branchChanges, "Changes"),
                       sectionAction(props.sectionMenu.workingTree, "Uncommitted"),
+                      // Only servers with this fork's Staged and Unstaged views return them.
+                      ...(props.sectionMenu.unstaged
+                        ? [sectionAction(props.sectionMenu.unstaged, "Unstaged")]
+                        : []),
+                      ...(props.sectionMenu.staged
+                        ? [sectionAction(props.sectionMenu.staged, "Staged")]
+                        : []),
                       sectionAction(props.sectionMenu.latestTurn, "Latest turn"),
                     ],
                   },
