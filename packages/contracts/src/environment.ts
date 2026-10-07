@@ -118,6 +118,9 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   /** Fork: review previews return the Staged and Unstaged sources on request
       (`includeStagedAndUnstaged`). Absent on official servers, so clients hide those views. */
   reviewStagedAndUnstaged: Schema.optionalKey(Schema.Boolean),
+  /** Fork: the `git.stageFile`, `git.unstageFile`, and `git.discardFile` RPCs. Absent on
+      official servers, so clients hide the diff panel's per-file actions. */
+  reviewFileActions: Schema.optionalKey(Schema.Boolean),
   /** Server understands canonical inline context links plus their message context records.
       Absent on servers from before inline context shipped, which drop the records and forward
       the links as literal text -- so a client must serialize context the legacy way for them. */

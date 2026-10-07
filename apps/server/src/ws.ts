@@ -2824,6 +2824,12 @@ const layerWsRpc = (
                 }),
               ),
           ),
+        [WS_METHODS.gitStageFile]: (input) =>
+          gitWorkflow.stageFile(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
+        [WS_METHODS.gitUnstageFile]: (input) =>
+          gitWorkflow.unstageFile(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
+        [WS_METHODS.gitDiscardFile]: (input) =>
+          gitWorkflow.discardFile(input).pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
         [WS_METHODS.gitResolvePullRequest]: (input) => gitWorkflow.resolvePullRequest(input),
         [WS_METHODS.gitPreparePullRequestThread]: (input) =>
           gitWorkflow

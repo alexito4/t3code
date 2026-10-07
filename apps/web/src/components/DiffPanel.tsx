@@ -14,7 +14,10 @@ import {
   ChevronDownIcon,
   Columns2Icon,
   FolderTreeIcon,
+  MinusIcon,
   PilcrowIcon,
+  PlusIcon,
+  RotateCcwIcon,
   Rows3Icon,
   TextWrapIcon,
 } from "lucide-react";
@@ -27,7 +30,7 @@ import { useFilesystemReadAccess } from "~/state/filesystem";
 import { useOpenInPreferredEditor } from "../editorPreferences";
 import { useFileContextMenuHandler } from "../fileContextMenu";
 import { type DraftId } from "../composerDraftStore";
-import { openDiffFilePrimaryAction } from "../diffFileActions";
+import { openDiffFilePrimaryAction, resolveDiffFileStagingActions } from "../diffFileActions";
 import { useCheckpointDiff } from "~/lib/checkpointDiffState";
 import { cn } from "~/lib/utils";
 import {
@@ -85,11 +88,13 @@ import {
   DropdownMenuTrigger,
 } from "./ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
+import { toastManager } from "./ui/toast";
 import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
 import { serverEnvironment } from "../state/server";
 import { reviewEnvironment } from "../state/review";
 import { vcsEnvironment } from "../state/vcs";
+import { gitEnvironment } from "../state/git";
 import { buildBaseRefChoices, filterBaseRefChoices } from "../lib/baseRefChoices";
 import { createGitDiffFileContentsLoader } from "../lib/diffFileContents";
 
@@ -183,6 +188,94 @@ function DiffFileCollapseToggle({
       </TooltipTrigger>
       <TooltipPopup side="top">{collapsed ? "Expand diff" : "Collapse diff"}</TooltipPopup>
     </Tooltip>
+  );
+}
+
+type DiffFileStagingAction = "stage" | "unstage" | "discard";
+
+const FILE_ACTION_FAILURE_TITLES: Record<DiffFileStagingAction, string> = {
+  stage: "Stage failed",
+  unstage: "Unstage failed",
+  discard: "Discard failed",
+};
+
+/** Fork: stage, unstage, and discard controls for one file header. */
+function DiffFileStagingButtons({
+  filePath,
+  canStage,
+  canUnstage,
+  canDiscard,
+  onAction,
+}: {
+  filePath: string;
+  canStage: boolean;
+  canUnstage: boolean;
+  canDiscard: boolean;
+  onAction: (action: DiffFileStagingAction, filePath: string) => void;
+}) {
+  return (
+    <>
+      {canStage && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="icon-micro"
+                variant="ghost"
+                aria-label={`Stage ${filePath}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onAction("stage", filePath);
+                }}
+              />
+            }
+          >
+            <PlusIcon className="size-4" />
+          </TooltipTrigger>
+          <TooltipPopup side="top">Stage file</TooltipPopup>
+        </Tooltip>
+      )}
+      {canUnstage && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="icon-micro"
+                variant="ghost"
+                aria-label={`Unstage ${filePath}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onAction("unstage", filePath);
+                }}
+              />
+            }
+          >
+            <MinusIcon className="size-4" />
+          </TooltipTrigger>
+          <TooltipPopup side="top">Unstage file</TooltipPopup>
+        </Tooltip>
+      )}
+      {canDiscard && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                size="icon-micro"
+                variant="ghost"
+                aria-label={`Discard changes to ${filePath}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onAction("discard", filePath);
+                }}
+              />
+            }
+          >
+            <RotateCcwIcon className="size-4" />
+          </TooltipTrigger>
+          <TooltipPopup side="top">Discard changes</TooltipPopup>
+        </Tooltip>
+      )}
+    </>
   );
 }
 
@@ -783,6 +876,46 @@ export default function DiffPanel({
     });
   }, [collapseScopeKey, defaultCollapsedDiffFileKeys, diffFileKeys]);
 
+  // Fork: per-file stage, unstage, and discard in the working-tree views, against servers that
+  // have them and for connections allowed to write source control.
+  const canWriteSourceControl = useAtomValue(
+    gitEnvironment.stageFile.permissionAtom(activeThread?.environmentId ?? null),
+  );
+  const fileActionsVisible =
+    serverConfig?.environment.capabilities.reviewFileActions === true && canWriteSourceControl;
+  const fileStagingActions = resolveDiffFileStagingActions(
+    selectedGitScope,
+    selectedRunId !== null,
+  );
+  const stageFileCommand = useAtomCommand(gitEnvironment.stageFile);
+  const unstageFileCommand = useAtomCommand(gitEnvironment.unstageFile);
+  const discardFileCommand = useAtomCommand(gitEnvironment.discardFile);
+  const fileActionCommands = {
+    stage: stageFileCommand,
+    unstage: unstageFileCommand,
+    discard: discardFileCommand,
+  };
+  const runFileAction = (action: DiffFileStagingAction, filePath: string) => {
+    const cwd = branchDiffPreview.data?.cwd;
+    if (!activeThread || !cwd) return;
+    void fileActionCommands[action]({
+      environmentId: activeThread.environmentId,
+      input: { cwd, path: filePath },
+    }).then((result) => {
+      if (result._tag === "Success") {
+        refreshPreviewQuery();
+        return;
+      }
+      if (isAtomCommandInterrupted(result)) return;
+      const error = squashAtomCommandFailure(result);
+      toastManager.add({
+        type: "error",
+        title: FILE_ACTION_FAILURE_TITLES[action],
+        description: error instanceof Error ? error.message : "An error occurred.",
+      });
+    });
+  };
+
   const selectTurn = (runId: RunId) => {
     if (!routeThreadRef) return;
     useDiffPanelStore.getState().selectTurn(routeThreadRef, runId);
@@ -1349,15 +1482,27 @@ export default function DiffPanel({
                       : {})}
                     renderHeaderPrefix={(fileDiff, fileKey) => {
                       const unavailable = fileDiff.cacheKey?.endsWith(":pending") === true;
+                      const filePath = resolveFileDiffPath(fileDiff);
                       return (
-                        <DiffFileCollapseToggle
-                          filePath={resolveFileDiffPath(fileDiff)}
-                          fileKey={fileKey}
-                          collapsed={unavailable || collapsedDiffFileKeys.has(fileKey)}
-                          unavailable={unavailable}
-                          iconClassName={getDiffCollapseIconClassName(fileDiff)}
-                          onToggle={toggleDiffFileCollapsed}
-                        />
+                        <>
+                          <DiffFileCollapseToggle
+                            filePath={filePath}
+                            fileKey={fileKey}
+                            collapsed={unavailable || collapsedDiffFileKeys.has(fileKey)}
+                            unavailable={unavailable}
+                            iconClassName={getDiffCollapseIconClassName(fileDiff)}
+                            onToggle={toggleDiffFileCollapsed}
+                          />
+                          {fileActionsVisible && (
+                            <DiffFileStagingButtons
+                              filePath={filePath}
+                              canStage={fileStagingActions.canStage}
+                              canUnstage={fileStagingActions.canUnstage}
+                              canDiscard={fileStagingActions.canDiscard}
+                              onAction={runFileAction}
+                            />
+                          )}
+                        </>
                       );
                     }}
                     options={{

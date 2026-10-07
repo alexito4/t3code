@@ -227,6 +227,8 @@ export const make = Effect.gen(function* () {
       reviewCommits: true,
       // This fork's Staged and Unstaged diff views, absent on official builds.
       reviewStagedAndUnstaged: true,
+      // This fork's per-file stage, unstage, and discard actions, absent on official builds.
+      reviewFileActions: true,
       inlineMessageContext: true,
       // This fork's side chat (closed upstream PR #8296), absent on official builds.
       sideQuestions: true,
