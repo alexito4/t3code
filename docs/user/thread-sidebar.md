@@ -182,6 +182,23 @@ and copying a thread reference. A copied reference uses the thread's pull reques
 link when available, otherwise its thread ID. See [keybindings](./keybindings.md)
 for custom configuration.
 
+## Export a thread
+
+On web and desktop, choose **Export thread…** from a thread's menu to save its full
+conversation, tool activity, and code changes as a single Markdown file. The file is
+self-contained and readable by a person or any coding agent — send it to a colleague
+so they can review what happened or pick up the work themselves, even without access
+to your environment.
+
+Tool activity lists each command, file change, and tool call, but not command output.
+Agent reasoning is left out of the readable transcript but kept in the file's embedded
+data block. Code changes appear as one diff of the whole thread. Threads outside a Git
+repository, or migrated from an older version of T3 Code, export without one.
+
+The export is not a live link: it is a snapshot at the moment you export it, and it
+is not redacted. Anything in the thread, including pasted secrets, goes into the file
+as written, so review it before sharing.
+
 ## Inspect agent work
 
 **Limited** means the provider stopped on a usage or rate limit. The conversation

@@ -41,6 +41,8 @@ import {
   derivePhysicalProjectKey,
   selectProjectGroupingSettings,
 } from "../logicalProject";
+import { exportThreadCommand } from "../state/orchestration";
+import { downloadPlanAsTextFile } from "../proposedPlan";
 import { buildPhysicalToLogicalProjectKeyMap } from "../sidebarProjectGrouping";
 import { threadRuntimeCanArchive } from "@t3tools/client-runtime/state/models";
 import { useCopyToClipboard } from "./useCopyToClipboard";
@@ -103,6 +105,7 @@ export function useThreadActionMenu(input: {
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
+  const exportThread = useAtomCommand(exportThreadCommand, { reportFailure: false });
   const handleNewThread = useNewThreadHandler();
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
@@ -288,6 +291,20 @@ export function useThreadActionMenu(input: {
           case "copy-thread-id":
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
+          case "export": {
+            const result = await exportThread({
+              environmentId: threadRef.environmentId,
+              input: { threadId: threadRef.threadId },
+            });
+            if (result._tag === "Failure") {
+              if (!isAtomCommandInterrupted(result)) {
+                failureToast("Failed to export thread", squashAtomCommandFailure(result));
+              }
+              return;
+            }
+            downloadPlanAsTextFile(result.value.suggestedFileName, result.value.markdown);
+            return;
+          }
           case "archive": {
             if (confirmThreadArchive) {
               const confirmed = await settlePromise(() =>
@@ -349,6 +366,7 @@ export function useThreadActionMenu(input: {
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
+      exportThread,
       handleNewThread,
       logicalProjectKeyByPhysicalKey,
       markThreadUnread,
