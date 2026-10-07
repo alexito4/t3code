@@ -32,7 +32,7 @@ import {
 } from "../connection/model.ts";
 import * as EnvironmentRegistry from "../connection/registry.ts";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
-import { remoteHttpClientLayer } from "../rpc/http.ts";
+import { layerRemoteHttpClient } from "../rpc/http.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
 import type { RpcSession } from "../rpc/session.ts";
 import { v2Now, v2Projection, v2ThreadId } from "./orchestrationV2TestFixtures.ts";
@@ -179,7 +179,7 @@ const exportThread = Effect.fn("exportThreadForTest")(function* (
     Atom.runtime(
       Layer.mergeAll(
         Layer.succeed(EnvironmentRegistry.EnvironmentRegistry, environments),
-        remoteHttpClientLayer(fetchFn),
+        layerRemoteHttpClient(fetchFn),
       ),
     ),
   );

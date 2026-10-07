@@ -159,6 +159,7 @@ import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../s
 import { vcsEnvironment } from "../state/vcs";
 import { threadEnvironment } from "../state/threads";
 import { exportThreadCommand } from "../state/orchestration";
+import { useAtomCommand } from "../state/use-atom-command";
 import { downloadPlanAsTextFile } from "../proposedPlan";
 import { useEnvironmentQuery } from "../state/query";
 import { useThreadSearch } from "../state/queries";
