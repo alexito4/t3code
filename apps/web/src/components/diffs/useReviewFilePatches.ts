@@ -72,6 +72,10 @@ export function useReviewFilePatches({
                     request: {
                       cwd,
                       ...(baseRef ? { baseRef } : {}),
+                      // A commit source names its commit as the head.
+                      ...(source.kind === "commit" && source.headRef
+                        ? { commitSha: source.headRef }
+                        : {}),
                       ignoreWhitespace,
                       file: {
                         path: file.path,

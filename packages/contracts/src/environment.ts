@@ -112,6 +112,9 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
       servers from before the pull-request workspace shipped, so clients must not probe them. */
   pullRequests: Schema.optionalKey(Schema.Boolean),
   pullRequestChecks: Schema.optionalKey(Schema.Boolean),
+  /** Fork: review previews list the branch's commits and preview one commit (`commitSha`,
+      `commitsOnly`). Absent on official servers, so clients hide the Commits menu. */
+  reviewCommits: Schema.optionalKey(Schema.Boolean),
   /** Fork: review previews return the Staged and Unstaged sources on request
       (`includeStagedAndUnstaged`). Absent on official servers, so clients hide those views. */
   reviewStagedAndUnstaged: Schema.optionalKey(Schema.Boolean),
