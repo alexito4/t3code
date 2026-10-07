@@ -1302,7 +1302,7 @@ describe("UsageService", () => {
       );
 
       const service = yield* UsageService.make.pipe(
-        Effect.provide(serviceLayers({ prefix: "usage-service-archived-test", home, settings })),
+        Effect.provide(layerService({ prefix: "usage-service-archived-test", home, settings })),
       );
 
       const summary = yield* service.readSummary(WINDOW);
