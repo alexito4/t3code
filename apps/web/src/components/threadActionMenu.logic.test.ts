@@ -85,6 +85,7 @@ describe("buildThreadActionMenuItems", () => {
       "new-thread-on-branch",
       "mark-unread",
       "copy",
+      "export",
       "project-settings",
     ]);
     const allowed = buildThreadActionMenuItems({ ...baseState, canOperate: true });
