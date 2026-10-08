@@ -242,8 +242,10 @@ original PR, not pile up here as one-off fixes.
     467-line composer CSS, `ComposerGlass.tsx` and `UserMessageBubble.tsx` were dropped, so side
     chat now looks like upstream's composer instead of the old glass styling. Since
     upstream moved every provider onto one shared runner (`TextGenerationOperations.ts`,
-    2026-10-07), `answerSideQuestion` lives once in its `fromRunner`, so every provider answers
-    side questions without per-provider code. ACP
+    2026-10-07), `answerSideQuestion` lives once in its `fromRunner`, so providers built on it answer side
+    questions without per-provider code. Providers with hand-built text generation implement it
+    themselves (Muse Code, added upstream 2026-10-08, calls `buildSideQuestionPrompt` like the
+    rest); a new upstream provider shows up as a missing `answerSideQuestion` type error. ACP
     Registry threads have no text generation and get a clear error. Known gaps: in a V2 forked
     thread, side chat only sees the fork's own turns, not the inherited history; each question
     loads all of the thread's matching items before trimming to the budget.
