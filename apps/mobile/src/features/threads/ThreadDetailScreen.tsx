@@ -154,6 +154,7 @@ import {
   COMPOSER_TRANSITION_DURATION_MS,
   ThreadComposer,
 } from "./ThreadComposer";
+import { ComposerPopoverHost } from "./ComposerPopoverHost";
 import { ThreadFeed, type ThreadFeedHistoryControls } from "./ThreadFeed";
 import { useThreadTurnSubagents } from "./ThreadAgentsSheet";
 import { ComposerQueuedEditBanner } from "./ComposerQueuedEdit";
@@ -694,6 +695,9 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const [collapsedUserInputRequestId, setCollapsedUserInputRequestId] =
     useState<RuntimeRequestId | null>(null);
   const activeUserInputRequestId = props.activePendingUserInput?.requestId ?? null;
+  // A pending user-input request or a failed creation owns the composer slot.
+  const composerSlotHidden =
+    activeUserInputRequestId !== null || props.creationState?.kind === "failed";
   // The open /usage-limits panel for this thread, model and turn. Only the open
   // moment is stored: the rows read live provider data, so a redeemed reset
   // credit or refreshed probe shows through. Anything that spends quota closes
@@ -1510,435 +1514,433 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
           style={{ position: "absolute", bottom: 0, left: 0, right: 0, top: 0 }}
           offset={{ closed: 0, opened: 0 }}
         >
-          {/* The fixed sticky host gives this bottom-anchored child a stable
+          <ComposerPopoverHost hidden={composerSlotHidden}>
+            {/* The fixed sticky host gives this bottom-anchored child a stable
               coordinate space. Its top and height can then animate together
               instead of the auto-sized host jumping to Yoga's destination. */}
-          <Animated.View
-            layout={COMPOSER_LAYOUT_TRANSITION}
-            pointerEvents="box-none"
-            style={[{ position: "absolute", bottom: 0, left: 0 }, composerWidthStyle]}
-          >
-            {/* No paddingTop here: the overlay's measured height becomes the
+            <Animated.View
+              layout={COMPOSER_LAYOUT_TRANSITION}
+              pointerEvents="box-none"
+              style={[{ position: "absolute", bottom: 0, left: 0 }, composerWidthStyle]}
+            >
+              {/* No paddingTop here: the overlay's measured height becomes the
                 list's bottom inset, so any padding above the pill/composer
                 pushes the resting content floor up by the same amount. */}
-            <View ref={composerOverlayRef} onLayout={onComposerLayout} className="w-full">
-              <FloatingWorkingControl
-                colorScheme={isDarkMode ? "dark" : "light"}
-                status={floatingStatus}
-                lift={floatingControlLift}
-                devicePreview={
-                  devicePreviews.length > 0
-                    ? { count: devicePreviews.length, onPress: openDevicePreview }
-                    : null
-                }
-                browserPreview={
-                  browserTabs.tabs.length > 0
-                    ? { count: browserTabs.tabs.length, onPress: () => openBrowserPreview() }
-                    : null
-                }
-                showScrollToEnd={showScrollToEndButton}
-                onScrollToEnd={handleScrollToEnd}
-                agents={agentsSegment}
-                onOpenAgents={() => {
-                  Keyboard.dismiss();
-                  navigation.navigate("ThreadAgents", {
-                    environmentId: props.environmentId,
-                    threadId: props.selectedThread.id,
-                  });
-                }}
-                queuedCount={queuedCount}
-                onOpenQueue={() => {
-                  Keyboard.dismiss();
-                  navigation.navigate("ThreadQueue", {
-                    environmentId: props.environmentId,
-                    threadId: props.selectedThread.id,
-                  });
-                }}
-              />
-              <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
-                {sideQuestionState &&
-                sideQuestionState.mode !== "hidden" &&
-                latestSideQuestionTurn ? (
-                  <Animated.View
-                    className="mx-4 mb-3 rounded-2xl border border-border bg-card"
-                    entering={FadeInDown.duration(220)}
-                    exiting={FadeOut.duration(140)}
-                  >
-                    {sideQuestionState.mode === "minimized" ? (
-                      <View className="flex-row items-center gap-3 px-4 py-3">
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Open side chat"
-                          className="min-w-0 flex-1"
-                          onPress={() => setSideQuestionMode("expanded")}
-                        >
-                          <Text className="text-2xs font-t3-bold uppercase tracking-wide text-foreground-muted">
-                            Side chat
-                          </Text>
-                          <Text
-                            className="mt-0.5 text-sm text-foreground-secondary"
-                            numberOfLines={1}
+              <View ref={composerOverlayRef} onLayout={onComposerLayout} className="w-full">
+                <FloatingWorkingControl
+                  colorScheme={isDarkMode ? "dark" : "light"}
+                  status={floatingStatus}
+                  lift={floatingControlLift}
+                  devicePreview={
+                    devicePreviews.length > 0
+                      ? { count: devicePreviews.length, onPress: openDevicePreview }
+                      : null
+                  }
+                  browserPreview={
+                    browserTabs.tabs.length > 0
+                      ? { count: browserTabs.tabs.length, onPress: () => openBrowserPreview() }
+                      : null
+                  }
+                  showScrollToEnd={showScrollToEndButton}
+                  onScrollToEnd={handleScrollToEnd}
+                  agents={agentsSegment}
+                  onOpenAgents={() => {
+                    Keyboard.dismiss();
+                    navigation.navigate("ThreadAgents", {
+                      environmentId: props.environmentId,
+                      threadId: props.selectedThread.id,
+                    });
+                  }}
+                  queuedCount={queuedCount}
+                  onOpenQueue={() => {
+                    Keyboard.dismiss();
+                    navigation.navigate("ThreadQueue", {
+                      environmentId: props.environmentId,
+                      threadId: props.selectedThread.id,
+                    });
+                  }}
+                />
+                <View className="w-full self-center" style={{ maxWidth: contentMaxWidth }}>
+                  {sideQuestionState &&
+                  sideQuestionState.mode !== "hidden" &&
+                  latestSideQuestionTurn ? (
+                    <Animated.View
+                      className="mx-4 mb-3 rounded-2xl border border-border bg-card"
+                      entering={FadeInDown.duration(220)}
+                      exiting={FadeOut.duration(140)}
+                    >
+                      {sideQuestionState.mode === "minimized" ? (
+                        <View className="flex-row items-center gap-3 px-4 py-3">
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Open side chat"
+                            className="min-w-0 flex-1"
+                            onPress={() => setSideQuestionMode("expanded")}
                           >
-                            {latestSideQuestionTurn.question}
-                          </Text>
-                        </Pressable>
-                        {sideQuestionPending ? (
-                          <ControlPill
-                            accessibilityLabel="Stop side chat"
-                            className="h-9 w-9"
-                            icon="stop.fill"
-                            variant="danger"
-                            onPress={stopSideQuestion}
-                          />
-                        ) : null}
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel="Dismiss side chat"
-                          onPress={() => setSideQuestionMode("hidden")}
-                        >
-                          <Text className="text-sm text-foreground-muted">Close</Text>
-                        </Pressable>
-                      </View>
-                    ) : (
-                      <View className="p-4">
-                        <View className="mb-3 flex-row items-start justify-between gap-3">
-                          <View className="min-w-0 flex-1">
                             <Text className="text-2xs font-t3-bold uppercase tracking-wide text-foreground-muted">
                               Side chat
                             </Text>
-                            <Text className="mt-1 text-sm text-foreground-secondary">
-                              Ask without interrupting the main agent.
+                            <Text
+                              className="mt-0.5 text-sm text-foreground-secondary"
+                              numberOfLines={1}
+                            >
+                              {latestSideQuestionTurn.question}
                             </Text>
-                          </View>
-                          <View className="flex-row gap-3">
-                            <Pressable
-                              accessibilityRole="button"
-                              accessibilityLabel="Minimize side chat"
-                              onPress={() => setSideQuestionMode("minimized")}
-                            >
-                              <Text className="text-sm text-foreground-muted">Minimize</Text>
-                            </Pressable>
-                            <Pressable
-                              accessibilityRole="button"
-                              accessibilityLabel="Dismiss side chat"
-                              onPress={() => setSideQuestionMode("hidden")}
-                            >
-                              <Text className="text-sm text-foreground-muted">Close</Text>
-                            </Pressable>
-                          </View>
-                        </View>
-                        <ScrollView
-                          style={{ maxHeight: windowHeight * 0.35 }}
-                          contentContainerStyle={{ gap: 12 }}
-                          keyboardShouldPersistTaps="handled"
-                        >
-                          {sideQuestionState.turns.map((turn) => (
-                            <View key={turn.id} className="gap-2">
-                              {turn.question ? (
-                                <View className="ml-8 self-end rounded-xl bg-background px-3 py-2">
-                                  <Text className="text-sm text-foreground">{turn.question}</Text>
-                                </View>
-                              ) : null}
-                              {turn.status === "loading" ? (
-                                <View className="flex-row items-center gap-2">
-                                  <ActivityIndicator size="small" />
-                                  <Text className="text-sm text-foreground-muted">
-                                    Answering without interrupting…
-                                  </Text>
-                                </View>
-                              ) : turn.status === "stopped" ? (
-                                <Text className="text-sm text-foreground-muted">Stopped</Text>
-                              ) : (
-                                <Text
-                                  selectable
-                                  className={
-                                    turn.status === "error"
-                                      ? "text-sm text-danger-foreground"
-                                      : "text-sm text-foreground"
-                                  }
-                                >
-                                  {turn.answer}
-                                </Text>
-                              )}
-                            </View>
-                          ))}
-                        </ScrollView>
-                        <View className="mt-3 flex-row items-center justify-between gap-2">
-                          <ComposerInlineControl
-                            accessibilityLabel="Side chat model and reasoning settings"
-                            emphasized
-                            renderIcon={(size) => (
-                              <ProviderIcon
-                                provider={sideCurrentModelOption?.providerDriver}
-                                size={size}
-                              />
-                            )}
-                            label={sideCurrentModelOption?.label ?? sideModelSelection.model}
-                            maxWidth={180}
-                            onPress={openSideSettings}
-                          />
+                          </Pressable>
                           {sideQuestionPending ? (
                             <ControlPill
                               accessibilityLabel="Stop side chat"
+                              className="h-9 w-9"
                               icon="stop.fill"
                               variant="danger"
                               onPress={stopSideQuestion}
                             />
                           ) : null}
-                        </View>
-                        <View className="mt-2 flex-row items-end gap-2">
-                          <TextInput
-                            multiline
-                            submitBehavior="submit"
-                            value={sideQuestionState.draft}
-                            accessibilityLabel="Continue the side chat"
-                            placeholder="Ask a follow-up…"
-                            onSubmitEditing={() => {
-                              const question = sideQuestionState.draft.trim();
-                              if (!question) return;
-                              void submitSideQuestion(question, "follow-up");
-                            }}
-                            className="min-h-11 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
-                            onChangeText={(draft) =>
-                              setSideQuestionsByThread((current) => {
-                                const state = current[selectedThreadKey];
-                                return state
-                                  ? { ...current, [selectedThreadKey]: { ...state, draft } }
-                                  : current;
-                              })
-                            }
-                          />
                           <Pressable
                             accessibilityRole="button"
-                            accessibilityLabel="Ask follow-up"
-                            disabled={
-                              sideQuestionPending || sideQuestionState.draft.trim().length === 0
-                            }
-                            className="rounded-xl bg-blue-500 px-3 py-2.5 disabled:opacity-40"
-                            onPress={() =>
-                              void submitSideQuestion(sideQuestionState.draft.trim(), "follow-up")
-                            }
+                            accessibilityLabel="Dismiss side chat"
+                            onPress={() => setSideQuestionMode("hidden")}
                           >
-                            <Text className="font-t3-bold text-sm text-white">Ask</Text>
+                            <Text className="text-sm text-foreground-muted">Close</Text>
                           </Pressable>
                         </View>
-                      </View>
-                    )}
-                  </Animated.View>
-                ) : null}
-                {props.queuedRunEdit !== null ? (
-                  <Animated.View
-                    className="shrink-0"
-                    entering={FadeInDown.duration(180)}
-                    exiting={FadeOut.duration(120)}
-                  >
-                    <ComposerQueuedEditBanner
-                      saving={props.isSavingQueuedEdit}
-                      onCancel={() => {
-                        voiceInputSession.cancel(props.composerDraftKey);
-                        props.onCancelQueuedRunEdit();
-                      }}
-                    />
-                  </Animated.View>
-                ) : null}
-                <UsageLimitRecoveryCard
-                  key={props.selectedThread.latestRun?.runId}
-                  thread={props.selectedThread}
-                  environmentId={props.environmentId}
-                />
-                {props.feedbackSubmissions.map((submission) => (
-                  <ComposerFeedback
-                    key={submission.id}
-                    submission={submission}
-                    onDismiss={() => props.onDismissFeedback(submission.id)}
+                      ) : (
+                        <View className="p-4">
+                          <View className="mb-3 flex-row items-start justify-between gap-3">
+                            <View className="min-w-0 flex-1">
+                              <Text className="text-2xs font-t3-bold uppercase tracking-wide text-foreground-muted">
+                                Side chat
+                              </Text>
+                              <Text className="mt-1 text-sm text-foreground-secondary">
+                                Ask without interrupting the main agent.
+                              </Text>
+                            </View>
+                            <View className="flex-row gap-3">
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Minimize side chat"
+                                onPress={() => setSideQuestionMode("minimized")}
+                              >
+                                <Text className="text-sm text-foreground-muted">Minimize</Text>
+                              </Pressable>
+                              <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Dismiss side chat"
+                                onPress={() => setSideQuestionMode("hidden")}
+                              >
+                                <Text className="text-sm text-foreground-muted">Close</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                          <ScrollView
+                            style={{ maxHeight: windowHeight * 0.35 }}
+                            contentContainerStyle={{ gap: 12 }}
+                            keyboardShouldPersistTaps="handled"
+                          >
+                            {sideQuestionState.turns.map((turn) => (
+                              <View key={turn.id} className="gap-2">
+                                {turn.question ? (
+                                  <View className="ml-8 self-end rounded-xl bg-background px-3 py-2">
+                                    <Text className="text-sm text-foreground">{turn.question}</Text>
+                                  </View>
+                                ) : null}
+                                {turn.status === "loading" ? (
+                                  <View className="flex-row items-center gap-2">
+                                    <ActivityIndicator size="small" />
+                                    <Text className="text-sm text-foreground-muted">
+                                      Answering without interrupting…
+                                    </Text>
+                                  </View>
+                                ) : turn.status === "stopped" ? (
+                                  <Text className="text-sm text-foreground-muted">Stopped</Text>
+                                ) : (
+                                  <Text
+                                    selectable
+                                    className={
+                                      turn.status === "error"
+                                        ? "text-sm text-danger-foreground"
+                                        : "text-sm text-foreground"
+                                    }
+                                  >
+                                    {turn.answer}
+                                  </Text>
+                                )}
+                              </View>
+                            ))}
+                          </ScrollView>
+                          <View className="mt-3 flex-row items-center justify-between gap-2">
+                            <ComposerInlineControl
+                              accessibilityLabel="Side chat model and reasoning settings"
+                              emphasized
+                              renderIcon={(size) => (
+                                <ProviderIcon
+                                  provider={sideCurrentModelOption?.providerDriver}
+                                  size={size}
+                                />
+                              )}
+                              label={sideCurrentModelOption?.label ?? sideModelSelection.model}
+                              maxWidth={180}
+                              onPress={openSideSettings}
+                            />
+                            {sideQuestionPending ? (
+                              <ControlPill
+                                accessibilityLabel="Stop side chat"
+                                icon="stop.fill"
+                                variant="danger"
+                                onPress={stopSideQuestion}
+                              />
+                            ) : null}
+                          </View>
+                          <View className="mt-2 flex-row items-end gap-2">
+                            <TextInput
+                              multiline
+                              submitBehavior="submit"
+                              value={sideQuestionState.draft}
+                              accessibilityLabel="Continue the side chat"
+                              placeholder="Ask a follow-up…"
+                              onSubmitEditing={() => {
+                                const question = sideQuestionState.draft.trim();
+                                if (!question) return;
+                                void submitSideQuestion(question, "follow-up");
+                              }}
+                              className="min-h-11 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
+                              onChangeText={(draft) =>
+                                setSideQuestionsByThread((current) => {
+                                  const state = current[selectedThreadKey];
+                                  return state
+                                    ? { ...current, [selectedThreadKey]: { ...state, draft } }
+                                    : current;
+                                })
+                              }
+                            />
+                            <Pressable
+                              accessibilityRole="button"
+                              accessibilityLabel="Ask follow-up"
+                              disabled={
+                                sideQuestionPending || sideQuestionState.draft.trim().length === 0
+                              }
+                              className="rounded-xl bg-blue-500 px-3 py-2.5 disabled:opacity-40"
+                              onPress={() =>
+                                void submitSideQuestion(sideQuestionState.draft.trim(), "follow-up")
+                              }
+                            >
+                              <Text className="font-t3-bold text-sm text-white">Ask</Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      )}
+                    </Animated.View>
+                  ) : null}
+                  {props.queuedRunEdit !== null ? (
+                    <Animated.View
+                      className="shrink-0"
+                      entering={FadeInDown.duration(180)}
+                      exiting={FadeOut.duration(120)}
+                    >
+                      <ComposerQueuedEditBanner
+                        saving={props.isSavingQueuedEdit}
+                        onCancel={() => {
+                          voiceInputSession.cancel(props.composerDraftKey);
+                          props.onCancelQueuedRunEdit();
+                        }}
+                      />
+                    </Animated.View>
+                  ) : null}
+                  <UsageLimitRecoveryCard
+                    key={props.selectedThread.latestRun?.runId}
+                    thread={props.selectedThread}
+                    environmentId={props.environmentId}
                   />
-                ))}
-                {composerError !== null ? (
-                  <Animated.View
-                    className="shrink-0"
-                    entering={FadeInDown.duration(180)}
-                    exiting={FadeOut.duration(120)}
-                  >
-                    <ComposerErrorNotice
-                      message={composerError}
-                      onDismiss={() => clearThreadComposerError(selectedThreadKey)}
+                  {props.feedbackSubmissions.map((submission) => (
+                    <ComposerFeedback
+                      key={submission.id}
+                      submission={submission}
+                      onDismiss={() => props.onDismissFeedback(submission.id)}
                     />
-                  </Animated.View>
-                ) : null}
-                {usageLimitsReport && activeUserInputRequestId === null ? (
-                  <Animated.View
-                    className="shrink-0 px-4 pb-3"
-                    entering={FadeInDown.duration(220)}
-                    exiting={FadeOut.duration(140)}
-                  >
-                    <ComposerUsageLimits
-                      report={usageLimitsReport}
-                      environmentId={props.environmentId}
-                      onClose={dismissUsageLimits}
-                    />
-                  </Animated.View>
-                ) : null}
-                {props.creationState?.kind === "failed" ? (
-                  <Animated.View
-                    className="shrink-0 px-4"
-                    style={{ paddingBottom: composerBottomInset }}
-                    entering={FadeInDown.duration(220)}
-                    exiting={FadeOut.duration(140)}
-                  >
-                    <ThreadCreationFailedCard
-                      reason={props.creationState.reason}
-                      onEditTask={props.creationState.onEditTask}
-                    />
-                  </Animated.View>
-                ) : null}
-                {props.activePendingApproval || props.activePendingUserInput ? (
-                  <Animated.View
-                    className="shrink-0 gap-3 px-4 pb-3"
-                    // The questionnaire replaces the composer, so it must pad
-                    // the home indicator the composer normally covers.
-                    style={
-                      activeUserInputRequestId !== null
-                        ? { paddingBottom: composerBottomInset }
-                        : undefined
-                    }
-                    entering={FadeInDown.duration(220)}
-                    exiting={FadeOut.duration(140)}
-                  >
-                    {props.activePendingApproval ? (
-                      <PendingApprovalCard
-                        canOperateThread={props.canOperateThread}
-                        approval={props.activePendingApproval}
-                        respondingApprovalId={props.respondingApprovalId}
-                        onRespond={props.onRespondToApproval}
+                  ))}
+                  {composerError !== null ? (
+                    <Animated.View
+                      className="shrink-0"
+                      entering={FadeInDown.duration(180)}
+                      exiting={FadeOut.duration(120)}
+                    >
+                      <ComposerErrorNotice
+                        message={composerError}
+                        onDismiss={() => clearThreadComposerError(selectedThreadKey)}
                       />
-                    ) : null}
-                    {props.activePendingUserInput ? (
-                      <PendingUserInputCard
-                        canOperateThread={props.canOperateThread}
-                        pendingUserInput={props.activePendingUserInput}
-                        maxHeight={pendingUserInputMaxHeight}
-                        collapsed={userInputCollapsed}
-                        onToggleCollapsed={handleToggleUserInputCollapsed}
-                        onStopThread={props.onStopThread}
-                        cardProgress={userInputCardProgress}
-                        cardCoverage={userInputCardCoverage}
-                        onInputFocusChange={handleOwnedInputFocusChange}
-                        drafts={props.activePendingUserInputDrafts}
-                        answers={props.activePendingUserInputAnswers}
-                        respondingUserInputId={props.respondingUserInputId}
-                        onSelectOption={props.onSelectUserInputOption}
-                        onChangeCustomAnswer={props.onChangeUserInputCustomAnswer}
-                        onSubmit={props.onSubmitUserInput}
-                        onDismiss={props.onDismissUserInput}
+                    </Animated.View>
+                  ) : null}
+                  {usageLimitsReport && activeUserInputRequestId === null ? (
+                    <Animated.View
+                      className="shrink-0 px-4 pb-3"
+                      entering={FadeInDown.duration(220)}
+                      exiting={FadeOut.duration(140)}
+                    >
+                      <ComposerUsageLimits
+                        report={usageLimitsReport}
+                        environmentId={props.environmentId}
+                        onClose={dismissUsageLimits}
                       />
-                    ) : null}
-                  </Animated.View>
-                ) : null}
-              </View>
+                    </Animated.View>
+                  ) : null}
+                  {props.creationState?.kind === "failed" ? (
+                    <Animated.View
+                      className="shrink-0 px-4"
+                      style={{ paddingBottom: composerBottomInset }}
+                      entering={FadeInDown.duration(220)}
+                      exiting={FadeOut.duration(140)}
+                    >
+                      <ThreadCreationFailedCard
+                        reason={props.creationState.reason}
+                        onEditTask={props.creationState.onEditTask}
+                      />
+                    </Animated.View>
+                  ) : null}
+                  {props.activePendingApproval || props.activePendingUserInput ? (
+                    <Animated.View
+                      className="shrink-0 gap-3 px-4 pb-3"
+                      // The questionnaire replaces the composer, so it must pad
+                      // the home indicator the composer normally covers.
+                      style={
+                        activeUserInputRequestId !== null
+                          ? { paddingBottom: composerBottomInset }
+                          : undefined
+                      }
+                      entering={FadeInDown.duration(220)}
+                      exiting={FadeOut.duration(140)}
+                    >
+                      {props.activePendingApproval ? (
+                        <PendingApprovalCard
+                          canOperateThread={props.canOperateThread}
+                          approval={props.activePendingApproval}
+                          respondingApprovalId={props.respondingApprovalId}
+                          onRespond={props.onRespondToApproval}
+                        />
+                      ) : null}
+                      {props.activePendingUserInput ? (
+                        <PendingUserInputCard
+                          canOperateThread={props.canOperateThread}
+                          pendingUserInput={props.activePendingUserInput}
+                          maxHeight={pendingUserInputMaxHeight}
+                          collapsed={userInputCollapsed}
+                          onToggleCollapsed={handleToggleUserInputCollapsed}
+                          onStopThread={props.onStopThread}
+                          cardProgress={userInputCardProgress}
+                          cardCoverage={userInputCardCoverage}
+                          onInputFocusChange={handleOwnedInputFocusChange}
+                          drafts={props.activePendingUserInputDrafts}
+                          answers={props.activePendingUserInputAnswers}
+                          respondingUserInputId={props.respondingUserInputId}
+                          onSelectOption={props.onSelectUserInputOption}
+                          onChangeCustomAnswer={props.onChangeUserInputCustomAnswer}
+                          onSubmit={props.onSubmitUserInput}
+                          onDismiss={props.onDismissUserInput}
+                        />
+                      ) : null}
+                    </Animated.View>
+                  ) : null}
+                </View>
 
-              {/* Hidden (not unmounted) while a user-input request owns the
+                {/* Hidden (not unmounted) while a user-input request owns the
                 composer slot, so composer drafts and editor state survive.
                 A rejected creation has no thread to send to; the failure card
                 owns the slot instead. */}
-              <View
-                style={
-                  activeUserInputRequestId !== null || props.creationState?.kind === "failed"
-                    ? { display: "none" }
-                    : undefined
-                }
-              >
-                {isProviderSubagent ? (
-                  <View
-                    className="self-center px-3 pt-1.5"
-                    style={{
-                      width: "100%",
-                      maxWidth: contentMaxWidth,
-                      paddingBottom: composerBottomInset + 6,
-                    }}
-                  >
-                    <ProviderSubagentBar
-                      provider={providerSubagentProvider ?? null}
-                      modelLabel={
-                        providerSubagentCatalogModel?.name ??
-                        formatModelSlugName(props.selectedThread.modelSelection.model)
-                      }
-                      effortLabel={formatModelSelectionEffort(
-                        props.selectedThread.modelSelection,
-                        providerSubagentProvider?.models,
-                        reportedModelSelection,
-                      )}
-                      status={props.providerSubagentStatus ?? null}
-                      onOpenParent={
-                        props.selectedThread.lineage.parentThreadId === null
-                          ? null
-                          : () =>
-                              navigation.navigate("Thread", {
-                                environmentId: String(props.environmentId),
-                                threadId: String(props.selectedThread.lineage.parentThreadId),
-                              })
-                      }
-                    />
-                  </View>
-                ) : (
-                  <>
-                    <ThreadComposer
-                      canOperateThread={props.canOperateThread}
-                      reportedModelSelection={reportedModelSelection}
-                      editorRef={composerEditorRef}
-                      draftMessage={props.draftMessage}
-                      draftAttachments={props.draftAttachments}
-                      placeholder="Ask the repo agent, or run a command…"
-                      contentMaxWidth={contentMaxWidth}
-                      connectionState={props.connectionStateLabel}
-                      environmentLabel={props.environmentLabel}
-                      selectedThread={props.selectedThread}
-                      hasCompactableConversation={hasCompactableConversation && !props.isCompacting}
-                      serverConfig={props.serverConfig}
-                      queueCount={props.selectedThreadQueueCount}
-                      activeThreadBusy={props.activeThreadBusy}
-                      canStopThread={props.canStopThread}
-                      environmentId={props.environmentId}
-                      projectCwd={props.threadCwd ?? props.projectWorkspaceRoot}
-                      // Follow-ups typed during setup wait in the draft: queueing
-                      // them against a thread id the server may still reject
-                      // would strand them in the outbox.
-                      sendBlockedReason={
-                        props.creationState?.kind === "preparing" ? "Starting the task…" : null
-                      }
-                      draftKey={props.composerDraftKey ?? undefined}
-                      followUpBehavior={props.followUpBehavior}
-                      canSteerActiveTurn={props.canSteerActiveTurn}
-                      queuedEdit={
-                        props.queuedRunEdit === null
-                          ? null
-                          : {
-                              existingAttachments: props.queuedRunEdit.existingAttachments,
-                              saving: props.isSavingQueuedEdit,
-                              onRemoveExistingAttachment: props.onRemoveQueuedEditAttachment,
-                            }
-                      }
-                      bottomInset={composerBottomInset}
-                      onChangeDraftMessage={props.onChangeDraftMessage}
-                      onPickDraftMedia={props.onPickDraftMedia}
-                      onPickDraftFiles={props.onPickDraftFiles}
-                      onNativePasteImages={props.onNativePasteImages}
-                      onNativePasteText={props.onNativePasteText}
-                      onRemoveDraftImage={props.onRemoveDraftImage}
-                      onStopThread={props.onStopThread}
-                      onSendMessage={handleSendMessage}
-                      onShowUsageLimits={showUsageLimits}
-                      canSwitchProvider={props.canSwitchThreadProvider}
-                      onUpdateModelSelection={props.onUpdateThreadModelSelection}
-                      onUpdateRuntimeMode={props.onUpdateThreadRuntimeMode}
-                      onUpdateInteractionMode={props.onUpdateThreadInteractionMode}
-                      onExpandedChange={setComposerExpanded}
-                      onEditorFocusChange={handleComposerFocusChange}
-                    />
-                  </>
-                )}
+                <View style={composerSlotHidden ? { display: "none" } : undefined}>
+                  {isProviderSubagent ? (
+                    <View
+                      className="self-center px-3 pt-1.5"
+                      style={{
+                        width: "100%",
+                        maxWidth: contentMaxWidth,
+                        paddingBottom: composerBottomInset + 6,
+                      }}
+                    >
+                      <ProviderSubagentBar
+                        provider={providerSubagentProvider ?? null}
+                        modelLabel={
+                          providerSubagentCatalogModel?.name ??
+                          formatModelSlugName(props.selectedThread.modelSelection.model)
+                        }
+                        effortLabel={formatModelSelectionEffort(
+                          props.selectedThread.modelSelection,
+                          providerSubagentProvider?.models,
+                          reportedModelSelection,
+                        )}
+                        status={props.providerSubagentStatus ?? null}
+                        onOpenParent={
+                          props.selectedThread.lineage.parentThreadId === null
+                            ? null
+                            : () =>
+                                navigation.navigate("Thread", {
+                                  environmentId: String(props.environmentId),
+                                  threadId: String(props.selectedThread.lineage.parentThreadId),
+                                })
+                        }
+                      />
+                    </View>
+                  ) : (
+                    <>
+                      <ThreadComposer
+                        canOperateThread={props.canOperateThread}
+                        reportedModelSelection={reportedModelSelection}
+                        editorRef={composerEditorRef}
+                        draftMessage={props.draftMessage}
+                        draftAttachments={props.draftAttachments}
+                        placeholder="Ask the repo agent, or run a command…"
+                        contentMaxWidth={contentMaxWidth}
+                        connectionState={props.connectionStateLabel}
+                        environmentLabel={props.environmentLabel}
+                        selectedThread={props.selectedThread}
+                        hasCompactableConversation={
+                          hasCompactableConversation && !props.isCompacting
+                        }
+                        serverConfig={props.serverConfig}
+                        queueCount={props.selectedThreadQueueCount}
+                        activeThreadBusy={props.activeThreadBusy}
+                        canStopThread={props.canStopThread}
+                        environmentId={props.environmentId}
+                        projectCwd={props.threadCwd ?? props.projectWorkspaceRoot}
+                        // Follow-ups typed during setup wait in the draft: queueing
+                        // them against a thread id the server may still reject
+                        // would strand them in the outbox.
+                        sendBlockedReason={
+                          props.creationState?.kind === "preparing" ? "Starting the task…" : null
+                        }
+                        draftKey={props.composerDraftKey ?? undefined}
+                        followUpBehavior={props.followUpBehavior}
+                        canSteerActiveTurn={props.canSteerActiveTurn}
+                        queuedEdit={
+                          props.queuedRunEdit === null
+                            ? null
+                            : {
+                                existingAttachments: props.queuedRunEdit.existingAttachments,
+                                saving: props.isSavingQueuedEdit,
+                                onRemoveExistingAttachment: props.onRemoveQueuedEditAttachment,
+                              }
+                        }
+                        bottomInset={composerBottomInset}
+                        onChangeDraftMessage={props.onChangeDraftMessage}
+                        onPickDraftMedia={props.onPickDraftMedia}
+                        onPickDraftFiles={props.onPickDraftFiles}
+                        onNativePasteImages={props.onNativePasteImages}
+                        onNativePasteText={props.onNativePasteText}
+                        onRemoveDraftImage={props.onRemoveDraftImage}
+                        onStopThread={props.onStopThread}
+                        onSendMessage={handleSendMessage}
+                        onShowUsageLimits={showUsageLimits}
+                        canSwitchProvider={props.canSwitchThreadProvider}
+                        onUpdateModelSelection={props.onUpdateThreadModelSelection}
+                        onUpdateRuntimeMode={props.onUpdateThreadRuntimeMode}
+                        onUpdateInteractionMode={props.onUpdateThreadInteractionMode}
+                        onExpandedChange={setComposerExpanded}
+                        onEditorFocusChange={handleComposerFocusChange}
+                      />
+                    </>
+                  )}
+                </View>
               </View>
-            </View>
-          </Animated.View>
+            </Animated.View>
+          </ComposerPopoverHost>
         </KeyboardStickyView>
       ) : null}
     </View>
