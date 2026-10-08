@@ -3,7 +3,7 @@ import { isWindowsAbsolutePath, normalizeProjectPathForComparison } from "@t3too
 
 import type { DiffPanelGitScope } from "./diffPanelStore";
 import { useRightPanelStore } from "./rightPanelStore";
-import { resolvePathLinkTarget } from "./terminal-links";
+import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 
 interface OpenDiffFilePrimaryActionInput {
   readonly threadRef: ScopedThreadRef | null;
