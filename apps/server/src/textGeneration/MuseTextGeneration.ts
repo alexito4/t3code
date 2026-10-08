@@ -25,6 +25,7 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
+  buildSideQuestionPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
 import {
@@ -341,10 +342,20 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
       });
       return { title: sanitizeThreadTitle(generated.title) };
     });
+  const answerSideQuestion: TextGeneration.TextGeneration["Service"]["answerSideQuestion"] =
+    Effect.fn("MuseTextGeneration.answerSideQuestion")(function* (input) {
+      const generated = yield* runMuseJson({
+        operation: "answerSideQuestion",
+        ...buildSideQuestionPrompt({ question: input.question, context: input.context }),
+        modelSelection: input.modelSelection,
+      });
+      return { answer: generated.answer.trim() };
+    });
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    answerSideQuestion,
   } satisfies TextGeneration.TextGeneration["Service"];
 });
