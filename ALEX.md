@@ -247,8 +247,8 @@ original PR, not pile up here as one-off fixes.
     `textGenerationPrompts.ts`. The thread-context helpers stay in the server
     (`textGeneration/SideQuestionContext.ts`) because they use the V2 wire projection, which a
     package can't import. Providers with hand-built text generation implement it
-    themselves (Muse Code, added upstream 2026-10-08, calls `buildSideQuestionPrompt` like the
-    rest); a new upstream provider shows up as a missing `answerSideQuestion` type error. ACP
+    themselves (Muse Code in `packages/provider-muse`, added upstream 2026-10-08, calls
+    `buildSideQuestionPrompt` like the rest; it recurs as a conflict whenever upstream reshapes it); a new upstream provider shows up as a missing `answerSideQuestion` type error. ACP
     Registry threads have no text generation and get a clear error. Known gaps: in a V2 forked
     thread, side chat only sees the fork's own turns, not the inherited history; each question
     loads all of the thread's matching items before trimming to the budget.
