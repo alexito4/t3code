@@ -23,7 +23,7 @@ import type { ProjectionRecordFilter } from "../orchestration-v2/ProjectionStore
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as SideQuestionCoordinator from "./SideQuestionCoordinator.ts";
 import * as TextGeneration from "./TextGeneration.ts";
-import { SIDE_QUESTION_CONTEXT_MAX_BYTES } from "./TextGenerationPrompts.ts";
+import { SIDE_QUESTION_CONTEXT_MAX_BYTES } from "./SideQuestionContext.ts";
 
 const defaultThreadId = ThreadId.make("thread:side-question");
 const projectId = ProjectId.make("project:side-question");

@@ -26,7 +26,7 @@ import {
   SIDE_QUESTION_CONTEXT_ITEM_TYPES,
   sideQuestionContextEntries,
   sideQuestionThreadContextBudget,
-} from "./TextGenerationPrompts.ts";
+} from "./SideQuestionContext.ts";
 
 type SideQuestionInput = {
   readonly threadId: ThreadId;
