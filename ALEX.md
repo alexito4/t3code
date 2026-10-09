@@ -240,10 +240,13 @@ original PR, not pile up here as one-off fixes.
     ChatView only gains about 40 lines. `SideQuestionPanel.tsx` is built on upstream's
     `ComposerSurface`/`ComposerBanner` via a `sideChatBanner` prop on `ChatComposer`. The fork's
     467-line composer CSS, `ComposerGlass.tsx` and `UserMessageBubble.tsx` were dropped, so side
-    chat now looks like upstream's composer instead of the old glass styling. Since
-    upstream moved every provider onto one shared runner (`TextGenerationOperations.ts`,
-    2026-10-07), `answerSideQuestion` lives once in its `fromRunner`, so providers built on it answer side
-    questions without per-provider code. Providers with hand-built text generation implement it
+    chat now looks like upstream's composer instead of the old glass styling. Every provider
+    shares one runner, now in provider-core (`packages/provider-core/src/server/textGenerationOperations.ts`
+    since 2026-10-08), so `answerSideQuestion` lives once in its `fromRunner` and the method sits on
+    provider-core's `ProviderTextGeneration`. The pure `buildSideQuestionPrompt` lives in provider-core's
+    `textGenerationPrompts.ts`. The thread-context helpers stay in the server
+    (`textGeneration/SideQuestionContext.ts`) because they use the V2 wire projection, which a
+    package can't import. Providers with hand-built text generation implement it
     themselves (Muse Code, added upstream 2026-10-08, calls `buildSideQuestionPrompt` like the
     rest); a new upstream provider shows up as a missing `answerSideQuestion` type error. ACP
     Registry threads have no text generation and get a clear error. Known gaps: in a V2 forked
@@ -251,7 +254,8 @@ original PR, not pile up here as one-off fixes.
     loads all of the thread's matching items before trimming to the budget.
   - **Known conflict set** (recurs on `rebuild` for as long as this branch is carried):
     `ChatComposer.tsx`, `ChatView.tsx` (small since `useSideChat`), `ws.ts`, `rpc.ts`, `RpcInstrumentation.ts` (one
-    tracing label per RPC), `textGeneration/TextGenerationOperations.ts`, and the mobile
+    tracing label per RPC), provider-core's `textGeneration.ts`/`textGenerationOperations.ts`/
+    `textGenerationPrompts.ts`, the server's `textGeneration/TextGeneration.ts`, and the mobile
     `ThreadComposer.tsx`/`ThreadDetailScreen.tsx`/`ThreadSettingsSheet.tsx` trio. The branch no
     longer touches `index.css` and only passes props through `MessagesTimeline`. Resolution
     pattern: adopt upstream's newer architecture and splice side chat into it. Don't trust the
