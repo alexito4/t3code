@@ -479,7 +479,7 @@ function RightPanelEmptyState(props: {
       aria-label="Open a surface"
       data-surface-launcher-keys={availableActions.map((action) => action.shortcut).join("")}
       className={cn(
-        "flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 outline-none",
+        "scrollbar-gutter-both flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-6 outline-none",
         // The panel topbar sits above this container; matching bottom padding
         // keeps the list centered against the full panel, not the leftover.
         "pb-(--workspace-topbar-height)",
@@ -1193,7 +1193,7 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
                   {renamingDevice === surface.id ? (
                     <input
                       aria-label="Device tab name"
-                      className="w-24 min-w-0 rounded-sm bg-background px-1 outline-none ring-1 ring-ring"
+                      className="w-24 min-w-0 rounded-sm bg-background px-1 outline-none ring-1 ring-inset ring-ring"
                       defaultValue={title}
                       ref={(element) => {
                         element?.focus();
