@@ -116,9 +116,10 @@ buildable/runnable for personal use (see Fork infrastructure below).
   rename needed — the prefix is convention, not a requirement) and _is_ composed into `main` via
   `PATCH_BRANCHES`. Sent upstream as https://github.com/pingdotgg/t3code/pull/9226, closed
   2026-09-04 in favor of #7096 (which also deduplicated rollouts moving between session roots),
-  and #7096 was itself closed unmerged. As of the V2 port upstream still scans only `sessions`, so
-  this stays a fork fix. Check upstream's `UsageService.ts` scan roots before each port in case
-  that changes.
+  and #7096 was itself closed unmerged. Upstream still scans only `sessions`, so this stays a fork
+  fix. Since nightly 2908 the scan roots come from each driver's usage reader, so the patch lives
+  in `codexUsageReader.directories` (`apps/server/src/provider/Drivers/codexUsage.ts`); check its
+  roots before each port in case upstream adds `archived_sessions` itself.
 
 - **Projects list page** — there was no way to see all projects at a glance, only a per-project
   settings screen reachable one at a time. Adds a `/projects` page listing every project
