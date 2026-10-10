@@ -1754,10 +1754,11 @@ code {
   background: var(--app-scrollbar-thumb-hover);
 }
 
-/* Conversation text, scoped to the thread timeline. Tailwind's text-*
-   utilities read these tokens, so overriding them resizes conversation text
-   while spacing stays on the interface rem. Without a conversation size the
-   tokens resolve to their defaults and text follows the interface size. */
+/* Conversation text, applied to message bodies in the thread timeline so the
+   controls around them keep the interface size. Tailwind's text-* utilities
+   read these tokens, so overriding them resizes message text while spacing
+   stays on the interface rem. Without a conversation size the tokens resolve
+   to their defaults and text follows the interface size. */
 .conversation-text {
   --conversation-text: var(--font-size-conversation, 1rem);
   --text-xs: calc(var(--conversation-text) * 0.75);
@@ -1765,11 +1766,10 @@ code {
   --text-base: var(--conversation-text);
   --text-lg: calc(var(--conversation-text) * 1.125);
   --text-xl: calc(var(--conversation-text) * 1.25);
-  font-size: var(--conversation-text);
 }
 
 /* Chat markdown rendering. Rem sizes go through --conversation-text so they
-   track the conversation size inside the timeline and 1rem elsewhere. */
+   track the conversation size in message bodies and 1rem elsewhere. */
 
 .chat-markdown > :first-child {
   margin-top: 0;
