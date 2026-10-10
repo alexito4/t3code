@@ -384,7 +384,7 @@ export default function DiffPanel({
   // view renders its own diff, so there it asks for the list alone, and a turn view only while
   // the Commits menu is open.
   const branchPreviewCommitsOnly = selectedRunId !== null || selectedCommitSha !== null;
-  const primaryBranchDiffPreview = useEnvironmentQuery(
+  const branchDiffPreview = useEnvironmentQuery(
     canReadFiles && (selectedRunId === null || commitsMenuOpen) && activeThread && activeCwd
       ? reviewEnvironment.diffPreview({
           environmentId: activeThread.environmentId,
@@ -398,36 +398,12 @@ export default function DiffPanel({
         })
       : null,
   );
-  const shouldRetryBranchDiffAtEnvironmentCwd =
-    primaryBranchDiffPreview.error?.includes("configured workspace root") === true &&
-    serverConfig?.cwd !== undefined &&
-    serverConfig.cwd !== activeCwd;
-  const fallbackBranchDiffPreview = useEnvironmentQuery(
-    canReadFiles && shouldRetryBranchDiffAtEnvironmentCwd && activeThread && serverConfig
-      ? reviewEnvironment.diffPreview({
-          environmentId: activeThread.environmentId,
-          input: {
-            cwd: serverConfig.cwd,
-            ...(selectedBaseRef ? { baseRef: selectedBaseRef } : {}),
-            ...(includeStagedAndUnstaged ? { includeStagedAndUnstaged: true } : {}),
-            ...(branchPreviewCommitsOnly ? { commitsOnly: true } : {}),
-            ignoreWhitespace: diffIgnoreWhitespace,
-          },
-        })
-      : null,
-  );
-  const branchDiffPreview = shouldRetryBranchDiffAtEnvironmentCwd
-    ? fallbackBranchDiffPreview
-    : primaryBranchDiffPreview;
-  // Read where the branch preview reads, without waiting for it to answer.
-  const previewCwd =
-    shouldRetryBranchDiffAtEnvironmentCwd && serverConfig ? serverConfig.cwd : activeCwd;
   const commitDiffPreview = useEnvironmentQuery(
-    canReadFiles && selectedCommitSha && activeThread && previewCwd
+    canReadFiles && selectedCommitSha && activeThread && activeCwd
       ? reviewEnvironment.diffPreview({
           environmentId: activeThread.environmentId,
           input: {
-            cwd: previewCwd,
+            cwd: activeCwd,
             commitSha: selectedCommitSha,
             ignoreWhitespace: diffIgnoreWhitespace,
           },
@@ -766,6 +742,18 @@ export default function DiffPanel({
       } else {
         next.add(fileKey);
       }
+      return { scopeKey: collapseScopeKey, fileKeys: next };
+    });
+  }, []);
+  // Find can ask again before the unfolded file reaches the viewer, so this must never fold.
+  const unfoldDiffFile = useCallback((fileKey: string) => {
+    const { collapseScopeKey, defaultCollapsedDiffFileKeys } = collapseDefaultsRef.current;
+    setCollapsedDiffFiles((current) => {
+      const fileKeys =
+        current.scopeKey === collapseScopeKey ? current.fileKeys : defaultCollapsedDiffFileKeys;
+      if (!fileKeys.has(fileKey)) return current;
+      const next = new Set(fileKeys);
+      next.delete(fileKey);
       return { scopeKey: collapseScopeKey, fileKeys: next };
     });
   }, []);
@@ -1347,6 +1335,7 @@ export default function DiffPanel({
                           },
                         }
                       : {})}
+                    onRevealSearchMatch={unfoldDiffFile}
                     renderHeaderPrefix={(fileDiff, fileKey) => {
                       const unavailable = fileDiff.cacheKey?.endsWith(":pending") === true;
                       return (
