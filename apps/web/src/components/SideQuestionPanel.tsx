@@ -213,6 +213,7 @@ export function SideQuestionPanel(props: {
                       {activeEntry ? (
                         <>
                           <ProviderModelPicker
+                            environmentId={props.threadRef?.environmentId ?? null}
                             size="xs"
                             activeInstanceId={activeModelSelection.instanceId}
                             model={activeModelSelection.model}
