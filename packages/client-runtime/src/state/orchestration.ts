@@ -72,6 +72,10 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
       idleTtlMs: 300_000,
     }),
     ...createThreadScratchpadAtoms(runtime),
+    stopWorkflow: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:orchestration:stop-workflow",
+      tag: ORCHESTRATION_V2_WS_METHODS.stopWorkflow,
+    }),
     // Keyed by the item revision, so a live row refetches as its output grows.
     turnItem: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:orchestration:turn-item",
