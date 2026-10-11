@@ -351,6 +351,7 @@ function createTextGeneration(
       Effect.succeed({
         answer: "Side answer",
       }),
+    generateReviewGuide: () => Effect.succeed({ stops: [] }),
     ...overrides,
   };
 
@@ -400,6 +401,7 @@ function createTextGeneration(
         ),
       ),
     answerSideQuestion: implementation.answerSideQuestion,
+    generateReviewGuide: (input) => implementation.generateReviewGuide(input),
   };
 }
 
