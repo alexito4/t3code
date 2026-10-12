@@ -4239,6 +4239,7 @@ export default function ChatView(props: ChatViewProps) {
     environmentId,
     threadKey: routeThreadKey,
     threadRef: activeThreadRef,
+    projectId: activeProject?.id ?? null,
     thread: activeThread,
     supported: sideQuestionsSupported,
     isServerThread,

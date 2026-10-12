@@ -1,4 +1,9 @@
-import type { ModelSelection, ScopedThreadRef, ServerProvider } from "@t3tools/contracts";
+import type {
+  ModelSelection,
+  ProjectId,
+  ScopedThreadRef,
+  ServerProvider,
+} from "@t3tools/contracts";
 import type { UnifiedSettings } from "@t3tools/contracts/settings";
 import { createModelSelection } from "@t3tools/shared/model";
 import { MessageCirclePlus, Minimize2Icon } from "lucide-react";
@@ -33,6 +38,8 @@ export type SideQuestionTurn = {
 export function SideQuestionPanel(props: {
   readonly cwd: string | undefined;
   readonly threadRef?: ScopedThreadRef;
+  /** Project-level provider overrides apply to side chat's picker like the composer's. */
+  readonly projectId: ProjectId | null;
   readonly turns: ReadonlyArray<SideQuestionTurn>;
   readonly providers: ReadonlyArray<ServerProvider>;
   readonly settings: UnifiedSettings;
@@ -68,9 +75,10 @@ export function SideQuestionPanel(props: {
         applyProviderInstanceSettings(
           deriveProviderInstanceEntries(props.providers),
           props.settings,
+          props.projectId,
         ),
       ),
-    [props.providers, props.settings],
+    [props.providers, props.settings, props.projectId],
   );
   const modelOptionsByInstance = useMemo(
     () =>

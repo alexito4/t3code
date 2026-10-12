@@ -49,6 +49,7 @@ const provider: ServerProvider = {
 };
 
 const panelProps = {
+  projectId: null,
   providers: [provider],
   settings: DEFAULT_UNIFIED_SETTINGS,
   modelSelection: {
