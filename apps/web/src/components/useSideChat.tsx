@@ -2,6 +2,7 @@ import type {
   AssistantCitation,
   EnvironmentId,
   ModelSelection,
+  ProjectId,
   ScopedThreadRef,
   ServerProvider,
   ThreadId,
@@ -53,6 +54,7 @@ export function useSideChat(input: {
   readonly environmentId: EnvironmentId;
   readonly threadKey: string;
   readonly threadRef: ScopedThreadRef | null;
+  readonly projectId: ProjectId | null;
   readonly thread:
     | { readonly id: ThreadId; readonly modelSelection: ModelSelection }
     | null
@@ -321,6 +323,7 @@ export function useSideChat(input: {
         turns={state.turns}
         providers={input.providers}
         settings={input.settings}
+        projectId={input.projectId}
         modelSelection={state.modelSelection}
         draftSeed={state.draftSeed}
         onMinimize={() => {

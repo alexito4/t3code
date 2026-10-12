@@ -499,8 +499,14 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const sideModelSelection =
     sideQuestionState?.modelSelection ?? props.selectedThread.modelSelection;
   const sideModelOptions = useMemo(
-    () => buildModelOptions(props.serverConfig, sideModelSelection),
-    [props.serverConfig, sideModelSelection],
+    () =>
+      buildModelOptions(
+        props.serverConfig,
+        sideModelSelection,
+        undefined,
+        props.selectedThread.projectId,
+      ),
+    [props.serverConfig, sideModelSelection, props.selectedThread.projectId],
   );
   const sideCurrentModelOption =
     sideModelOptions.find(
@@ -535,6 +541,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     () => ({
       ownerId: `${selectedThreadKey}:side-question`,
       environmentId: props.environmentId,
+      projectId: props.selectedThread.projectId,
       title: "Side chat settings",
       showRuntime: false,
       providerGroups: sideProviderGroups,
@@ -548,6 +555,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
     }),
     [
       props.environmentId,
+      props.selectedThread.projectId,
       props.selectedThread.runtimeMode,
       selectedThreadKey,
       sideModelSelection,
