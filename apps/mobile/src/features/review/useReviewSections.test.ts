@@ -41,6 +41,9 @@ vi.mock("../../state/use-thread-detail", () => ({
 vi.mock("../../state/use-selected-thread-worktree", () => ({
   useSelectedThreadWorktree: () => ({ selectedThreadCwd: "/repo" }),
 }));
+vi.mock("../../state/entities", () => ({
+  useEnvironmentServerConfig: () => null,
+}));
 vi.mock("../../state/query", () => ({
   useEnvironmentQuery: (atom: unknown) => ({
     data: atom === state.sessionAtom ? state.session : null,
