@@ -3,6 +3,7 @@ import { usePullRequestLinking } from "~/hooks/usePullRequestLinking";
 import { useAtomValue } from "@effect/atom-react";
 import { usePullRequestStack } from "~/state/usePullRequestStack";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
+import { AnimatedWidth } from "~/components/AnimatedWidth";
 import {
   scopedThreadKey,
   scopeProjectRef,
@@ -28,6 +29,7 @@ import {
   ArrowLeftIcon,
   ArrowUpRightIcon,
   BookOpenIcon,
+  CheckIcon,
   CircleDotIcon,
   ClipboardCheckIcon,
   CopyIcon,
@@ -2108,22 +2110,25 @@ export function PullRequestDetailPanel({
                                 : pendingAutoMergeLabel
                           }
                         >
-                          <PullRequestGlyph.merged aria-hidden className="size-3.5" />
-                          <span className="inline-grid @max-[30rem]/pr-header:hidden">
-                            <span aria-hidden className="invisible col-start-1 row-start-1">
-                              {pendingAutoMergeLabel}
+                          {inlineConfirm.isArmed("enable-auto-merge") ? (
+                            <CheckIcon aria-hidden className="size-3.5" />
+                          ) : (
+                            <PullRequestGlyph.merged aria-hidden className="size-3.5" />
+                          )}
+                          <AnimatedWidth className="@max-[30rem]/pr-header:hidden">
+                            <span className="grid">
+                              <span aria-hidden className="invisible col-start-1 row-start-1">
+                                {pendingAutoMergeLabel}
+                              </span>
+                              <span className="col-start-1 row-start-1">
+                                {pendingAction === "enable-auto-merge"
+                                  ? "Enabling..."
+                                  : inlineConfirm.isArmed("enable-auto-merge")
+                                    ? "Confirm auto-merge?"
+                                    : pendingAutoMergeLabel}
+                              </span>
                             </span>
-                            <span aria-hidden className="invisible col-start-1 row-start-1">
-                              Confirm auto-merge?
-                            </span>
-                            <span className="col-start-1 row-start-1">
-                              {pendingAction === "enable-auto-merge"
-                                ? "Enabling..."
-                                : inlineConfirm.isArmed("enable-auto-merge")
-                                  ? "Confirm auto-merge?"
-                                  : pendingAutoMergeLabel}
-                            </span>
-                          </span>
+                          </AnimatedWidth>
                         </Button>
                       </span>
                     }
@@ -2177,22 +2182,25 @@ export function PullRequestDetailPanel({
                                 : selectedMergeMethodLabel
                           }
                         >
-                          <PullRequestGlyph.merged aria-hidden className="size-3.5" />
-                          <span className="inline-grid @max-[30rem]/pr-header:hidden">
-                            <span aria-hidden className="invisible col-start-1 row-start-1">
-                              {selectedMergeMethodLabel}
+                          {inlineConfirm.isArmed("merge") ? (
+                            <CheckIcon aria-hidden className="size-3.5" />
+                          ) : (
+                            <PullRequestGlyph.merged aria-hidden className="size-3.5" />
+                          )}
+                          <AnimatedWidth className="@max-[30rem]/pr-header:hidden">
+                            <span className="grid">
+                              <span aria-hidden className="invisible col-start-1 row-start-1">
+                                {selectedMergeMethodLabel}
+                              </span>
+                              <span className="col-start-1 row-start-1">
+                                {pendingAction === "merge"
+                                  ? "Merging..."
+                                  : inlineConfirm.isArmed("merge")
+                                    ? "Confirm merge?"
+                                    : selectedMergeMethodLabel}
+                              </span>
                             </span>
-                            <span aria-hidden className="invisible col-start-1 row-start-1">
-                              Confirm merge?
-                            </span>
-                            <span className="col-start-1 row-start-1">
-                              {pendingAction === "merge"
-                                ? "Merging..."
-                                : inlineConfirm.isArmed("merge")
-                                  ? "Confirm merge?"
-                                  : selectedMergeMethodLabel}
-                            </span>
-                          </span>
+                          </AnimatedWidth>
                         </Button>
                       </span>
                     }
