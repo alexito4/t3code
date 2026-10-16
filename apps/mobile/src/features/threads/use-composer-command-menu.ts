@@ -1,9 +1,11 @@
+import * as Dialog from "../../components/ui/Dialog";
 import type {
   EnvironmentId,
   ProjectId,
   ProviderInteractionMode,
   ServerProvider,
   ThreadId,
+  ThreadPullRequestLink,
 } from "@t3tools/contracts";
 import { matchComposerThreadItems } from "@t3tools/client-runtime/composerThreadItems";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
@@ -13,7 +15,6 @@ import {
   COMPOSER_CONTEXT_MAX_RECORDS,
   PROVIDER_WORKSPACE_SNAPSHOT_TTL_MS,
 } from "@t3tools/contracts";
-import { Alert } from "react-native";
 import { formatComposerContextReference } from "@t3tools/shared/composerContextReferences";
 import { pullRequestComposerContext, threadComposerContext } from "../../lib/composerContext";
 import { uuidv4 } from "../../lib/uuid";
@@ -191,6 +192,7 @@ export function useComposerCommandMenu({
   projectCwd,
   pullRequestProjectId = null,
   pullRequestRepository = null,
+  threadPullRequests,
   selectedProviderStatus,
   hasThread,
   hasCompactableConversation,
@@ -211,6 +213,8 @@ export function useComposerCommandMenu({
   readonly projectCwd: string | null;
   readonly pullRequestProjectId?: ProjectId | null;
   readonly pullRequestRepository?: string | null;
+  /** The thread's linked pull requests, offered in `#` suggestions from any repository. */
+  readonly threadPullRequests?: ReadonlyArray<ThreadPullRequestLink>;
   readonly selectedProviderStatus: ServerProvider | null;
   readonly hasThread: boolean;
   readonly hasCompactableConversation: boolean;
@@ -372,6 +376,7 @@ export function useComposerCommandMenu({
     environmentId,
     projectId: pullRequestProjectId,
     repository: pullRequestRepository,
+    threadPullRequests,
     query: trigger?.kind === "pull-request" ? trigger.query : null,
   });
 
@@ -392,7 +397,11 @@ export function useComposerCommandMenu({
           isDraft: entry.isDraft,
         },
         label: `#${entry.number}`,
-        description: `${entry.isDraft ? "Draft" : entry.state} · ${entry.title}`,
+        description: `${entry.isDraft ? "Draft" : entry.state} · ${
+          entry.repository.toLowerCase() === pullRequestRepository?.toLowerCase()
+            ? ""
+            : `${entry.repository} · `
+        }${entry.title}`,
       }));
     }
 
@@ -572,7 +581,7 @@ export function useComposerCommandMenu({
         const existing = getComposerDraftSnapshot(ownerKey).context?.records ?? [];
         const alreadyAttached = existing.some((entry) => entry.contextId === record.contextId);
         if (!alreadyAttached && existing.length >= COMPOSER_CONTEXT_MAX_RECORDS) {
-          Alert.alert(
+          Dialog.alert(
             "Too many context items",
             "Remove some context from the draft and try again.",
           );
@@ -607,7 +616,7 @@ export function useComposerCommandMenu({
           (getComposerDraftSnapshot(ownerKey).context?.records.length ?? 0) >=
           COMPOSER_CONTEXT_MAX_RECORDS
         ) {
-          Alert.alert(
+          Dialog.alert(
             "Too many context items",
             "Remove some context from the draft and try again.",
           );
