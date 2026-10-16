@@ -98,8 +98,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkspaceContentWidth } from "../layout/workspace-content-width";
-import { AppText as Text, AppTextInput as TextInput } from "../../components/AppText";
-import { ControlPill } from "../../components/ControlPill";
+import { AppText as Text, AppTextInput as TextInput } from "../../components/ui/AppText";
+import { ControlPill } from "../../components/ui/ControlPill";
 import { ComposerInlineControl } from "../../components/ComposerToolbar";
 import { ProviderIcon } from "../../components/ProviderIcon";
 import { useNativeWorkspaceColumnsSupported } from "../../native/NativeWorkspaceColumns";
