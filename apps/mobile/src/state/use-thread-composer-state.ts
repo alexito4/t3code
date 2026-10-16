@@ -1,6 +1,10 @@
+import * as Dialog from "../components/ui/Dialog";
+import { AuthOrchestrationOperateScope } from "@t3tools/contracts";
+import { readEnvironmentScope } from "./session";
 import type { ComposerTextPaste } from "../native/T3ComposerEditor.types";
 import { useAtomValue } from "@effect/atom-react";
 import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/shell";
+import { resolvePendingHandoff } from "@t3tools/client-runtime/handoff";
 import {
   deriveProviderSubagentStatus,
   deriveRunlessWorkStartedAt,
@@ -9,7 +13,6 @@ import {
   threadRuntimeHasInterruptibleRun,
 } from "@t3tools/client-runtime/state/thread-execution";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert } from "react-native";
 
 import {
   CommandId,
@@ -37,7 +40,10 @@ import { composerContextSendBlockReason, reidentifyComposerContext } from "../li
 import { uuidv4 } from "../lib/uuid";
 
 import { makeQueuedMessageMetadata } from "../lib/commandMetadata";
-import { isModelSelectionUnavailable } from "../lib/modelOptions";
+import {
+  describeUnavailableModelSelection,
+  isModelSelectionUnavailable,
+} from "../lib/modelOptions";
 import { resolveProviderInteractionMode } from "./legacy-plan-mode";
 import {
   convertPastedImagesToAttachments,
@@ -81,8 +87,8 @@ import {
   resolveComposerDispatchMode,
   type ActiveTurnComposerAction,
 } from "@t3tools/client-runtime/state/composer-dispatch";
-import { Atom } from "effect/unstable/reactivity";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { prepareTurnAttachments } from "../lib/attachmentUpload";
 import { DEFAULT_FOLLOW_UP_BEHAVIOR } from "../lib/followUpBehavior";
 import { mobilePreferencesAtom } from "./preferences";
@@ -96,6 +102,7 @@ import {
   useQueuedRunEdit,
 } from "./queued-run-edit";
 import { setPendingConnectionError } from "../state/use-remote-environment-registry";
+import { clearThreadComposerError, setThreadComposerError } from "./thread-composer-error";
 import {
   useSelectedThreadProjection,
   useSelectedThreadVisibleTurnItems,
@@ -124,7 +131,7 @@ export function appendReviewCommentToDraft(input: {
       reidentifyComposerContext(upgraded.text, upgraded.records, uuidv4),
     )
   ) {
-    Alert.alert("Too many context items", "Remove some context from the draft and try again.");
+    Dialog.alert("Too many context items", "Remove some context from the draft and try again.");
     return;
   }
   if (input.attachments && input.attachments.length > 0) {
@@ -177,6 +184,7 @@ export function useThreadComposerState() {
   const {
     selectedThread: selectedThreadShell,
     selectedThreadCreation,
+    selectedThreadDetailRef,
     selectedEnvironmentRuntime,
   } = useThreadSelection();
   const selectedThreadProjection = useSelectedThreadProjection();
@@ -304,12 +312,9 @@ export function useThreadComposerState() {
   // Steering needs a live provider turn the adapter can interrupt; the queue
   // workflow already derives that from the session's capabilities.
   const queueWorkflow = useAtomValue(
-    selectedThreadShell === null
+    selectedThreadDetailRef === null
       ? EMPTY_QUEUE_WORKFLOW_ATOM
-      : environmentThreadDetails.queueWorkflowAtom({
-          environmentId: selectedThreadShell.environmentId,
-          threadId: selectedThreadShell.id,
-        }),
+      : environmentThreadDetails.queueWorkflowAtom(selectedThreadDetailRef),
   );
   const canSteerActiveTurn = queueWorkflow?.canPromoteToSteer === true;
   const queuedRunEdit = useQueuedRunEdit(selectedThreadKey);
@@ -328,6 +333,15 @@ export function useThreadComposerState() {
   const selectedThreadQueueCount = selectedThreadQueuedMessages.length;
   const selectedThread = selectedThreadShell;
   const modelSelection = selectedDraft?.modelSelection ?? selectedThread?.modelSelection ?? null;
+  const pendingHandoff = useMemo(
+    () =>
+      resolvePendingHandoff(
+        selectedThreadProjection?.projection,
+        modelSelection,
+        selectedEnvironmentRuntime?.serverConfig?.providers ?? [],
+      ),
+    [modelSelection, selectedThreadProjection, selectedEnvironmentRuntime?.serverConfig?.providers],
+  );
   const runtimeMode = selectedDraft?.runtimeMode ?? selectedThread?.runtimeMode ?? null;
   const selectedProvider = selectedEnvironmentRuntime?.serverConfig?.providers.find(
     (provider) => provider.instanceId === modelSelection?.instanceId,
@@ -452,7 +466,8 @@ export function useThreadComposerState() {
       });
     }
     endQueuedRunEdit(selectedThreadKey, { deferAttachmentCleanup: keepable });
-    setPendingConnectionError(
+    setThreadComposerError(
+      selectedThreadKey,
       keepable
         ? "That message already started. Your edit is back in the composer."
         : "That message already started, so the edit was discarded.",
@@ -487,14 +502,14 @@ export function useThreadComposerState() {
     const text = draft.text.trim();
     if (text.length === 0) {
       // The server rejects an empty queued message, attachments or not.
-      Alert.alert("Add a message", "A queued message cannot be left empty.");
+      Dialog.alert("Add a message", "A queued message cannot be left empty.");
       return;
     }
     if (
       edit.existingAttachments.length + draft.attachments.length >
       PROVIDER_SEND_TURN_MAX_ATTACHMENTS
     ) {
-      Alert.alert(
+      Dialog.alert(
         "Too many attachments",
         `Remove attachments until there are at most ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS}.`,
       );
@@ -530,7 +545,7 @@ export function useThreadComposerState() {
         },
       });
       if (result._tag !== "Success") {
-        Alert.alert(
+        Dialog.alert(
           "Could not save the queued message",
           "It may have already started. Your edit is still in the composer.",
         );
@@ -546,6 +561,12 @@ export function useThreadComposerState() {
 
   const onSendMessage = useCallback(
     async (followUpOverride?: ActiveTurnComposerAction) => {
+      if (
+        selectedThreadShell &&
+        selectedEnvironmentRuntime?.connectionState === "connected" &&
+        !readEnvironmentScope(selectedThreadShell.environmentId, AuthOrchestrationOperateScope)
+      )
+        return null;
       if (!selectedThreadShell) {
         return null;
       }
@@ -589,7 +610,7 @@ export function useThreadComposerState() {
       // would enqueue a message that outbox recovery rejects forever, so block
       // here until the user removes attachments.
       if (attachments.length > PROVIDER_SEND_TURN_MAX_ATTACHMENTS) {
-        Alert.alert(
+        Dialog.alert(
           "Too many attachments",
           `Remove attachments until there are at most ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS}.`,
         );
@@ -598,7 +619,7 @@ export function useThreadComposerState() {
 
       const contextBlockReason = composerContextSendBlockReason(draft.context);
       if (contextBlockReason) {
-        Alert.alert("Too much context", contextBlockReason);
+        Dialog.alert("Too much context", contextBlockReason);
         return null;
       }
 
@@ -606,12 +627,14 @@ export function useThreadComposerState() {
       const serverConfig = selectedEnvironmentRuntime?.serverConfig;
       if (
         selectedEnvironmentRuntime?.connectionState === "connected" &&
-        isModelSelectionUnavailable(serverConfig, modelSelection)
+        isModelSelectionUnavailable(serverConfig, modelSelection, thread.projectId)
       ) {
-        Alert.alert(
-          "Antigravity model unavailable",
-          "Set up Antigravity on web or desktop, or choose another model.",
+        const { title, detail } = describeUnavailableModelSelection(
+          serverConfig,
+          modelSelection,
+          thread.projectId,
         );
+        Dialog.alert(title, detail);
         return null;
       }
       const provider = serverConfig?.providers.find(
@@ -622,8 +645,10 @@ export function useThreadComposerState() {
           ? parseCodexFeedbackCommand(text)
           : null;
       if (feedbackCommand) {
+        if (!readEnvironmentScope(selectedThreadShell.environmentId, AuthOrchestrationOperateScope))
+          return null;
         if (thread.activeProviderThreadId === null) {
-          Alert.alert("Start a Codex thread first", "Send a message before you submit feedback.");
+          Dialog.alert("Start a Codex thread first", "Send a message before you submit feedback.");
           return null;
         }
         const metadata = makeQueuedMessageMetadata();
@@ -665,11 +690,25 @@ export function useThreadComposerState() {
         alternateModifier: followUpOverride !== undefined && followUpOverride !== followUpBehavior,
         activeTurnDefault: followUpBehavior,
       });
-      const followUpDispatchMode =
-        followUpAction === "auto" ? null : followUpAction === "queue" ? "queue" : "auto";
+      // A send while the worktree is still being set up waits behind that setup,
+      // so the server can hold it if the setup ends without a worktree.
+      // Before detail loads, the shell's latest run can be a queued follow-up
+      // while its runtime still reports the setup.
+      const setupRunning = [selectedThreadActivityRun?.status, selectedThreadRuntime?.status].some(
+        (status) => status === "preparing" || status === "starting",
+      );
+      const followUpDispatchMode = setupRunning
+        ? "queue"
+        : followUpAction === "auto"
+          ? null
+          : followUpAction === "queue"
+            ? "queue"
+            : "auto";
 
       const metadata = makeQueuedMessageMetadata();
       const messageId = MessageId.make(metadata.messageId);
+      // A new send supersedes the reason the previous one bounced back.
+      clearThreadComposerError(threadKey);
       // Enqueue publishes the queued atom synchronously (the durable write
       // happens behind it), so clearing the draft here gives send feedback on
       // the tap frame instead of after file I/O. If the write fails the message
@@ -706,7 +745,8 @@ export function useThreadComposerState() {
             attachments: [],
           });
           appendComposerDraftAttachments(threadKey, attachments, { allowOverflow: true });
-          setPendingConnectionError(
+          setThreadComposerError(
+            threadKey,
             error instanceof Error ? error.message : "Failed to save the queued message.",
           );
         },
@@ -720,7 +760,9 @@ export function useThreadComposerState() {
       saveQueuedRunEdit,
       selectedEnvironmentRuntime?.connectionState,
       selectedEnvironmentRuntime?.serverConfig,
+      selectedThreadActivityRun?.status,
       selectedThreadCreation,
+      selectedThreadRuntime?.status,
       selectedThreadShell,
       uploadThreadFeedback,
     ],
@@ -764,7 +806,7 @@ export function useThreadComposerState() {
         : []),
     ];
     if (problems.length > 0) {
-      Alert.alert("Could not attach photo or video", problems.join("\n\n"));
+      Dialog.alert("Could not attach photo or video", problems.join("\n\n"));
     }
   }, [composerDrafts, selectedEnvironmentRuntime?.serverConfig, selectedThreadShell]);
 
@@ -776,7 +818,7 @@ export function useThreadComposerState() {
       selectedEnvironmentRuntime?.serverConfig?.environment.capabilities.fileAttachments
         ?.maxUploadBytes;
     if (maxBytes === undefined) {
-      Alert.alert("Could not attach file", "This server does not support file attachments.");
+      Dialog.alert("Could not attach file", "This server does not support file attachments.");
       return;
     }
 
@@ -800,7 +842,7 @@ export function useThreadComposerState() {
         : []),
     ];
     if (problems.length > 0) {
-      Alert.alert("Could not attach file", problems.join("\n\n"));
+      Dialog.alert("Could not attach file", problems.join("\n\n"));
     }
   }, [composerDrafts, selectedEnvironmentRuntime?.serverConfig, selectedThreadShell]);
 
@@ -1057,6 +1099,7 @@ export function useThreadComposerState() {
     cancelQueuedRunEdit,
     onRemoveQueuedEditAttachment,
     modelSelection,
+    pendingHandoff,
     canSwitchThreadProvider,
     runtimeMode,
     interactionMode,

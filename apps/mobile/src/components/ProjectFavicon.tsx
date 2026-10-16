@@ -1,5 +1,5 @@
-import { SymbolView } from "./AppSymbol";
-import { AppText } from "./AppText";
+import { SymbolView } from "./ui/AppSymbol";
+import { AppText } from "./ui/AppText";
 import { Image } from "expo-image";
 import { memo, useLayoutEffect, useMemo, useState } from "react";
 import { View } from "react-native";
@@ -10,7 +10,7 @@ import {
   isProjectFaviconFallbackUrl,
 } from "@t3tools/shared/projectFavicon";
 import { useAtomValue } from "@effect/atom-react";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { projectFaviconUrlAtom } from "../state/assets";
 import {
   countGlyphs,
