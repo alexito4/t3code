@@ -1,3 +1,4 @@
+import * as Dialog from "../../components/ui/Dialog";
 import {
   AuthTerminalReadScope,
   AuthTerminalOperateScope,
@@ -7,13 +8,14 @@ import {
   sessionGrantsScope,
 } from "@t3tools/contracts";
 import { type KnownTerminalSession } from "@t3tools/client-runtime/state/terminal";
-import { SymbolView } from "../../components/AppSymbol";
-import { ScreenHeader } from "../../components/ScreenHeader";
+import { SymbolView } from "../../components/ui/AppSymbol";
+import { AppBar } from "../../components/ui/AppBar";
+import { useNativeColumnLayoutMetrics } from "../../native/native-layout-metrics";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Platform, Pressable, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AppText as Text } from "../../components/AppText";
+import { AppText as Text } from "../../components/ui/AppText";
 import { TerminalContextSheet } from "./TerminalContextSheet";
 import { hasNativeTerminalSurface } from "./nativeTerminalModule";
 import * as Clipboard from "expo-clipboard";
@@ -30,12 +32,12 @@ import {
   ComposerToolbarRow,
   ComposerToolbarScroller,
 } from "../../components/ComposerToolbar";
-import { EmptyState } from "../../components/EmptyState";
-import { GlassSurface } from "../../components/GlassSurface";
+import { EmptyState } from "../../components/ui/EmptyState";
+import { GlassSurface } from "../../components/ui/GlassSurface";
 import { LoadingScreen } from "../../components/LoadingScreen";
-import { MaterialScreenContent } from "../../components/MaterialScreenContent";
-import { MaterialButton } from "../../components/MaterialButton";
-import { MaterialIconButton } from "../../components/MaterialIconButton";
+import { ScreenContent } from "../../components/ui/ScreenContent";
+import { Button } from "../../components/ui/Button";
+import { IconButton } from "../../components/ui/IconButton";
 import { environmentCatalog } from "../../connection/catalog";
 import { useEnvironmentPresentation } from "../../state/presentation";
 import { terminalEnvironment } from "../../state/terminal";
@@ -108,7 +110,7 @@ function TerminalHeader(props: {
   readonly onSelectTerminal: (terminalId: string) => void;
 }) {
   return (
-    <ScreenHeader
+    <AppBar
       title="Terminal"
       subtitle={props.subtitle}
       onBack={props.onCloseTerminal}
@@ -254,6 +256,7 @@ type ThreadTerminalRouteScreenProps = StaticScreenProps<{
 
 export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps) {
   const insets = useSafeAreaInsets();
+  const nativeColumnMetrics = useNativeColumnLayoutMetrics();
   const navigation = useNavigation();
   const writeTerminal = useAtomCommand(terminalEnvironment.write, "terminal write");
   const resizeTerminal = useAtomCommand(terminalEnvironment.resize, "terminal resize");
@@ -1194,7 +1197,7 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
         onSelectTerminal={handleSelectTerminal}
       />
 
-      <MaterialScreenContent>
+      <ScreenContent>
         <View
           className="flex-1"
           style={{
@@ -1202,6 +1205,10 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
               Platform.OS === "android"
                 ? themeVariables["--color-card-alt"]
                 : terminalTheme.background,
+            // The v5 column extends behind UIKit chrome. Its measured top
+            // reservation is zero when UIKit has already inset the body or moved the bar.
+            paddingTop:
+              Platform.OS === "ios" ? (nativeColumnMetrics?.safeArea.top ?? insets.top) : 0,
             paddingBottom:
               Platform.OS === "android" && !keyboardState.isVisible ? insets.bottom : 0,
           }}
@@ -1277,7 +1284,8 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
                   captureRequest={captureRequest}
                   onCapture={(text) => {
                     if (text.trim()) setCapturedOutput(text);
-                    else Alert.alert("No terminal output", "There is no visible output to attach.");
+                    else
+                      Dialog.alert("No terminal output", "There is no visible output to attach.");
                   }}
                   onInput={handleInput}
                   onResize={handleResize}
@@ -1290,14 +1298,14 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
               {Platform.OS === "android" && !keyboardState.isVisible ? (
                 <View className="min-h-14 flex-row items-center gap-2 bg-card-alt px-2">
                   {selectedThread && hasNativeTerminalSurface() ? (
-                    <MaterialButton
+                    <Button
                       label="Attach output"
                       tone="text"
                       onPress={() => setCaptureRequest((value) => value + 1)}
                     />
                   ) : null}
                   <View className="flex-1" />
-                  <MaterialIconButton
+                  <IconButton
                     accessibilityLabel="Show keyboard"
                     disabled={!canOperateTerminal}
                     icon="keyboard"
@@ -1405,7 +1413,7 @@ export function ThreadTerminalRouteScreen(props: ThreadTerminalRouteScreenProps)
             </>
           )}
         </View>
-      </MaterialScreenContent>
+      </ScreenContent>
     </>
   );
 }
