@@ -315,7 +315,7 @@ export const make: Effect.Effect<
         });
       }
 
-      const requestId = input.requestId ?? (yield* crypto.randomUUIDv4);
+      const requestId = input.requestId ?? (yield* crypto.randomUUIDv4());
       const modelSelection = input.modelSelection ?? thread.modelSelection;
       return yield* run(
         {
