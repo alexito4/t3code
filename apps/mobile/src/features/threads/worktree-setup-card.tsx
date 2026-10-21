@@ -1,3 +1,4 @@
+import { Button } from "../../components/ui/Button";
 import {
   worktreeSetupStageLabel,
   type WorktreeSetupSnapshot,
@@ -38,7 +39,6 @@ const icons: Record<WorktreeSetupStage["status"], AppSymbolName> = {
   warning: "exclamationmark.triangle",
 };
 
-/** Setup stages collapse into the working header once the agent's turn is live. */
 export function WorktreeSetupCard(props: WorktreeSetupCardProps) {
   const { snapshot, turnStarted, turnStartedAt, working } = props;
   const handedOff = turnStarted && worktreeSetupAgentStarted(snapshot);
@@ -212,7 +212,6 @@ function SetupDetailsSheet({
           paddingBottom: Math.max(20, insets.bottom),
         }}
       >
-        {/* Agent startup is the header handoff, not a fifth setup step. */}
         {snapshot.stages
           .filter((stage) => stage.id !== "agent")
           .map((stage) => (
@@ -231,28 +230,24 @@ function SetupDetailsSheet({
         ) : null}
         {canCancel ? (
           <View className="mt-3 flex-row items-center justify-end gap-4 border-t border-border pt-1">
-            <Pressable
-              accessibilityRole="button"
+            <Button
+              label="Cancel setup"
+              tone="danger"
               accessibilityLabel="Cancel worktree setup"
               onPress={() => {
                 onClose();
                 onCancel();
               }}
-              className="min-h-11 justify-center px-2"
-            >
-              <Text className="text-sm text-danger-foreground">Cancel setup</Text>
-            </Pressable>
+            />
             {onWorkLocally ? (
-              <Pressable
-                accessibilityRole="button"
+              <Button
+                label="Work locally"
+                tone="secondary"
                 onPress={() => {
                   onClose();
                   onWorkLocally();
                 }}
-                className="min-h-11 justify-center px-2"
-              >
-                <Text className="text-sm text-foreground">Work locally</Text>
-              </Pressable>
+              />
             ) : null}
           </View>
         ) : null}
@@ -351,7 +346,6 @@ function StageRow({
 
 const OUTPUT_TAIL_SLOTS = [0, 1, 2, 3] as const;
 
-/** Fixed four-line output window, shown only in Details. */
 function OutputTail({ lines, failed }: { lines: ReadonlyArray<string>; failed: boolean }) {
   return (
     <View
