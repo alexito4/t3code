@@ -546,6 +546,35 @@ const PROVIDER_STATUS_DEBOUNCE_MS = 200;
 
 // Middleware added later wraps middleware added earlier, so instrumentation wraps authorization.
 const ServerWsRpcGroup = WsRpcGroup.middleware(RpcInstrumentation);
+// The fork's procedures are implemented outside upstream's handler map: a single
+// toLayer over every procedure exceeds TypeScript's type instantiation limit.
+const CoreWsRpcGroup = ServerWsRpcGroup.omit(
+  WS_METHODS.threadScratchpadGet,
+  WS_METHODS.threadScratchpadSet,
+);
+// The scratchpad's procedures have their own handler layer.
+const layerThreadScratchpadWsRpc = Layer.mergeAll(
+  ServerWsRpcGroup.toLayerHandler(WS_METHODS.threadScratchpadGet, (input) =>
+    Effect.gen(function* () {
+      const threadScratchpads = yield* ThreadScratchpads.ThreadScratchpadRepository;
+      return yield* threadScratchpads.get(input.threadId);
+    }).pipe(
+      Effect.mapError(
+        (cause) => new ThreadScratchpadError({ message: "Could not read the scratchpad.", cause }),
+      ),
+    ),
+  ),
+  ServerWsRpcGroup.toLayerHandler(WS_METHODS.threadScratchpadSet, (input) =>
+    Effect.gen(function* () {
+      const threadScratchpads = yield* ThreadScratchpads.ThreadScratchpadRepository;
+      return yield* threadScratchpads.set(input);
+    }).pipe(
+      Effect.mapError(
+        (cause) => new ThreadScratchpadError({ message: "Could not save the scratchpad.", cause }),
+      ),
+    ),
+  ),
+);
 // Replaying each intervening event costs a shell refetch; past this gap a
 // single O(active-threads) snapshot is cheaper and bounded.
 const SHELL_RESUME_MAX_GAP = 1_000;
@@ -1182,14 +1211,14 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
   },
 );
 
-export const layerWsRpc = (
+const layerCoreWsRpc = (
   currentSession: EnvironmentAuth.AuthenticatedSession,
   clientOrigin: OrchestrationClientOrigin,
   clientAnalyticsProps: Readonly<Record<string, unknown>>,
   previewAutomationBroker: PreviewAutomationBroker.PreviewAutomationBroker["Service"],
   serverBrowser: ServerBrowser.ServerBrowser["Service"],
 ) =>
-  ServerWsRpcGroup.toLayer(
+  CoreWsRpcGroup.toLayer(
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
       const sql = yield* SqlClient.SqlClient;
@@ -1228,7 +1257,6 @@ export const layerWsRpc = (
       const pullRequests = yield* PullRequestService.PullRequestService;
       const reviewGuides = yield* PullRequestReviewGuideService.PullRequestReviewGuideService;
       const pullRequestSync = yield* PullRequestSyncReactor.PullRequestSyncReactor;
-      const threadScratchpads = yield* ThreadScratchpads.ThreadScratchpadRepository;
       const deviceService = yield* DeviceService.DeviceService;
       const deviceHostContext =
         yield* Effect.context<Effect.Services<ReturnType<typeof remoteSshDeviceHosts>>>();
@@ -1806,7 +1834,7 @@ export const layerWsRpc = (
         return result;
       });
 
-      const handlers = ServerWsRpcGroup.of({
+      const handlers = CoreWsRpcGroup.of({
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": command.commandId,
@@ -2549,24 +2577,6 @@ export const layerWsRpc = (
           withPullRequestViewer(input, pullRequests.setLabels(input)),
         // Fetched on demand, never part of the thread snapshot, so a long scratchpad costs
         // nothing until its panel opens.
-        [WS_METHODS.threadScratchpadGet]: (input) =>
-          threadScratchpads
-            .get(input.threadId)
-            .pipe(
-              Effect.mapError(
-                (cause) =>
-                  new ThreadScratchpadError({ message: "Could not read the scratchpad.", cause }),
-              ),
-            ),
-        [WS_METHODS.threadScratchpadSet]: (input) =>
-          threadScratchpads
-            .set(input)
-            .pipe(
-              Effect.mapError(
-                (cause) =>
-                  new ThreadScratchpadError({ message: "Could not save the scratchpad.", cause }),
-              ),
-            ),
         [WS_METHODS.sourceControlLookupRepository]: (input) =>
           sourceControlRepositories.lookupRepository(input),
         [WS_METHODS.sourceControlCloneRepository]: (input) =>
@@ -3146,6 +3156,9 @@ export const layerWsRpc = (
       return handlers;
     }),
   );
+
+export const layerWsRpc = (...args: Parameters<typeof layerCoreWsRpc>) =>
+  Layer.mergeAll(layerCoreWsRpc(...args), layerThreadScratchpadWsRpc);
 
 // RpcServer's default sends a socket-level Defect frame instead, and the client
 // ends every pending request on the socket with it.
