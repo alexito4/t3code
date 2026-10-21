@@ -15,34 +15,21 @@ function section(id: string, kind: ReviewSectionKind): ReviewSectionItem {
 }
 
 describe("buildReviewSectionMenu", () => {
-  it("exposes git scopes and the latest turn at the top level", () => {
-    const turn28 = section("turn:28", "turn");
-    const turn27 = section("turn:27", "turn");
+  it("exposes the fork's Staged and Unstaged scopes next to Uncommitted", () => {
     const workingTree = section("git:working-tree", "working-tree");
     const unstaged = section("git:unstaged", "unstaged");
     const staged = section("git:staged", "staged");
-    const branchChanges = section("git:branch-range", "branch-range");
 
-    expect(
-      buildReviewSectionMenu([turn28, turn27, workingTree, staged, unstaged, branchChanges]),
-    ).toEqual({
+    expect(buildReviewSectionMenu([workingTree, staged, unstaged])).toMatchObject({
       workingTree,
       unstaged,
       staged,
-      branchChanges,
-      latestTurn: turn28,
-      turns: [turn28, turn27],
     });
   });
 
-  it("keeps unavailable scopes empty while data loads", () => {
-    expect(buildReviewSectionMenu([])).toEqual({
-      workingTree: null,
-      unstaged: null,
-      staged: null,
-      branchChanges: null,
-      latestTurn: null,
-      turns: [],
-    });
+  it("leaves Staged and Unstaged empty when the server does not return them", () => {
+    expect(
+      buildReviewSectionMenu([section("git:working-tree", "working-tree")]),
+    ).toMatchObject({ unstaged: null, staged: null });
   });
 });
