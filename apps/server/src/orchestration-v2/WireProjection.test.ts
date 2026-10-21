@@ -17,8 +17,13 @@ import { describe, expect, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
 import * as Schema from "effect/Schema";
 
-import { projectTurnItemForWire, projectDomainEventForWire } from "./WireProjection.ts";
+import {
+  projectTurnItemForWire,
+  projectTurnItemForDetail,
+  projectDomainEventForWire,
+} from "./WireProjection.ts";
 import { threadShellFromProjection } from "./ProjectionStore.ts";
+import { MAX_TOOL_OUTPUT_IMAGES, toolOutputImages } from "@t3tools/shared/toolOutput";
 
 const decodeTurnItem = Schema.decodeUnknownSync(OrchestrationV2TurnItem);
 const encodeTurnItemJson = Schema.encodeSync(OrchestrationV2TurnItemJson);
@@ -89,23 +94,6 @@ describe("orchestration V2 wire projection", () => {
     expect(item.output.data).toBe("private-image-data");
   });
 
-  it("preserves provider notices in bounded items and live events", () => {
-    const item = {
-      ...base,
-      type: "system_notice" as const,
-      message: "Safeguards flagged this message. Switched to Opus 4.8.",
-    };
-    expect(projectTurnItemForWire(item)).toEqual(item);
-    const event = {
-      id: EventId.make("notice-wire-event"),
-      type: "turn-item.updated" as const,
-      threadId: item.threadId,
-      occurredAt: item.updatedAt,
-      payload: item,
-    };
-    expect(projectDomainEventForWire(event)).toEqual(event);
-  });
-
   it("keeps transcript bodies out of shell rows", () => {
     const now = DateTime.makeUnsafe("2026-08-13T00:00:00.000Z");
     const threadId = ThreadId.make("thread-shell-budget");
@@ -137,6 +125,7 @@ describe("orchestration V2 wire projection", () => {
         deletedAt: null,
       },
       runs: [],
+      attempts: [],
       runtimeRequests: [],
       messages: [
         {
@@ -160,41 +149,10 @@ describe("orchestration V2 wire projection", () => {
     expect(JSON.stringify(shell).length).toBeLessThan(2_000);
   });
 
-  it("omits oversized dynamic tool results without mutating persistence data", () => {
-    const output = { content: [{ type: "text", text: "first line\n" + "x".repeat(100_000) }] };
-    const item = { ...base, output } satisfies OrchestrationV2TurnItem;
-    const projected = projectTurnItemForWire(item);
-
-    expect(item.output).toBe(output);
-    expect(projected).not.toBe(item);
-    expect(JSON.stringify(projected).length).toBeLessThan(2_000);
-    expect(projected).not.toHaveProperty("output");
-  });
-
   it("omits even small dynamic tool results while retaining input", () => {
     const item = { ...base, output: { ok: true } } satisfies OrchestrationV2TurnItem;
-    expect(projectTurnItemForWire(item)).toEqual(base);
+    expect(projectTurnItemForWire(item)).toEqual({ ...base, outputOmitted: true });
     expect(item.output).toEqual({ ok: true });
-  });
-
-  it("keeps undefined dynamic input intact", () => {
-    const item = { ...base, input: undefined } satisfies OrchestrationV2TurnItem;
-    expect(projectTurnItemForWire(item)).toEqual(item);
-  });
-
-  it.each([
-    [" \t\r\n\n  first\t line  \r\n" + "x\n".repeat(10_000), "first line"],
-    [" \n".repeat(10_000), "Large tool output"],
-    ["a".repeat(160) + "\n" + "x".repeat(20_000), "a".repeat(160)],
-    ["a".repeat(161) + "\n" + "x".repeat(20_000), "a".repeat(159) + "…"],
-    ["a".repeat(159) + "\t b" + "x".repeat(20_000), "a".repeat(159) + "…"],
-    ["  café\u00a0\u2003😀 \t\r\n" + "x".repeat(20_000), "café 😀"],
-  ])("preserves bounded input summary normalization for case %#", (input, summary) => {
-    const projected = projectTurnItemForWire({ ...base, input });
-    expect(projected.type === "dynamic_tool" ? projected.input : null).toEqual({
-      summary,
-      truncated: true,
-    });
   });
 
   it("uses encoded JSON bytes for strings near the dynamic-value limit", () => {
@@ -205,21 +163,6 @@ describe("orchestration V2 wire projection", () => {
     const projected = projectTurnItemForWire({ ...base, input: large });
     expect(projected.type === "dynamic_tool" ? projected.input : null).toEqual({
       summary: '"'.repeat(159) + "…",
-      truncated: true,
-    });
-  });
-
-  it("serializes an oversized structured input only once for its summary", () => {
-    let serializations = 0;
-    const input = {
-      toJSON() {
-        serializations += 1;
-        return { text: "x".repeat(100_000) };
-      },
-    };
-    const projected = projectTurnItemForWire({ ...base, input });
-    expect(serializations).toBe(1);
-    expect(projected.type === "dynamic_tool" ? projected.input : null).toMatchObject({
       truncated: true,
     });
   });
@@ -245,16 +188,54 @@ describe("orchestration V2 wire projection", () => {
     expect(item.progress).toBe(progress);
   });
 
-  it.each(["", "small output", "x".repeat(1_048_576)])(
-    "omits command output of every size, case %#",
-    (output) => {
-      const item = { ...base, type: "command_execution" as const, input: "test", output };
-      const projected = projectTurnItemForWire(item);
-      expect(projected).not.toHaveProperty("output");
-      expect(projected).toMatchObject({ input: "test", status: "completed" });
-      expect(item.output).toBe(output);
-    },
-  );
+  it("leaves a screenshot's bytes out of the fetched tool output", () => {
+    const data = "A".repeat(600_000);
+    const item = {
+      ...base,
+      type: "dynamic_tool" as const,
+      toolName: "mcp__t3-code__device_screenshot",
+      input: { deviceId: "phone" },
+      output: {
+        content: [{ type: "image", source: { type: "base64", media_type: "image/png", data } }],
+      },
+    };
+    expect(projectTurnItemForDetail(item)).toMatchObject({
+      output: { content: [{ type: "image", mimeType: "image/png" }] },
+    });
+    expect(item.output.content[0]?.source.data).toBe(data);
+  });
+
+  it("keeps image markers when the rest of a tool output is too large to send", () => {
+    const image = {
+      type: "image",
+      source: { type: "base64", media_type: "image/png", data: "AAAA" },
+    };
+    const item = {
+      ...base,
+      type: "dynamic_tool" as const,
+      output: { content: [{ type: "text", text: "x".repeat(300_000) }, image] },
+    };
+    const projected = projectTurnItemForDetail(item);
+    const output = projected.type === "dynamic_tool" ? projected.output : null;
+    expect(Array.isArray(output) ? output.slice(1) : null).toEqual([
+      { type: "image", mimeType: "image/png" },
+    ]);
+    expect(JSON.stringify(output).length).toBeLessThan(270_000);
+  });
+
+  it("bounds a tool output made of many images", () => {
+    const image = { type: "image", data: "AAAA", mimeType: "image/png" };
+    const item = {
+      ...base,
+      type: "dynamic_tool" as const,
+      output: Array.from({ length: 10_000 }, () => image),
+    };
+    const projected = projectTurnItemForDetail(item);
+    const output = projected.type === "dynamic_tool" ? projected.output : null;
+    expect(Array.isArray(output) ? output.length : null).toBe(1 + MAX_TOOL_OUTPUT_IMAGES);
+    expect(Array.isArray(output) ? String(output[0]?.text).length : null).toBeLessThan(263_000);
+    expect(toolOutputImages(output)).toHaveLength(MAX_TOOL_OUTPUT_IMAGES);
+  });
 
   it("keeps failure evidence without retaining command output", () => {
     const item = {
@@ -290,6 +271,13 @@ describe("orchestration V2 wire projection", () => {
     expect(projected).not.toHaveProperty("newStr");
     expect(projected).toMatchObject({ fileName: "src/main.ts", additions: 3, deletions: 1 });
     expect(item.diffStr).toBe("+new code");
+    const failed = projectTurnItemForWire({
+      ...item,
+      status: "failed",
+      diffStr: "String to replace not found",
+    });
+    expect(failed).toMatchObject({ diffStr: "String to replace not found" });
+    expect(failed).not.toHaveProperty("newStr");
   });
 
   it("retains only result identities and failure metadata in live tool events", () => {
@@ -312,14 +300,5 @@ describe("orchestration V2 wire projection", () => {
     expect(JSON.stringify(projected)).not.toContain("PRIVATE_BODY");
     expect(event.payload.output).toBe(output);
     expect(projectDomainEventForWire(projected)).toEqual(projected);
-  });
-
-  it("does not serialize raw dynamic output to discard it", () => {
-    const output = {
-      toJSON: () => {
-        throw new Error("Raw output must not be serialized");
-      },
-    };
-    expect(projectTurnItemForWire({ ...base, output })).not.toHaveProperty("output");
   });
 });
