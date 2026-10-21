@@ -8,7 +8,7 @@ import {
   type EditorOptions,
 } from "@pierre/diffs/edit";
 import { EditProvider, File, Virtualizer } from "@pierre/diffs/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { buildScratchpadReviewComment } from "~/reviewCommentContext";
@@ -98,71 +98,29 @@ function ScratchpadEditor({
   const [selectedRange, setSelectedRange] = useState<SelectedLineRange | null>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Editor<"file", FileCommentAnnotationGroup, undefined> | null>(null);
-  const editorOptions = useMemo<EditorOptions<"file", FileCommentAnnotationGroup, undefined>>(
-    () => ({
-      onAttach: (editor) => {
-        editorRef.current = editor;
-      },
-      onComplete: () => {
-        editorRef.current = null;
-      },
-    }),
-    [],
-  );
-
-  const handleEditChange = useCallback(
-    ({
-      file: editedFile,
-      lineAnnotations: nextLineAnnotations,
-    }: EditorChangeEvent<"file", FileCommentAnnotationGroup, undefined>) => {
-      if (editedFile.contents === contentsRef.current) return;
-      contentsRef.current = editedFile.contents;
-      saveCoordinator.change(editedFile.contents);
-      if (!nextLineAnnotations) return;
-      const remapped = remapFileCommentAnnotations(nextLineAnnotations);
-      // The editor hands back the array it was given until an edit moves an annotation.
-      setLineAnnotations((current) => (current === nextLineAnnotations ? current : remapped));
-      for (const annotation of remapped) {
-        for (const entry of annotation.metadata.entries) {
-          if (entry.kind !== "comment") continue;
-          addReviewComment(
-            composerDraftTarget,
-            buildScratchpadReviewComment({
-              id: entry.id,
-              threadId: threadRef.threadId,
-              startLine: entry.startLine,
-              endLine: entry.endLine,
-              text: entry.text,
-              contents: editedFile.contents,
-            }),
-          );
-        }
-      }
+  const editorOptions: EditorOptions<"file", FileCommentAnnotationGroup, undefined> = {
+    onAttach: (editor) => {
+      editorRef.current = editor;
     },
-    [addReviewComment, composerDraftTarget, saveCoordinator, threadRef.threadId],
-  );
-
-  const removeAnnotationEntry = useCallback(
-    (entryId: string) => {
-      setSelectedRange(null);
-      removeReviewComment(composerDraftTarget, entryId);
-      setLineAnnotations((current) =>
-        current.flatMap((annotation) => {
-          const entries = annotation.metadata.entries.filter((entry) => entry.id !== entryId);
-          return entries.length > 0 ? [{ ...annotation, metadata: { entries } }] : [];
-        }),
-      );
+    onComplete: () => {
+      editorRef.current = null;
     },
-    [composerDraftTarget, removeReviewComment],
-  );
+  };
 
-  const submitAnnotationEntry = useCallback(
-    (entryId: string, text: string) => {
-      setSelectedRange(null);
-      const entry = lineAnnotations
-        .flatMap((annotation) => annotation.metadata.entries)
-        .find((candidate) => candidate.id === entryId);
-      if (entry) {
+  const handleEditChange = ({
+    file: editedFile,
+    lineAnnotations: nextLineAnnotations,
+  }: EditorChangeEvent<"file", FileCommentAnnotationGroup, undefined>) => {
+    if (editedFile.contents === contentsRef.current) return;
+    contentsRef.current = editedFile.contents;
+    saveCoordinator.change(editedFile.contents);
+    if (!nextLineAnnotations) return;
+    const remapped = remapFileCommentAnnotations(nextLineAnnotations);
+    // The editor hands back the array it was given until an edit moves an annotation.
+    setLineAnnotations((current) => (current === nextLineAnnotations ? current : remapped));
+    for (const annotation of remapped) {
+      for (const entry of annotation.metadata.entries) {
+        if (entry.kind !== "comment") continue;
         addReviewComment(
           composerDraftTarget,
           buildScratchpadReviewComment({
@@ -170,28 +128,58 @@ function ScratchpadEditor({
             threadId: threadRef.threadId,
             startLine: entry.startLine,
             endLine: entry.endLine,
-            text,
-            contents: contentsRef.current,
+            text: entry.text,
+            contents: editedFile.contents,
           }),
         );
       }
-      setLineAnnotations((current) =>
-        current.map((annotation) => ({
-          ...annotation,
-          metadata: {
-            entries: annotation.metadata.entries.map((annotationEntry) =>
-              annotationEntry.id === entryId
-                ? { ...annotationEntry, kind: "comment" as const, text }
-                : annotationEntry,
-            ),
-          },
-        })),
-      );
-    },
-    [addReviewComment, composerDraftTarget, lineAnnotations, threadRef.threadId],
-  );
+    }
+  };
 
-  const beginComment = useCallback((range: SelectedLineRange) => {
+  const removeAnnotationEntry = (entryId: string) => {
+    setSelectedRange(null);
+    removeReviewComment(composerDraftTarget, entryId);
+    setLineAnnotations((current) =>
+      current.flatMap((annotation) => {
+        const entries = annotation.metadata.entries.filter((entry) => entry.id !== entryId);
+        return entries.length > 0 ? [{ ...annotation, metadata: { entries } }] : [];
+      }),
+    );
+  };
+
+  const submitAnnotationEntry = (entryId: string, text: string) => {
+    setSelectedRange(null);
+    const entry = lineAnnotations
+      .flatMap((annotation) => annotation.metadata.entries)
+      .find((candidate) => candidate.id === entryId);
+    if (entry) {
+      addReviewComment(
+        composerDraftTarget,
+        buildScratchpadReviewComment({
+          id: entry.id,
+          threadId: threadRef.threadId,
+          startLine: entry.startLine,
+          endLine: entry.endLine,
+          text,
+          contents: contentsRef.current,
+        }),
+      );
+    }
+    setLineAnnotations((current) =>
+      current.map((annotation) => ({
+        ...annotation,
+        metadata: {
+          entries: annotation.metadata.entries.map((annotationEntry) =>
+            annotationEntry.id === entryId
+              ? { ...annotationEntry, kind: "comment" as const, text }
+              : annotationEntry,
+          ),
+        },
+      })),
+    );
+  };
+
+  const beginComment = (range: SelectedLineRange) => {
     editorRef.current?.setSelections([]);
     editorRef.current?.blur();
     const { startLine, endLine } = normalizeFileCommentRange(range);
@@ -219,7 +207,7 @@ function ScratchpadEditor({
           : annotation,
       );
     });
-  }, []);
+  };
 
   const hasOpenCommentForm = lineAnnotations.some((annotation) =>
     annotation.metadata.entries.some((entry) => entry.kind === "draft"),
@@ -236,13 +224,10 @@ function ScratchpadEditor({
     });
   }, [hasOpenCommentForm]);
 
-  const handleLineSelectionEnd = useCallback(
-    (range: SelectedLineRange | null) => {
-      setSelectedRange(range);
-      if (range) beginComment(range);
-    },
-    [beginComment],
-  );
+  const handleLineSelectionEnd = (range: SelectedLineRange | null) => {
+    setSelectedRange(range);
+    if (range) beginComment(range);
+  };
 
   return (
     <EditProvider createEditor={createScratchpadEditor}>
