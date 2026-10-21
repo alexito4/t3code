@@ -8247,7 +8247,7 @@ export default function ChatView(props: ChatViewProps) {
                 {...(!paintOnlyDisplayedTimeline
                   ? {
                       onCiteAssistantText: citeAssistantTextStable,
-                      onAskInSideChat: sideChat.askSelection,
+                      onAskInSideChat: sideChat.askSelectionStable,
                       askInSideChatAvailable: sideChat.available,
                       ...(activeProject ? { onRunShellCommand: runShellCommandStable } : {}),
                     }
@@ -8868,7 +8868,7 @@ export default function ChatView(props: ChatViewProps) {
           onAddFiles={addFilesSurfaceStable}
           onAddPullRequest={addPullRequestSurfaceStable}
           onAddPullRequests={addPullRequestsSurfaceStable}
-          onAddSideQuestion={sideChat.addSurface}
+          onAddSideQuestion={sideChat.addSurfaceStable}
           onAddDevice={addDeviceSurfaceStable}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
@@ -8925,7 +8925,7 @@ export default function ChatView(props: ChatViewProps) {
             onAddFiles={addFilesSurfaceStable}
             onAddPullRequest={addPullRequestSurfaceStable}
             onAddPullRequests={addPullRequestsSurfaceStable}
-            onAddSideQuestion={sideChat.addSurface}
+            onAddSideQuestion={sideChat.addSurfaceStable}
             onAddDevice={addDeviceSurfaceStable}
             browserAvailable={canOperatePreview && browserAvailable}
             terminalAvailable={activeProject !== null && canOperateTerminal}
