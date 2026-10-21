@@ -38,7 +38,6 @@ declare const __T3CODE_DESKTOP_PERSONAL_BUILD__: boolean | undefined;
 const isPersonalBuild =
   typeof __T3CODE_DESKTOP_PERSONAL_BUILD__ !== "undefined" && __T3CODE_DESKTOP_PERSONAL_BUILD__;
 
-/** Select Electron's profile independently of the server's T3 home. */
 export const resolveUserDataPath = Effect.fn("desktop.userData.resolveUserDataPath")(
   function* (input: {
     readonly appDataDirectory: string;
