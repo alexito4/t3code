@@ -7,7 +7,7 @@ import type {
 import type { UnifiedSettings } from "@t3tools/contracts/settings";
 import { createModelSelection } from "@t3tools/shared/model";
 import { MessageCirclePlus, Minimize2Icon } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import ChatMarkdown from "./ChatMarkdown";
@@ -69,26 +69,18 @@ export function SideQuestionPanel(props: {
   }, [props.draftSeed]);
   const isMobileViewport = useMediaQuery("max-sm");
   const pending = props.turns.at(-1)?.status === "loading";
-  const providerEntries = useMemo(
-    () =>
-      sortProviderInstanceEntries(
-        applyProviderInstanceSettings(
-          deriveProviderInstanceEntries(props.providers),
-          props.settings,
-          props.projectId,
-        ),
-      ),
-    [props.providers, props.settings, props.projectId],
+  const providerEntries = sortProviderInstanceEntries(
+    applyProviderInstanceSettings(
+      deriveProviderInstanceEntries(props.providers),
+      props.settings,
+      props.projectId,
+    ),
   );
-  const modelOptionsByInstance = useMemo(
-    () =>
-      new Map(
-        providerEntries.map((entry) => [
-          entry.instanceId,
-          getAppModelOptionsForInstance(props.settings, entry),
-        ]),
-      ),
-    [providerEntries, props.settings],
+  const modelOptionsByInstance = new Map(
+    providerEntries.map((entry) => [
+      entry.instanceId,
+      getAppModelOptionsForInstance(props.settings, entry),
+    ]),
   );
   const activeEntry =
     resolveSelectableProviderInstanceEntry(providerEntries, props.modelSelection.instanceId) ??

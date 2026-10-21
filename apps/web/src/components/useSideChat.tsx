@@ -13,7 +13,7 @@ import {
   sideQuestionPreviousTurns,
 } from "@t3tools/client-runtime/state/orchestration";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   canAskComposerSideQuestion,
@@ -21,6 +21,7 @@ import {
   parseComposerSideQuestion,
 } from "../composer-logic";
 import { type ComposerThreadTarget, useComposerDraftStore } from "../composerDraftStore";
+import { useStableCallback } from "../hooks/useStableCallback";
 import { randomUUID } from "../lib/utils";
 import { type RightPanelSurface, useRightPanelStore } from "../rightPanelStore";
 import { orchestrationEnvironment } from "../state/orchestration";
@@ -89,21 +90,16 @@ export function useSideChat(input: {
       hasPendingUserInput: input.hasPendingUserInput,
     });
 
-  const updateState = useCallback(
-    (update: (state: SideQuestionState) => SideQuestionState) =>
-      setSideQuestionsByThread((current) => {
-        const existing = current[threadKey];
-        return existing ? { ...current, [threadKey]: update(existing) } : current;
-      }),
-    [threadKey],
-  );
-  const setMode = useCallback(
-    (mode: SideQuestionState["mode"]) => updateState((existing) => ({ ...existing, mode })),
-    [updateState],
-  );
-  const openPanel = useCallback(() => {
+  const updateState = (update: (state: SideQuestionState) => SideQuestionState) =>
+    setSideQuestionsByThread((current) => {
+      const existing = current[threadKey];
+      return existing ? { ...current, [threadKey]: update(existing) } : current;
+    });
+  const setMode = (mode: SideQuestionState["mode"]) =>
+    updateState((existing) => ({ ...existing, mode }));
+  const openPanel = () => {
     if (threadRef) useRightPanelStore.getState().open(threadRef, "side-question");
-  }, [threadRef]);
+  };
 
   // A restored panel layout can name a side chat this view no longer holds.
   useEffect(() => {
@@ -113,7 +109,7 @@ export function useSideChat(input: {
     }
   }, [input.surfaces, state, threadRef]);
 
-  const addSurface = useCallback(() => {
+  const addSurface = () => {
     if (!thread || !available) return;
     if (state) {
       setMode("panel");
@@ -124,115 +120,99 @@ export function useSideChat(input: {
       }));
     }
     openPanel();
-  }, [available, openPanel, setMode, state, thread, threadKey]);
+  };
+  const addSurfaceStable = useStableCallback(addSurface);
 
-  const askSelection = useCallback(
-    (citation: AssistantCitation) => {
-      if (!thread || !available) return false;
-      const text = formatAssistantCitationForComposer(citation, citation.comment).trim();
-      setSideQuestionsByThread((current) => {
-        const existing = current[threadKey];
-        const draftSeed = { text, nonce: (existing?.draftSeed?.nonce ?? 0) + 1 };
-        return {
-          ...current,
-          [threadKey]: existing
-            ? { ...existing, mode: "panel", draftSeed }
-            : { mode: "panel", modelSelection: thread.modelSelection, turns: [], draftSeed },
-        };
-      });
-      openPanel();
-      return true;
-    },
-    [available, openPanel, thread, threadKey],
-  );
-
-  const onSurfacesClosed = useCallback(
-    (surfaces: readonly RightPanelSurface[]) => {
-      if (surfaces.some((surface) => surface.kind === "side-question")) setMode("hidden");
-    },
-    [setMode],
-  );
-
-  const finishTurn = useCallback(
-    (requestId: string, turn: SideQuestionTurn) =>
-      updateState((existing) =>
-        existing.turns.at(-1)?.id === requestId
-          ? { ...existing, turns: [...existing.turns.slice(0, -1), turn] }
-          : existing,
-      ),
-    [updateState],
-  );
-
-  const submit = useCallback(
-    async (question: string, mode: "new" | "follow-up", modelSelection?: ModelSelection) => {
-      if (!thread || !threadRef) return;
-      if (state?.turns.at(-1)?.status === "loading") return;
-
-      const previousTurns = mode === "new" ? [] : sideQuestionPreviousTurns(state?.turns ?? []);
-      const retainedTurns = mode === "new" ? [] : (state?.turns ?? []);
-      const requestId = randomUUID();
-      const resolvedModelSelection =
-        modelSelection ??
-        (mode === "new" ? thread.modelSelection : (state?.modelSelection ?? thread.modelSelection));
-      requestRef.current[threadKey] = requestId;
-      setSideQuestionsByThread((current) => ({
+  const askSelection = (citation: AssistantCitation) => {
+    if (!thread || !available) return false;
+    const text = formatAssistantCitationForComposer(citation, citation.comment).trim();
+    setSideQuestionsByThread((current) => {
+      const existing = current[threadKey];
+      const draftSeed = { text, nonce: (existing?.draftSeed?.nonce ?? 0) + 1 };
+      return {
         ...current,
-        [threadKey]: {
-          mode: "panel",
-          modelSelection: resolvedModelSelection,
-          turns: [...retainedTurns, { id: requestId, question, answer: "", status: "loading" }],
-        },
-      }));
-      openPanel();
+        [threadKey]: existing
+          ? { ...existing, mode: "panel", draftSeed }
+          : { mode: "panel", modelSelection: thread.modelSelection, turns: [], draftSeed },
+      };
+    });
+    openPanel();
+    return true;
+  };
+  const askSelectionStable = useStableCallback(askSelection);
 
-      const result = await askSideQuestion({
-        environmentId,
-        input: {
-          threadId: thread.id,
-          requestId,
-          question,
-          modelSelection: resolvedModelSelection,
-          previousTurns,
-        },
-      });
-      if (requestRef.current[threadKey] !== requestId) return;
+  const onSurfacesClosed = (surfaces: readonly RightPanelSurface[]) => {
+    if (surfaces.some((surface) => surface.kind === "side-question")) setMode("hidden");
+  };
 
-      if (result._tag === "Success") {
-        finishTurn(requestId, {
-          id: requestId,
-          question,
-          answer: result.value.answer,
-          status: "success",
-        });
-        return;
-      }
+  const finishTurn = (requestId: string, turn: SideQuestionTurn) =>
+    updateState((existing) =>
+      existing.turns.at(-1)?.id === requestId
+        ? { ...existing, turns: [...existing.turns.slice(0, -1), turn] }
+        : existing,
+    );
 
-      // A failed first question goes back to an empty composer so it is not lost.
-      const draftStore = useComposerDraftStore.getState();
-      if (mode === "new" && !draftStore.getComposerDraft(composerDraftTarget)?.prompt) {
-        draftStore.setPrompt(composerDraftTarget, `/btw ${question}`);
-      }
+  const submit = async (
+    question: string,
+    mode: "new" | "follow-up",
+    modelSelection?: ModelSelection,
+  ) => {
+    if (!thread || !threadRef) return;
+    if (state?.turns.at(-1)?.status === "loading") return;
+
+    const previousTurns = mode === "new" ? [] : sideQuestionPreviousTurns(state?.turns ?? []);
+    const retainedTurns = mode === "new" ? [] : (state?.turns ?? []);
+    const requestId = randomUUID();
+    const resolvedModelSelection =
+      modelSelection ??
+      (mode === "new" ? thread.modelSelection : (state?.modelSelection ?? thread.modelSelection));
+    requestRef.current[threadKey] = requestId;
+    setSideQuestionsByThread((current) => ({
+      ...current,
+      [threadKey]: {
+        mode: "panel",
+        modelSelection: resolvedModelSelection,
+        turns: [...retainedTurns, { id: requestId, question, answer: "", status: "loading" }],
+      },
+    }));
+    openPanel();
+
+    const result = await askSideQuestion({
+      environmentId,
+      input: {
+        threadId: thread.id,
+        requestId,
+        question,
+        modelSelection: resolvedModelSelection,
+        previousTurns,
+      },
+    });
+    if (requestRef.current[threadKey] !== requestId) return;
+
+    if (result._tag === "Success") {
       finishTurn(requestId, {
         id: requestId,
         question,
-        answer: errorMessage(squashAtomCommandFailure(result)),
-        status: "error",
+        answer: result.value.answer,
+        status: "success",
       });
-    },
-    [
-      askSideQuestion,
-      composerDraftTarget,
-      environmentId,
-      finishTurn,
-      openPanel,
-      state,
-      thread,
-      threadKey,
-      threadRef,
-    ],
-  );
+      return;
+    }
 
-  const stop = useCallback(async () => {
+    // A failed first question goes back to an empty composer so it is not lost.
+    const draftStore = useComposerDraftStore.getState();
+    if (mode === "new" && !draftStore.getComposerDraft(composerDraftTarget)?.prompt) {
+      draftStore.setPrompt(composerDraftTarget, `/btw ${question}`);
+    }
+    finishTurn(requestId, {
+      id: requestId,
+      question,
+      answer: errorMessage(squashAtomCommandFailure(result)),
+      status: "error",
+    });
+  };
+
+  const stop = async () => {
     if (!thread) return;
     const latest = state?.turns.at(-1);
     if (!latest || latest.status !== "loading") return;
@@ -254,7 +234,7 @@ export function useSideChat(input: {
           }
         : existing;
     });
-  }, [cancelSideQuestion, environmentId, state, thread, threadKey, updateState]);
+  };
 
   /**
    * Handles a composer send when it is a `/btw` side question; returns false for anything the
@@ -356,8 +336,8 @@ export function useSideChat(input: {
 
   return {
     available,
-    addSurface,
-    askSelection,
+    addSurfaceStable,
+    askSelectionStable,
     onSurfacesClosed,
     sendFromComposer,
     panel,

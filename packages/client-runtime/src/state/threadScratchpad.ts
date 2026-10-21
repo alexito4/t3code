@@ -47,16 +47,18 @@ export function createThreadScratchpadAtoms<R, E>(
      */
     appendThreadScratchpad: createEnvironmentCommand(runtime, {
       label: "environment-data:thread-scratchpad:append",
-      execute: (input: { readonly threadId: ThreadId; readonly text: string }) =>
-        Effect.gen(function* () {
-          const current = yield* request(WS_METHODS.threadScratchpadGet, {
-            threadId: input.threadId,
-          });
-          const content =
-            current.content.trim().length > 0 ? `${current.content}\n\n${input.text}` : input.text;
-          yield* request(WS_METHODS.threadScratchpadSet, { threadId: input.threadId, content });
-          return { content };
-        }),
+      execute: Effect.fn("threadScratchpad.append")(function* (input: {
+        readonly threadId: ThreadId;
+        readonly text: string;
+      }) {
+        const current = yield* request(WS_METHODS.threadScratchpadGet, {
+          threadId: input.threadId,
+        });
+        const content =
+          current.content.trim().length > 0 ? `${current.content}\n\n${input.text}` : input.text;
+        yield* request(WS_METHODS.threadScratchpadSet, { threadId: input.threadId, content });
+        return { content };
+      }),
       scheduler,
       concurrency,
     }),

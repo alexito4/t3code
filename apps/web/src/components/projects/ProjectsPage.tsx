@@ -1,9 +1,9 @@
 import { useNavigate } from "@tanstack/react-router";
 import { CloudIcon, ContainerIcon } from "lucide-react";
-import { useMemo } from "react";
 
 import { enumerateDays, formatPercent } from "@t3tools/shared/usageFormat";
 import { isElectron } from "../../env";
+import { useNowMinute } from "../../hooks/useNowMinute";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import { useThreadShells } from "../../state/entities";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
@@ -57,26 +57,24 @@ function useProjectStatsByKey(
   groups: readonly SidebarProjectSnapshot[],
 ): ReadonlyMap<string, ProjectStats> {
   const threads = useThreadShells();
-  return useMemo(() => {
-    const projectKeyByRef = buildProjectKeyByRef(groups);
-    const stats = new Map<string, ProjectStats>();
-    for (const thread of threads) {
-      // Subagent children belong to their parent's work, as in the sidebar.
-      if (isSidebarSubagentThread(thread)) continue;
-      const projectKey = projectKeyByRef.get(`${thread.environmentId}:${thread.projectId}`);
-      if (!projectKey) continue;
-      const existing = stats.get(projectKey) ?? { activeThreadCount: 0, lastActivityAt: null };
-      const activity = thread.latestUserMessageAt ?? thread.updatedAt;
-      stats.set(projectKey, {
-        activeThreadCount: existing.activeThreadCount + (thread.archivedAt === null ? 1 : 0),
-        lastActivityAt:
-          existing.lastActivityAt === null || activity > existing.lastActivityAt
-            ? activity
-            : existing.lastActivityAt,
-      });
-    }
-    return stats;
-  }, [groups, threads]);
+  const projectKeyByRef = buildProjectKeyByRef(groups);
+  const stats = new Map<string, ProjectStats>();
+  for (const thread of threads) {
+    // Subagent children belong to their parent's work, as in the sidebar.
+    if (isSidebarSubagentThread(thread)) continue;
+    const projectKey = projectKeyByRef.get(`${thread.environmentId}:${thread.projectId}`);
+    if (!projectKey) continue;
+    const existing = stats.get(projectKey) ?? { activeThreadCount: 0, lastActivityAt: null };
+    const activity = thread.latestUserMessageAt ?? thread.updatedAt;
+    stats.set(projectKey, {
+      activeThreadCount: existing.activeThreadCount + (thread.archivedAt === null ? 1 : 0),
+      lastActivityAt:
+        existing.lastActivityAt === null || activity > existing.lastActivityAt
+          ? activity
+          : existing.lastActivityAt,
+    });
+  }
+  return stats;
 }
 
 interface ProjectActivityData {
@@ -92,66 +90,64 @@ interface ProjectActivityData {
  * past the top 5 by volume into "Other" so the chart never has to invent a 6th-and-beyond hue. */
 function useProjectActivityData(groups: readonly SidebarProjectSnapshot[]): ProjectActivityData {
   const threads = useThreadShells();
-  return useMemo(() => {
-    const untilDay = new Date().toISOString().slice(0, 10);
-    const sinceDay = new Date(Date.now() - (ACTIVITY_WINDOW_DAYS - 1) * 86_400_000)
-      .toISOString()
-      .slice(0, 10);
-    const days = enumerateDays(sinceDay, untilDay);
-    const projectKeyByRef = buildProjectKeyByRef(groups);
+  const untilDay = useNowMinute().slice(0, 10);
+  const sinceDay = new Date(Date.parse(untilDay) - (ACTIVITY_WINDOW_DAYS - 1) * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const days = enumerateDays(sinceDay, untilDay);
+  const projectKeyByRef = buildProjectKeyByRef(groups);
 
-    const totalByProjectKey = new Map<string, number>();
-    const dayAndProjectKeyToCount = new Map<string, Map<string, number>>();
-    for (const thread of threads) {
-      if (isSidebarSubagentThread(thread)) continue;
-      const projectKey = projectKeyByRef.get(`${thread.environmentId}:${thread.projectId}`);
-      if (!projectKey) continue;
-      const day = (thread.latestUserMessageAt ?? thread.updatedAt).slice(0, 10);
-      if (day < sinceDay || day > untilDay) continue;
+  const totalByProjectKey = new Map<string, number>();
+  const dayAndProjectKeyToCount = new Map<string, Map<string, number>>();
+  for (const thread of threads) {
+    if (isSidebarSubagentThread(thread)) continue;
+    const projectKey = projectKeyByRef.get(`${thread.environmentId}:${thread.projectId}`);
+    if (!projectKey) continue;
+    const day = (thread.latestUserMessageAt ?? thread.updatedAt).slice(0, 10);
+    if (day < sinceDay || day > untilDay) continue;
 
-      totalByProjectKey.set(projectKey, (totalByProjectKey.get(projectKey) ?? 0) + 1);
-      const perProject = dayAndProjectKeyToCount.get(day) ?? new Map<string, number>();
-      perProject.set(projectKey, (perProject.get(projectKey) ?? 0) + 1);
-      dayAndProjectKeyToCount.set(day, perProject);
+    totalByProjectKey.set(projectKey, (totalByProjectKey.get(projectKey) ?? 0) + 1);
+    const perProject = dayAndProjectKeyToCount.get(day) ?? new Map<string, number>();
+    perProject.set(projectKey, (perProject.get(projectKey) ?? 0) + 1);
+    dayAndProjectKeyToCount.set(day, perProject);
+  }
+
+  const topProjectKeys = [...totalByProjectKey.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, ACTIVITY_SERIES_LIMIT)
+    .map(([projectKey]) => projectKey);
+  const displayNameByKey = new Map(groups.map((group) => [group.projectKey, group.displayName]));
+  const series: ProjectActivitySeries[] = topProjectKeys.map((projectKey, index) => ({
+    id: projectKey,
+    label: displayNameByKey.get(projectKey) ?? projectKey,
+    color: ACTIVITY_COLORS[index] ?? "var(--muted-foreground)",
+  }));
+  const hasOther = totalByProjectKey.size > topProjectKeys.length;
+  if (hasOther) {
+    series.push({ id: OTHER_SERIES_ID, label: "Other", color: "var(--muted-foreground)" });
+  }
+
+  const countsByDay = new Map<string, Map<string, number>>();
+  const seriesTotals = new Map<string, number>();
+  for (const [day, perProject] of dayAndProjectKeyToCount) {
+    const counts = new Map<string, number>();
+    for (const [projectKey, count] of perProject) {
+      const seriesId = topProjectKeys.includes(projectKey) ? projectKey : OTHER_SERIES_ID;
+      counts.set(seriesId, (counts.get(seriesId) ?? 0) + count);
+      seriesTotals.set(seriesId, (seriesTotals.get(seriesId) ?? 0) + count);
     }
+    countsByDay.set(day, counts);
+  }
+  const totalCount = [...totalByProjectKey.values()].reduce((sum, count) => sum + count, 0);
 
-    const topProjectKeys = [...totalByProjectKey.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, ACTIVITY_SERIES_LIMIT)
-      .map(([projectKey]) => projectKey);
-    const displayNameByKey = new Map(groups.map((group) => [group.projectKey, group.displayName]));
-    const series: ProjectActivitySeries[] = topProjectKeys.map((projectKey, index) => ({
-      id: projectKey,
-      label: displayNameByKey.get(projectKey) ?? projectKey,
-      color: ACTIVITY_COLORS[index] ?? "var(--muted-foreground)",
-    }));
-    const hasOther = totalByProjectKey.size > topProjectKeys.length;
-    if (hasOther) {
-      series.push({ id: OTHER_SERIES_ID, label: "Other", color: "var(--muted-foreground)" });
-    }
-
-    const countsByDay = new Map<string, Map<string, number>>();
-    const seriesTotals = new Map<string, number>();
-    for (const [day, perProject] of dayAndProjectKeyToCount) {
-      const counts = new Map<string, number>();
-      for (const [projectKey, count] of perProject) {
-        const seriesId = topProjectKeys.includes(projectKey) ? projectKey : OTHER_SERIES_ID;
-        counts.set(seriesId, (counts.get(seriesId) ?? 0) + count);
-        seriesTotals.set(seriesId, (seriesTotals.get(seriesId) ?? 0) + count);
-      }
-      countsByDay.set(day, counts);
-    }
-    const totalCount = [...totalByProjectKey.values()].reduce((sum, count) => sum + count, 0);
-
-    return {
-      series,
-      days,
-      countsByDay,
-      seriesTotals,
-      totalCount,
-      hasActivity: totalByProjectKey.size > 0,
-    };
-  }, [groups, threads]);
+  return {
+    series,
+    days,
+    countsByDay,
+    seriesTotals,
+    totalCount,
+    hasActivity: totalByProjectKey.size > 0,
+  };
 }
 
 export function ProjectsPage() {

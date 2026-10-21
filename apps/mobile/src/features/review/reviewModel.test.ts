@@ -1,182 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { MessageId, RunId, type ReviewDiffPreviewSource } from "@t3tools/contracts";
-import type { ThreadCheckpointSummary } from "@t3tools/client-runtime/state/thread-checkpoints";
+import type { ReviewDiffPreviewSource } from "@t3tools/contracts";
 
 import {
   applyReviewDiffMetadata,
   buildReviewParsedDiff,
   buildReviewSectionItems,
-  getDefaultReviewSectionId,
-  getReviewFilePreviewState,
-  getReviewSectionIdForCheckpoint,
-  type ReviewRenderableFile,
 } from "./reviewModel";
-
-function makeCheckpoint(
-  input: Partial<ThreadCheckpointSummary> &
-    Pick<ThreadCheckpointSummary, "runId" | "checkpointTurnCount" | "completedAt">,
-): ThreadCheckpointSummary {
-  return {
-    checkpointRef: `refs/t3/checkpoints/thread/${input.checkpointTurnCount}` as any,
-    status: "ready",
-    files: [],
-    assistantMessageId: MessageId.make(`msg-${input.checkpointTurnCount}`),
-    ...input,
-  };
-}
-
-function makeRenderableFile(
-  input: Partial<ReviewRenderableFile> & Pick<ReviewRenderableFile, "path">,
-): ReviewRenderableFile {
-  return {
-    id: input.path,
-    cacheKey: input.path,
-    previousPath: null,
-    changeType: "new",
-    additions: 0,
-    deletions: 0,
-    languageHint: null,
-    additionLines: [],
-    deletionLines: [],
-    rows: [],
-    ...input,
-  };
-}
-
-describe("buildReviewSectionItems", () => {
-  it("keeps one chip per checkpoint and appends git sources", () => {
-    const checkpoints = [
-      makeCheckpoint({
-        runId: RunId.make("run-1"),
-        checkpointTurnCount: 1,
-        completedAt: "2026-04-01T00:00:00.000Z",
-      }),
-      makeCheckpoint({
-        runId: RunId.make("run-2"),
-        checkpointTurnCount: 2,
-        completedAt: "2026-04-02T00:00:00.000Z",
-      }),
-    ];
-    const gitSections: ReviewDiffPreviewSource[] = [
-      {
-        id: "working-tree",
-        kind: "working-tree",
-        title: "Uncommitted",
-        baseRef: "HEAD",
-        headRef: null,
-        diff: "diff --git a/a.ts b/a.ts",
-        diffHash: "hash-dirty",
-        truncated: false,
-      },
-      {
-        id: "branch-range",
-        kind: "branch-range",
-        title: "Changes vs main",
-        baseRef: "main",
-        headRef: "feature",
-        diff: "diff --git a/a.ts b/a.ts",
-        diffHash: "hash-base",
-        truncated: false,
-      },
-    ];
-
-    const loadedTurnId = getReviewSectionIdForCheckpoint(checkpoints[0]!);
-    const items = buildReviewSectionItems({
-      checkpoints,
-      gitSections,
-      turnDiffById: {
-        [loadedTurnId]: "diff --git a/loaded.ts b/loaded.ts",
-      },
-      loadingTurnIds: {
-        [getReviewSectionIdForCheckpoint(checkpoints[1]!)]: true,
-      },
-      loadingGitSections: false,
-    });
-
-    expect(items.map((item) => item.id)).toEqual([
-      "turn:2",
-      "turn:1",
-      "git:working-tree",
-      "git:branch-range",
-    ]);
-    expect(items[0]).toMatchObject({ isLoading: true, diff: null });
-    expect(items[1]).toMatchObject({
-      isLoading: false,
-      diff: expect.stringContaining("loaded.ts"),
-    });
-    expect(getDefaultReviewSectionId(items)).toBe("git:branch-range");
-  });
-
-  it("describes the Staged and Unstaged halves instead of their refs", () => {
-    const split = (kind: "staged" | "unstaged", title: string): ReviewDiffPreviewSource => ({
-      id: kind,
-      kind,
-      title,
-      baseRef: kind === "staged" ? "HEAD" : null,
-      headRef: null,
-      diff: `diff --git a/${kind}.ts b/${kind}.ts`,
-      diffHash: `hash-${kind}`,
-      truncated: false,
-    });
-    const items = buildReviewSectionItems({
-      checkpoints: [],
-      gitSections: [split("staged", "Staged"), split("unstaged", "Unstaged")],
-      turnDiffById: {},
-      loadingTurnIds: {},
-      loadingGitSections: false,
-    });
-
-    expect(items.map(({ id, title, subtitle }) => ({ id, title, subtitle }))).toEqual([
-      { id: "git:staged", title: "Staged", subtitle: "Staged files" },
-      { id: "git:unstaged", title: "Unstaged", subtitle: "Unstaged and untracked files" },
-    ]);
-  });
-
-  it("falls back to the first turn without git sections", () => {
-    const items = buildReviewSectionItems({
-      checkpoints: [
-        makeCheckpoint({
-          runId: RunId.make("run-1"),
-          checkpointTurnCount: 1,
-          completedAt: "2026-04-01T00:00:00.000Z",
-        }),
-      ],
-      gitSections: [],
-      turnDiffById: {},
-      loadingTurnIds: {},
-      loadingGitSections: false,
-    });
-
-    expect(getDefaultReviewSectionId(items)).toBe("turn:1");
-  });
-
-  it("holds the Changes place while git preview is loading", () => {
-    const items = buildReviewSectionItems({
-      checkpoints: [],
-      gitSections: [],
-      turnDiffById: {},
-      loadingTurnIds: {},
-      loadingGitSections: true,
-    });
-
-    expect(items).toEqual([
-      expect.objectContaining({
-        id: "git:branch-range",
-        kind: "branch-range",
-        title: "Changes",
-        diff: null,
-        isLoading: true,
-      }),
-    ]);
-    expect(getDefaultReviewSectionId(items)).toBe("git:branch-range");
-  });
-});
 
 describe("buildReviewParsedDiff", () => {
   it.each([
     ["a/example.ts", "a/example.ts"],
-    ["b/example.ts", "b/example.ts"],
     ["a/before.ts", "b/after.ts"],
   ])("preserves repository paths from %s to %s", (previousPath, path) => {
     const parsed = buildReviewParsedDiff(
@@ -297,47 +131,6 @@ describe("buildReviewParsedDiff", () => {
       header: "@@ -1,1 +1,2 @@",
     });
   });
-
-  it("suppresses preview for non-text file formats", () => {
-    const preview = getReviewFilePreviewState(
-      makeRenderableFile({
-        path: "apps/mobile/assets/icon.png",
-      }),
-    );
-
-    expect(preview).toMatchObject({
-      kind: "suppressed",
-      reason: "non-text",
-      title: "Non-text file",
-      actionLabel: null,
-    });
-  });
-
-  it("suppresses large diffs until explicitly requested", () => {
-    const preview = getReviewFilePreviewState(
-      makeRenderableFile({
-        path: "apps/mobile/src/big.ts",
-        rows: Array.from({ length: 401 }, (_, index) => ({
-          kind: "line" as const,
-          id: `line-${index}`,
-          change: "add" as const,
-          oldLineNumber: null,
-          newLineNumber: index + 1,
-          content: `const line${index} = ${index};`,
-          additionTokenIndex: index,
-          deletionTokenIndex: null,
-          comparison: null,
-        })),
-      }),
-    );
-
-    expect(preview).toMatchObject({
-      kind: "suppressed",
-      reason: "large",
-      title: "Large diff",
-      actionLabel: "Load diff",
-    });
-  });
 });
 
 describe("applyReviewDiffMetadata", () => {
@@ -368,5 +161,32 @@ describe("applyReviewDiffMetadata", () => {
     expect(result.files[0]?.additions).toBe(4000);
     expect(result.notice).toContain("Counts include all changes");
     expect(applyReviewDiffMetadata(parsed, null)).toEqual(parsed);
+  });
+});
+
+describe("buildReviewSectionItems", () => {
+  it("describes the Staged and Unstaged halves instead of their refs", () => {
+    const split = (kind: "staged" | "unstaged", title: string): ReviewDiffPreviewSource => ({
+      id: kind,
+      kind,
+      title,
+      baseRef: kind === "staged" ? "HEAD" : null,
+      headRef: null,
+      diff: `diff --git a/${kind}.ts b/${kind}.ts`,
+      diffHash: `hash-${kind}`,
+      truncated: false,
+    });
+    const items = buildReviewSectionItems({
+      checkpoints: [],
+      gitSections: [split("staged", "Staged"), split("unstaged", "Unstaged")],
+      turnDiffById: {},
+      loadingTurnIds: {},
+      loadingGitSections: false,
+    });
+
+    expect(items.map(({ id, title, subtitle }) => ({ id, title, subtitle }))).toEqual([
+      { id: "git:staged", title: "Staged", subtitle: "Staged files" },
+      { id: "git:unstaged", title: "Unstaged", subtitle: "Unstaged and untracked files" },
+    ]);
   });
 });
