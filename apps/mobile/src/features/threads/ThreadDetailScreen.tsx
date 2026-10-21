@@ -28,7 +28,6 @@ import {
   sideQuestionCancellationSucceeded,
   sideQuestionPreviousTurns,
 } from "@t3tools/client-runtime/state/orchestration";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { HandoffEndpoints } from "@t3tools/client-runtime/handoff";
 import {
   childThreadInputsTitle,
@@ -595,11 +594,15 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
     capabilities: sideCurrentModelOption?.capabilities,
     selections: sideModelSelection.options,
   });
-  const updateSideModelSelection = (modelSelection: ModelSelection) =>
+  const updateSideQuestionState = (
+    update: Partial<Pick<SideQuestionState, "draft" | "modelSelection">>,
+  ) =>
     setSideQuestionsByThread((current) => {
       const state = current[selectedThreadKey];
-      return state ? { ...current, [selectedThreadKey]: { ...state, modelSelection } } : current;
+      return state ? { ...current, [selectedThreadKey]: { ...state, ...update } } : current;
     });
+  const updateSideModelSelection = (modelSelection: ModelSelection) =>
+    updateSideQuestionState({ modelSelection });
   const sideSettingsOwnerId = `${selectedThreadKey}:side-question`;
   const sideSettingsSession: ExistingThreadSettingsRouteSession = {
     ownerId: sideSettingsOwnerId,
@@ -609,6 +612,9 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
     showRuntime: false,
     providerGroups: sideProviderGroups,
     selectedModel: sideModelSelection,
+    // The side chat's follow-up draft carries prompt-controlled traits such as ultrathink.
+    prompt: sideQuestionState?.draft ?? "",
+    onPromptChange: (draft) => updateSideQuestionState({ draft }),
     onSelectModel: (option) => updateSideModelSelection(option.selection),
     optionDescriptors: sideOptionDescriptors,
     onUpdateOptionSelections: (options) =>
@@ -1377,7 +1383,11 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
   // Returns true when the composer draft was a `/btw` side question and the side chat took it.
   const sendSideQuestionFromComposer = (): boolean => {
     // Editing a queued message saves it as typed, `/btw` included.
-    if (!sideQuestionsSupported || props.queuedRunEdit !== null || props.composerDraftKey === null) {
+    if (
+      !sideQuestionsSupported ||
+      props.queuedRunEdit !== null ||
+      props.composerDraftKey === null
+    ) {
       return false;
     }
     const draft = getComposerDraftSnapshot(props.composerDraftKey);
@@ -1842,14 +1852,7 @@ export const ThreadDetailScreen = function ThreadDetailScreen(props: ThreadDetai
                                 void submitSideQuestion(question, "follow-up");
                               }}
                               className="min-h-11 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
-                              onChangeText={(draft) =>
-                                setSideQuestionsByThread((current) => {
-                                  const state = current[selectedThreadKey];
-                                  return state
-                                    ? { ...current, [selectedThreadKey]: { ...state, draft } }
-                                    : current;
-                                })
-                              }
+                              onChangeText={(draft) => updateSideQuestionState({ draft })}
                             />
                             <Pressable
                               accessibilityRole="button"
