@@ -1,6 +1,7 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { formatCount, formatDayShort } from "@t3tools/shared/usageFormat";
+import { observeResize } from "~/lib/observeResize";
 import { niceScale } from "../usage/UsageProviderChart";
 
 const VIEW_WIDTH = 960;
@@ -103,6 +104,60 @@ function curvePath(segments: readonly CurveSegment[]): string {
   return path;
 }
 
+function buildActivityChart(
+  days: readonly string[],
+  series: readonly ProjectActivitySeries[],
+  valueFor: (day: string, seriesId: string) => number,
+) {
+  if (days.length === 0) {
+    return {
+      paths: [],
+      columns: [] as readonly (readonly { seriesId: string; value: number }[])[],
+      stepX: 0,
+      ticks: [0] as readonly number[],
+      toY: (_value: number) => VIEW_HEIGHT,
+    };
+  }
+
+  const columns = days.map((day) =>
+    series.map((entry) => ({ seriesId: entry.id, value: valueFor(day, entry.id) })),
+  );
+  const peak = columns.reduce(
+    (max, column) => column.reduce((inner, band) => Math.max(inner, band.value), max),
+    0,
+  );
+  const { max, ticks } = niceScale(peak, TICK_COUNT);
+  const stepX = days.length === 1 ? 0 : VIEW_WIDTH / (days.length - 1);
+  const toY = (value: number) =>
+    max === 0 ? VIEW_HEIGHT : VIEW_HEIGHT - (value / max) * (VIEW_HEIGHT - PLOT_TOP);
+
+  const built = series.map((entry, seriesIndex) => {
+    const line = curvePath(
+      smoothCurve(
+        columns.map((column, dayIndex) => ({
+          x: dayIndex * stepX,
+          y: toY(column[seriesIndex]?.value ?? 0),
+        })),
+      ),
+    );
+    return {
+      series: entry,
+      total: columns.reduce((sum, column) => sum + (column[seriesIndex]?.value ?? 0), 0),
+      area: line === "" ? "" : `${line} L${VIEW_WIDTH},${VIEW_HEIGHT} L0,${VIEW_HEIGHT} Z`,
+      line,
+    };
+  });
+
+  return {
+    // Paint the heavier series first so lighter ones are not buried.
+    paths: built.toSorted((a, b) => b.total - a.total),
+    columns,
+    stepX,
+    ticks,
+    toY,
+  };
+}
+
 /** Threads active per day, by project, over zero — mirrors the Usage chart's layering. */
 export function ProjectActivityChart({ series, days, countsByDay }: ProjectActivityChartProps) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -110,62 +165,11 @@ export function ProjectActivityChart({ series, days, countsByDay }: ProjectActiv
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const hoverPositionRef = useRef<{ x: number; y: number } | null>(null);
 
-  const valueFor = useCallback(
-    (day: string, seriesId: string) => countsByDay.get(day)?.get(seriesId) ?? 0,
-    [countsByDay],
-  );
+  const valueFor = (day: string, seriesId: string) => countsByDay.get(day)?.get(seriesId) ?? 0;
 
-  const { paths, ticks, stepX, toY, columns } = useMemo(() => {
-    if (days.length === 0) {
-      return {
-        paths: [],
-        columns: [] as readonly (readonly { seriesId: string; value: number }[])[],
-        stepX: 0,
-        ticks: [0] as readonly number[],
-        toY: () => VIEW_HEIGHT,
-      };
-    }
+  const { paths, ticks, stepX, toY, columns } = buildActivityChart(days, series, valueFor);
 
-    const builtColumns = days.map((day) =>
-      series.map((entry) => ({ seriesId: entry.id, value: valueFor(day, entry.id) })),
-    );
-    const peak = builtColumns.reduce(
-      (max, column) => column.reduce((inner, band) => Math.max(inner, band.value), max),
-      0,
-    );
-    const { max, ticks: tickValues } = niceScale(peak, TICK_COUNT);
-    const step = days.length === 1 ? 0 : VIEW_WIDTH / (days.length - 1);
-    const toYValue = (value: number) =>
-      max === 0 ? VIEW_HEIGHT : VIEW_HEIGHT - (value / max) * (VIEW_HEIGHT - PLOT_TOP);
-
-    const built = series.map((entry, seriesIndex) => {
-      const line = curvePath(
-        smoothCurve(
-          builtColumns.map((column, dayIndex) => ({
-            x: dayIndex * step,
-            y: toYValue(column[seriesIndex]?.value ?? 0),
-          })),
-        ),
-      );
-      return {
-        series: entry,
-        total: builtColumns.reduce((sum, column) => sum + (column[seriesIndex]?.value ?? 0), 0),
-        area: line === "" ? "" : `${line} L${VIEW_WIDTH},${VIEW_HEIGHT} L0,${VIEW_HEIGHT} Z`,
-        line,
-      };
-    });
-
-    return {
-      // Paint the heavier series first so lighter ones are not buried.
-      paths: built.toSorted((a, b) => b.total - a.total),
-      columns: builtColumns,
-      stepX: step,
-      ticks: tickValues,
-      toY: toYValue,
-    };
-  }, [days, series, valueFor]);
-
-  const positionTooltip = useCallback(() => {
+  const positionTooltip = () => {
     const plot = plotRef.current;
     const tooltip = tooltipRef.current;
     const hoverPosition = hoverPositionRef.current;
@@ -188,7 +192,7 @@ export function ProjectActivityChart({ series, days, countsByDay }: ProjectActiv
     const top = Math.min(Math.max(0, preferredTop), Math.max(0, plotHeight - tooltipHeight));
     plot.style.setProperty("--usage-tooltip-left", `${left}px`);
     plot.style.setProperty("--usage-tooltip-top", `${top}px`);
-  }, []);
+  };
 
   useLayoutEffect(() => {
     if (hoverIndex === null) return;
@@ -196,30 +200,24 @@ export function ProjectActivityChart({ series, days, countsByDay }: ProjectActiv
 
     const plot = plotRef.current;
     const tooltip = tooltipRef.current;
-    if (plot === null || tooltip === null || typeof ResizeObserver === "undefined") return;
+    if (plot === null || tooltip === null) return;
 
-    const observer = new ResizeObserver(positionTooltip);
-    observer.observe(plot);
-    observer.observe(tooltip);
-    return () => observer.disconnect();
+    return observeResize([plot, tooltip], positionTooltip);
   }, [hoverIndex, positionTooltip]);
 
-  const handleMove = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      const plot = plotRef.current;
-      if (plot === null || days.length === 0) return;
-      const bounds = plot.getBoundingClientRect();
-      if (bounds.width === 0) return;
-      const localX = Math.min(bounds.width, Math.max(0, event.clientX - bounds.left));
-      const localY = Math.min(bounds.height, Math.max(0, event.clientY - bounds.top));
-      const fraction = localX / bounds.width;
-      const index = Math.round(fraction * (days.length - 1));
-      hoverPositionRef.current = { x: localX, y: localY };
-      positionTooltip();
-      setHoverIndex(Math.min(days.length - 1, Math.max(0, index)));
-    },
-    [days.length, positionTooltip],
-  );
+  const handleMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    const plot = plotRef.current;
+    if (plot === null || days.length === 0) return;
+    const bounds = plot.getBoundingClientRect();
+    if (bounds.width === 0) return;
+    const localX = Math.min(bounds.width, Math.max(0, event.clientX - bounds.left));
+    const localY = Math.min(bounds.height, Math.max(0, event.clientY - bounds.top));
+    const fraction = localX / bounds.width;
+    const index = Math.round(fraction * (days.length - 1));
+    hoverPositionRef.current = { x: localX, y: localY };
+    positionTooltip();
+    setHoverIndex(Math.min(days.length - 1, Math.max(0, index)));
+  };
 
   const hoveredDay = hoverIndex === null ? undefined : days[hoverIndex];
   const hoveredColumn = hoverIndex === null ? undefined : columns[hoverIndex];
