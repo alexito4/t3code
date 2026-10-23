@@ -7,7 +7,7 @@ import { IsoDateTime, ThreadId } from "./baseSchemas.ts";
  * keeps them out of orchestration entirely: plain get/set RPCs over their own table, gated by the
  * `scratchpad` environment capability.
  */
-export const THREAD_SCRATCHPAD_MAX_CHARS = 200_000;
+const THREAD_SCRATCHPAD_MAX_CHARS = 200_000;
 
 export const ThreadScratchpadGetInput = Schema.Struct({
   threadId: ThreadId,

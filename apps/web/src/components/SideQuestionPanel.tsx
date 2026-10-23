@@ -229,8 +229,6 @@ export function SideQuestionPanel(props: {
                             instanceId={activeEntry.instanceId}
                             models={activeEntry.models}
                             model={activeModelSelection.model}
-                            prompt=""
-                            onPromptChange={() => undefined}
                             modelOptions={activeModelSelection.options}
                             allowPromptInjectedEffort={false}
                             planModeEnabled={props.settings.planModeEnabled}

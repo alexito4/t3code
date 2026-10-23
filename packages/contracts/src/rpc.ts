@@ -1679,23 +1679,17 @@ const WsOrchestrationV2DispatchCommandRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS
   error: Schema.Union([OrchestrationV2DispatchCommandError, EnvironmentAuthorizationError]),
 });
 
-export const WsOrchestrationAskSideQuestionRpc = Rpc.make(
-  SIDE_QUESTION_WS_METHODS.askSideQuestion,
-  {
-    payload: OrchestrationAskSideQuestionInput,
-    success: OrchestrationAskSideQuestionResult,
-    error: Schema.Union([TextGenerationError, EnvironmentAuthorizationError]),
-  },
-);
+const WsOrchestrationAskSideQuestionRpc = Rpc.make(SIDE_QUESTION_WS_METHODS.askSideQuestion, {
+  payload: OrchestrationAskSideQuestionInput,
+  success: OrchestrationAskSideQuestionResult,
+  error: Schema.Union([TextGenerationError, EnvironmentAuthorizationError]),
+});
 
-export const WsOrchestrationCancelSideQuestionRpc = Rpc.make(
-  SIDE_QUESTION_WS_METHODS.cancelSideQuestion,
-  {
-    payload: OrchestrationCancelSideQuestionInput,
-    success: OrchestrationCancelSideQuestionResult,
-    error: EnvironmentAuthorizationError,
-  },
-);
+const WsOrchestrationCancelSideQuestionRpc = Rpc.make(SIDE_QUESTION_WS_METHODS.cancelSideQuestion, {
+  payload: OrchestrationCancelSideQuestionInput,
+  success: OrchestrationCancelSideQuestionResult,
+  error: EnvironmentAuthorizationError,
+});
 
 const WsOrchestrationV2GetTurnDiffRpc = Rpc.make(ORCHESTRATION_V2_WS_METHODS.getTurnDiff, {
   payload: OrchestrationV2RpcSchemas.getTurnDiff.input,
