@@ -66,14 +66,10 @@ const DESKTOP_APP_ID = "com.t3tools.t3code";
 const PERSONAL_DESKTOP_APP_ID = "com.t3tools.t3code.personal";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
-// Official channels all share DESKTOP_APP_ID (see resolveDesktopProductName's
-// nightly/alpha split for why that's fine — only one channel runs at a time).
-// A personal fork build sits alongside an official install instead of
-// replacing it, and macOS's LaunchServices/single-instance handling is keyed
-// off the bundle identifier, not productName: two .app bundles sharing one
-// appId get treated as the same running app, so the one launched second is
-// redirected into the first instead of opening. A distinct appId is required
-// for the personal build to actually run side by side.
+// Personal builds run beside an official install, and macOS keys LaunchServices and
+// single-instance handling off the bundle identifier, not productName: a shared appId sends the
+// second app launched into the first. Official channels can share DESKTOP_APP_ID because only
+// one of them runs at a time.
 function isPersonalDesktopBuild(): boolean {
   return process.env.T3CODE_DESKTOP_PERSONAL_BUILD === "1";
 }
