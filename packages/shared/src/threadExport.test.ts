@@ -272,11 +272,11 @@ describe("buildThreadExportMarkdown", () => {
     const { markdown } = exportOf();
 
     const order = [
-      "### User — 2026-01-01T00:00:00.000Z",
-      "**Command** — exit 1",
+      "### User (2026-01-01T00:00:00.000Z)",
+      "**Command** (exit 1)",
       "**Changed** `src/login.ts` (+3 −1)",
-      "**Approval requested** (command) — decline",
-      "### Assistant — 2026-01-01T00:05:00.000Z",
+      "**Approval requested** (command): decline",
+      "### Assistant (2026-01-01T00:05:00.000Z)",
     ].map((text) => markdown.indexOf(text));
     expect(order.every((index) => index > -1)).toBe(true);
     expect(order).toEqual([...order].sort((left, right) => left - right));
@@ -297,7 +297,7 @@ describe("buildThreadExportMarkdown", () => {
       images: new Map([[imageAttachment.id, "data:image/png;base64,AAAA"]]),
     });
     expect(markdown).toContain("![screenshot.png](data:image/png;base64,AAAA)");
-    expect(markdown).toContain("📎 *notes.txt* (text/plain, 2 KB) — not included in this export.");
+    expect(markdown).toContain("📎 *notes.txt* (text/plain, 2 KB), not included in this export.");
 
     const withoutImages = exportOf({ projection }).markdown;
     expect(withoutImages).not.toContain("![screenshot.png]");
