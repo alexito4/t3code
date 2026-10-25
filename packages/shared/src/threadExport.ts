@@ -1,15 +1,7 @@
 /**
- * Builds a portable, single-file Markdown export of a thread for sharing
- * outside its environment — see docs/user/thread-sidebar.md ("Export a thread").
- *
- * Pure, so the client can assemble it from data any official server already
- * serves (`@t3tools/client-runtime/state/thread-export` gathers it). The
- * readable transcript follows the chat timeline minus reasoning; the embedded
- * JSON block keeps the whole projection for a future re-import.
- *
- * The export has no access control of its own beyond whatever gated reading
- * the thread in the first place: whatever it contains (including any secrets
- * a user pasted into it) goes into the file verbatim, unredacted, by design.
+ * Pure single-file Markdown export of a thread, built from data any official server already
+ * serves. The embedded JSON block keeps the whole projection for a future re-import. Nothing is
+ * redacted: whatever the thread contains, pasted secrets included, goes into the file verbatim.
  */
 import {
   OrchestrationV2ThreadProjectionJson,
@@ -111,7 +103,7 @@ function paragraphs(parts: ReadonlyArray<string | null | undefined>): string {
 
 function formatAttachmentNote(attachment: ChatAttachment): string {
   const sizeKb = Math.max(1, Math.round(attachment.sizeBytes / 1024));
-  return `📎 *${attachment.name}* (${attachment.mimeType}, ${sizeKb} KB) — not included in this export.`;
+  return `📎 *${attachment.name}* (${attachment.mimeType}, ${sizeKb} KB), not included in this export.`;
 }
 
 interface RenderContext {
@@ -133,7 +125,7 @@ function renderMessage(
     return dataUrl ? `![${attachment.name}](${dataUrl})` : formatAttachmentNote(attachment);
   });
   return paragraphs([
-    `### ${role} — ${timestamp}`,
+    `### ${role} (${timestamp})`,
     item.text.trim().length > 0 ? item.text : "*(empty message)*",
     ...attachments,
   ]);
@@ -173,7 +165,7 @@ function renderTurnItem(item: OrchestrationV2TurnItem, context: RenderContext): 
     case "approval_request": {
       const decision = context.approvalDecisionsByRequestId.get(item.requestId);
       return paragraphs([
-        `**Approval requested** (${item.requestKind})${decision ? ` — ${decision}` : ""}`,
+        `**Approval requested** (${item.requestKind})${decision ? `: ${decision}` : ""}`,
         item.prompt ? blockquote(item.prompt) : null,
       ]);
     }
@@ -187,9 +179,9 @@ function renderTurnItem(item: OrchestrationV2TurnItem, context: RenderContext): 
     case "command_execution": {
       const outcome =
         item.exitCode !== undefined
-          ? ` — exit ${item.exitCode}`
+          ? ` (exit ${item.exitCode})`
           : item.outputIndicatesFailure === true
-            ? " — failed"
+            ? " (failed)"
             : "";
       return paragraphs([`**Command**${outcome}`, fenced("sh", item.input)]);
     }
@@ -231,7 +223,7 @@ function renderTurnItem(item: OrchestrationV2TurnItem, context: RenderContext): 
     // The value never reaches orchestration, so there is nothing secret here to leave out.
     case "secret_request":
       return paragraphs([
-        `**Secret requested**: ${item.label} — ${item.secretStatus}`,
+        `**Secret requested**: ${item.label} (${item.secretStatus})`,
         item.reason.trim().length > 0 ? blockquote(item.reason) : null,
       ]);
     default:

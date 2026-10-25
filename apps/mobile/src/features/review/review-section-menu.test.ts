@@ -28,9 +28,8 @@ describe("buildReviewSectionMenu", () => {
   });
 
   it("leaves Staged and Unstaged empty when the server does not return them", () => {
-    expect(buildReviewSectionMenu([section("git:working-tree", "working-tree")])).toMatchObject({
-      unstaged: null,
-      staged: null,
-    });
+    expect(
+      buildReviewSectionMenu([section("git:working-tree", "working-tree")]),
+    ).toMatchObject({ unstaged: null, staged: null });
   });
 });
