@@ -113,18 +113,8 @@ const NO_STAGING_ACTIONS: DiffFileStagingActions = {
 };
 
 /**
- * Decides which per-file stage/unstage/discard buttons the diff panel shows
- * for the active Git scope. Only the working-tree scopes (Uncommitted,
- * Unstaged, Staged) get any buttons -- Changes and historical (turn/commit)
- * diffs are read-only.
- *
- * Judgment call: Uncommitted (`git diff HEAD`) doesn't tell us, per file,
- * whether its change is staged, unstaged, or both, so there's no unambiguous
- * "unstage" action to offer there. "Stage" is still offered because `git add`
- * on an already-staged file is a harmless no-op, and "discard" is
- * well-defined regardless (see the git driver's `discardFile`): it always
- * reverts the file to HEAD (or deletes it if never committed) rather than
- * clearing only the staged or only the unstaged half of a change.
+ * Changes and turn/commit diffs are read-only. Uncommitted cannot tell staged from unstaged per
+ * file, so it offers no unstage; staging again is a no-op and discard reverts the whole file.
  */
 export function resolveDiffFileStagingActions(
   gitScope: DiffPanelGitScope,

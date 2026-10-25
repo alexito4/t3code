@@ -2829,12 +2829,9 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     },
   );
 
-  // Discarding a file always reverts it to the same end state regardless of
-  // which scope (Uncommitted / Unstaged / Staged) the caller looked at it
-  // from: fully matching HEAD, or gone if it was never committed. A discard
-  // that only cleared the "staged" or "unstaged" half of a change would
-  // silently leave the other half in place -- surprising, and easy to miss
-  // in a one-click action with no confirmation.
+  // Every scope discards to the same end state: matching HEAD, or gone if never committed.
+  // Clearing only the staged or unstaged half would silently keep the other half, which a
+  // one-click action without confirmation makes easy to miss.
   const discardFile: GitVcsDriver.GitVcsDriver["Service"]["discardFile"] = Effect.fn("discardFile")(
     function* (input) {
       const root = yield* validateWorkspaceRelativeFilePath(

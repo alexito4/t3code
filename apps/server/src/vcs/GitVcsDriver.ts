@@ -349,12 +349,8 @@ export class GitVcsDriver extends Context.Service<
       input: GitFilePathInput,
     ) => Effect.Effect<GitFilePathResult, GitCommandError>;
     /**
-     * Reverts `input.path` to its committed state (or deletes it, if it was
-     * never committed), regardless of whether it's currently staged,
-     * unstaged, or both -- see the implementation for why a single scope-
-     * independent behavior is the correct one. Stashes the file's current
-     * state first as an unrecoverable-data safety net; the stash is left in
-     * place, not popped.
+     * Reverts the file to HEAD, or deletes it if never committed, whichever half is staged.
+     * Stashes it first and leaves that stash in place as the only way back.
      */
     readonly discardFile: (
       input: GitFilePathInput,
