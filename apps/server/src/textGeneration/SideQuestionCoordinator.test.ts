@@ -16,7 +16,6 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
 
 import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
 import type { ProjectionRecordFilter } from "../orchestration-v2/ProjectionStore.ts";
@@ -110,22 +109,20 @@ const makeCoordinator = (
         }),
         Layer.mock(ProjectStore.ProjectStoreV2)({
           get: () =>
-            Effect.succeed(
-              Option.some({
-                projectId,
-                title: "Project",
-                workspaceRoot: "/repo",
-                defaultModelSelection: null,
-                defaultThreadEnvMode: null,
-                autoPull: false,
-                faviconPath: null,
-                projectIcon: null,
-                scripts: [],
-                createdAt: "2026-01-01T00:00:00.000Z",
-                updatedAt: "2026-01-01T00:00:00.000Z",
-                deletedAt: null,
-              }),
-            ),
+            Effect.succeedSome({
+              projectId,
+              title: "Project",
+              workspaceRoot: "/repo",
+              defaultModelSelection: null,
+              defaultThreadEnvMode: null,
+              autoPull: false,
+              faviconPath: null,
+              projectIcon: null,
+              scripts: [],
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+              deletedAt: null,
+            }),
         }),
         Layer.mock(TextGeneration.TextGeneration)({
           answerSideQuestion:
