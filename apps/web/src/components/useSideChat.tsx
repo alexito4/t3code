@@ -102,6 +102,7 @@ export function useSideChat(input: {
   };
 
   // A restored panel layout can name a side chat this view no longer holds.
+  // oxlint-disable-next-line t3code/react-effect-budget -- Prunes the persisted panel store, which restores layouts with no user action to hook.
   useEffect(() => {
     if (!threadRef || state) return;
     if (input.surfaces.some((surface) => surface.kind === "side-question")) {

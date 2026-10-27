@@ -1,10 +1,7 @@
 /**
- * Thread context for side questions: which turn items a side question sees, how they are
- * formatted, and how a long thread is trimmed to the byte budget. The prompt itself lives in
+ * Thread context for side questions, trimmed to the byte budget. The prompt lives in
  * provider-core's `buildSideQuestionPrompt`; these helpers stay in the server because they
  * project turn items through the V2 wire projection.
- *
- * @module textGeneration/SideQuestionContext
  */
 import * as NodeBuffer from "node:buffer";
 import type { OrchestrationV2TurnItem } from "@t3tools/contracts";
