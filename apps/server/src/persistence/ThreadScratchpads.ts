@@ -92,15 +92,16 @@ const make = Effect.gen(function* () {
   });
 
   return ThreadScratchpadRepository.of({
-    get: (threadId) =>
-      findRow({ threadId }).pipe(
+    get: Effect.fn("ThreadScratchpadRepository.get")(function (threadId) {
+      return findRow({ threadId }).pipe(
         Effect.map(
           Option.getOrElse((): ThreadScratchpad => ({ threadId, content: "", updatedAt: null })),
         ),
         Effect.mapError(toSqlOrDecodeError("getThreadScratchpad")),
-      ),
-    set: (input) =>
-      DateTime.now.pipe(
+      );
+    }),
+    set: Effect.fn("ThreadScratchpadRepository.set")(function (input) {
+      return DateTime.now.pipe(
         Effect.flatMap((now) =>
           upsertRow({
             threadId: input.threadId,
@@ -109,7 +110,8 @@ const make = Effect.gen(function* () {
           }),
         ),
         Effect.mapError(toSqlOrDecodeError("setThreadScratchpad")),
-      ),
+      );
+    }),
   });
 });
 
