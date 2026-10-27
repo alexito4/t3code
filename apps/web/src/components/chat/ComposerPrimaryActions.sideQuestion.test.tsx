@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 vi.mock("~/hooks/useSettings", () => ({
+  useClientSettings: (select: (settings: { redesignEnabled: boolean }) => unknown) =>
+    select({ redesignEnabled: false }),
   useEnvironmentIdentificationMode: () => "none",
 }));
 vi.mock("../SidebarStageBackdrop", () => ({

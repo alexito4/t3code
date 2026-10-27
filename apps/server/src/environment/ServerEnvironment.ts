@@ -228,7 +228,7 @@ export const make = Effect.gen(function* () {
       // This fork's per-file stage, unstage, and discard actions, absent on official builds.
       reviewFileActions: true,
       inlineMessageContext: true,
-      // This fork's side chat (closed upstream PR #8296), absent on official builds.
+      // This fork's side chat, absent on official builds.
       sideQuestions: true,
       requiredWorktreeBootstrap: true,
       threadSettlement: true,
@@ -247,6 +247,7 @@ export const make = Effect.gen(function* () {
       threadSnooze: true,
       environmentThemes: true,
       usageLimitSources: true,
+      providerWorkspaceSnapshotsOnDemand: true,
       usagePriceOverrides: true,
       usageModelAliases: true,
       threadPinning: true,

@@ -30,5 +30,5 @@ main agent. If another connected client is waiting for the same shared answer, i
 Side questions are unavailable while the agent is waiting for required user input.
 
 Side questions accept text only. They start with the model selected for the thread. ACP Registry
-agents cannot answer side questions, so on those threads pick another provider's model in the side
-composer.
+and fx agents cannot answer side questions, so on those threads pick another provider's model in the
+side composer.

@@ -7,7 +7,7 @@ import type {
 import type { UnifiedSettings } from "@t3tools/contracts/settings";
 import { createModelSelection } from "@t3tools/shared/model";
 import { MessageCirclePlus, Minimize2Icon } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useState } from "react";
 
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import ChatMarkdown from "./ChatMarkdown";
@@ -57,16 +57,13 @@ export function SideQuestionPanel(props: {
   readonly draftSeed?: { readonly text: string; readonly nonce: number } | undefined;
 }) {
   const [draft, setDraft] = useState("");
-  const appliedDraftSeedNonceRef = useRef<number | null>(null);
-  useEffect(() => {
-    const seed = props.draftSeed;
-    if (!seed || appliedDraftSeedNonceRef.current === seed.nonce) return;
-    appliedDraftSeedNonceRef.current = seed.nonce;
-    setDraft((current) => {
-      const trimmed = current.trimStart();
-      return trimmed.length === 0 ? `${seed.text} ` : `${seed.text}\n\n${trimmed}`;
-    });
-  }, [props.draftSeed]);
+  const [appliedDraftSeedNonce, setAppliedDraftSeedNonce] = useState<number | null>(null);
+  const seed = props.draftSeed;
+  if (seed && appliedDraftSeedNonce !== seed.nonce) {
+    setAppliedDraftSeedNonce(seed.nonce);
+    const trimmed = draft.trimStart();
+    setDraft(trimmed.length === 0 ? `${seed.text} ` : `${seed.text}\n\n${trimmed}`);
+  }
   const isMobileViewport = useMediaQuery("max-sm");
   const pending = props.turns.at(-1)?.status === "loading";
   const providerEntries = sortProviderInstanceEntries(

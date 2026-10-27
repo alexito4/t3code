@@ -5,8 +5,7 @@ import { ModelSelection } from "./modelSelection.ts";
 
 /**
  * Side chat (`/btw`): stateless questions answered from a thread's context without writing to
- * the thread. Fork-owned (closed upstream PR #8296); servers advertise it with the
- * `sideQuestions` environment capability.
+ * the thread. Fork-owned; servers advertise it with the `sideQuestions` environment capability.
  */
 export const SIDE_QUESTION_WS_METHODS = {
   askSideQuestion: "orchestration.askSideQuestion",
