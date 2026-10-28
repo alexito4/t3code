@@ -288,6 +288,33 @@ describe("buildThreadExportMarkdown", () => {
     expect(conversation).not.toContain("This answer was rolled back.");
   });
 
+  it("renders a link request with its target, outcome and reason", () => {
+    const linkRequest: OrchestrationV2TurnItem = {
+      ...itemBase("item-link", 7),
+      type: "link_request",
+      url: "https://vps.example.test",
+      label: "vps",
+      reason: "Run the migration on the VPS.",
+      linkStatus: "linked",
+    };
+    const projection = makeProjection({
+      turnItems: [linkRequest],
+      visibleTurnItems: [
+        {
+          position: 0,
+          visibility: "local",
+          sourceThreadId: threadId,
+          sourceItemId: linkRequest.id,
+          item: linkRequest,
+        },
+      ],
+    });
+
+    expect(exportOf({ projection }).markdown).toContain(
+      ["**Link requested**: vps (linked)", "", "> Run the migration on the VPS."].join("\n"),
+    );
+  });
+
   it("inlines images that have a resolved data URL and notes the rest", () => {
     const projection = makeProjection();
     expect(threadExportImageAttachments(projection)).toEqual([imageAttachment]);
