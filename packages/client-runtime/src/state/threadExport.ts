@@ -25,8 +25,11 @@ import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import * as ManagedRelay from "../relay/managedRelay.ts";
 import { request } from "../rpc/client.ts";
 import { resolveAssetUrl } from "./assets.ts";
+import {
+  executeAuthenticatedEnvironmentHttpRequest,
+  withOrchestrationProtocolHeader,
+} from "./environmentHttpAuth.ts";
 import { createEnvironmentCommand } from "./runtime.ts";
-import { fetchEnvironmentThreadSnapshot } from "./threadSnapshotHttp.ts";
 
 // A long thread's full projection is far larger than a cold-open snapshot.
 const THREAD_EXPORT_SNAPSHOT_TIMEOUT_MS = 60_000;
@@ -48,14 +51,19 @@ const exportThread = Effect.fn("clientRuntime.state.exportThread")(function* (in
   }
   // The full, unwindowed projection: the WebSocket projection and the default
   // snapshot loader return only the recent window of a long thread.
-  const { projection } = yield* fetchEnvironmentThreadSnapshot({
+  const params = { threadId: input.threadId };
+  const { projection } = yield* executeAuthenticatedEnvironmentHttpRequest({
     prepared: prepared.value,
-    threadId: input.threadId,
     signer: yield* Effect.serviceOption(ManagedRelay.ManagedRelayDpopSigner),
     remoteAuthorization: yield* Effect.serviceOption(
       RemoteEnvironmentAuthorization.RemoteEnvironmentAuthorization,
     ),
+    group: "orchestration",
+    method: "GET",
+    url: (urls) => urls.threadSnapshot({ params }),
     timeoutMs: THREAD_EXPORT_SNAPSHOT_TIMEOUT_MS,
+    request: ({ client, headers }) =>
+      client.threadSnapshot({ params, headers: withOrchestrationProtocolHeader(headers) }),
   });
 
   // A missing diff only loses the "Code changes" section, so it never fails the export.

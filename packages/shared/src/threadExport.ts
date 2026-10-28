@@ -226,6 +226,11 @@ function renderTurnItem(item: OrchestrationV2TurnItem, context: RenderContext): 
         `**Secret requested**: ${item.label} (${item.secretStatus})`,
         item.reason.trim().length > 0 ? blockquote(item.reason) : null,
       ]);
+    case "link_request":
+      return paragraphs([
+        `**Link requested**: ${item.label?.trim() || item.url || "a machine"} (${item.linkStatus})`,
+        item.reason.trim().length > 0 ? blockquote(item.reason) : null,
+      ]);
     default:
       item satisfies never;
       return null;
