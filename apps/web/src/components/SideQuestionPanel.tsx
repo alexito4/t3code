@@ -13,10 +13,8 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import ChatMarkdown from "./ChatMarkdown";
 import { getAppModelOptionsForInstance } from "../modelSelection";
 import {
-  applyProviderInstanceSettings,
-  deriveProviderInstanceEntries,
+  providerInstanceEntriesFor,
   resolveSelectableProviderInstanceEntry,
-  sortProviderInstanceEntries,
 } from "../providerInstances";
 import { ComposerBanner } from "./chat/ComposerBanner";
 import { ComposerSurface } from "./chat/ComposerSurface";
@@ -66,12 +64,10 @@ export function SideQuestionPanel(props: {
   }
   const isMobileViewport = useMediaQuery("max-sm");
   const pending = props.turns.at(-1)?.status === "loading";
-  const providerEntries = sortProviderInstanceEntries(
-    applyProviderInstanceSettings(
-      deriveProviderInstanceEntries(props.providers),
-      props.settings,
-      props.projectId,
-    ),
+  const providerEntries = providerInstanceEntriesFor(
+    props.providers,
+    props.settings,
+    props.projectId,
   );
   const modelOptionsByInstance = new Map(
     providerEntries.map((entry) => [
