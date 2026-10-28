@@ -357,7 +357,7 @@ export default function DiffPanel({
       ? `turn:${selectedTurn.runId}`
       : selectedCommitSha
         ? `commit:${selectedCommitSha}`
-      : selectedGitScope;
+        : selectedGitScope;
   const collapseScopeKey = routeThreadRef
     ? `${routeThreadRef.environmentId}:${routeThreadRef.threadId}:${reviewSectionId}`
     : null;
@@ -765,11 +765,11 @@ export default function DiffPanel({
     ? ""
     : selectedCommitSha
       ? selectedCommitValue
-    : selectedRunId === null
-      ? selectedGitScope
-      : selectedTurn?.runId === latestTurn?.runId
-        ? "latest"
-        : selectedTurnValue;
+      : selectedRunId === null
+        ? selectedGitScope
+        : selectedTurn?.runId === latestTurn?.runId
+          ? "latest"
+          : selectedTurnValue;
   const selectScopeValue = (value: string) => {
     if (
       value === "branch" ||
@@ -1242,7 +1242,7 @@ export default function DiffPanel({
                         ? "Loading checkpoint diff..."
                         : selectedCommitSha
                           ? "Loading commit diff..."
-                        : GIT_SCOPES[selectedGitScope].loadingLabel
+                          : GIT_SCOPES[selectedGitScope].loadingLabel
                   }
                 />
               ) : (
