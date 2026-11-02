@@ -245,8 +245,11 @@ original PR, not pile up here as one-off fixes.
     main thread. Both claimed `/btw` and the panel launcher, and upstream's is the bigger feature,
     so the fork's stateless version was removed from `PATCH_BRANCHES`. What's lost: the "Ask in
     side chat" button on the selection toolbar (also removed from the scratchpad branch, which
-    shared that toolbar) and starting a side chat from mobile. The fork's version wrote nothing to
-    the database, so nothing needs cleaning up. The branch stays at its last tip as a reference,
+    shared that toolbar) and starting a side chat from mobile. Upstream status (2026-11-02): open
+    PR https://github.com/pingdotgg/t3code/pull/28559 adds an **Ask** button next to Cite that
+    opens a side chat with the selection cited (web only, not yet reviewed). Nothing upstream
+    covers starting a side chat on mobile; #26901 only lists and opens existing ones there. The
+    fork's version wrote nothing to the database, so nothing needs cleaning up. The branch stays at its last tip as a reference,
     and its unfinished 4080 merge is kept locally as `refs/backup/side-chat-4080`.
   - **Branch**: `patch/pr8296-side-questions`, built by merging `upstream-pr-8296` (a mirror of
     `refs/pull/8296/head`, kept independent of everything else) onto fresh `upstream/main`.
