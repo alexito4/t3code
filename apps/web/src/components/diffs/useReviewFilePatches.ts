@@ -193,10 +193,7 @@ function reviewFileQueries({
                 request: {
                   cwd,
                   ...(baseRef ? { baseRef } : {}),
-                  // A commit source names its commit as the head.
-                  ...(source.kind === "commit" && source.headRef
-                    ? { commitSha: source.headRef }
-                    : {}),
+                  ...(source.kind === "commit" ? { commitSha: source.id } : {}),
                   ignoreWhitespace,
                   file: {
                     path: file.path,

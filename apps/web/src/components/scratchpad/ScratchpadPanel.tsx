@@ -213,6 +213,7 @@ function ScratchpadEditor({
     annotation.metadata.entries.some((entry) => entry.kind === "draft"),
   );
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- installs selection dismissal listeners on the editor surface DOM node
   useEffect(() => {
     const root = surfaceRef.current;
     if (!root) return;

@@ -1,9 +1,4 @@
-import {
-  ORCHESTRATION_V2_WS_METHODS,
-  SIDE_QUESTION_WS_METHODS,
-  WS_METHODS,
-  type WsRpcGroup,
-} from "@t3tools/contracts";
+import { ORCHESTRATION_V2_WS_METHODS, WS_METHODS, type WsRpcGroup } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as References from "effect/References";
@@ -18,7 +13,9 @@ type WsRpcMethod = RpcGroup.Rpcs<typeof WsRpcGroup>["_tag"];
 const RPC_AGGREGATES = {
   [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: "orchestrationV2",
   [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: "orchestration",
+  [ORCHESTRATION_V2_WS_METHODS.getNativeChildWork]: "orchestration",
   [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: "orchestration",
+  [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: "orchestration",
   [ORCHESTRATION_V2_WS_METHODS.getTurnItem]: "orchestration",
   [ORCHESTRATION_V2_WS_METHODS.getTurnDiff]: "orchestration",
   [ORCHESTRATION_V2_WS_METHODS.getFullThreadDiff]: "orchestration",
@@ -33,12 +30,11 @@ const RPC_AGGREGATES = {
   [ORCHESTRATION_V2_WS_METHODS.launchThread]: "orchestration",
   [ORCHESTRATION_V2_WS_METHODS.subscribeShell]: "orchestrationV2",
   [ORCHESTRATION_V2_WS_METHODS.subscribeThread]: "orchestrationV2",
-  [SIDE_QUESTION_WS_METHODS.askSideQuestion]: "orchestration",
-  [SIDE_QUESTION_WS_METHODS.cancelSideQuestion]: "orchestration",
   [ORCHESTRATION_V2_WS_METHODS.subscribeCommandOutput]: "orchestrationV2",
   [WS_METHODS.projectsMutate]: "orchestration",
   [WS_METHODS.serverProbe]: "server",
   [WS_METHODS.serverGetConfig]: "server",
+  [WS_METHODS.serverGetNpmRelease]: "server",
   [WS_METHODS.serverRefreshProviders]: "server",
   [WS_METHODS.serverUpdateProvider]: "server",
   [WS_METHODS.providerAuthStart]: "provider",
@@ -147,6 +143,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.sourceControlSignInWait]: "source-control",
   [WS_METHODS.sourceControlSignInCancel]: "source-control",
   [WS_METHODS.sourceControlAppAccess]: "source-control",
+  [WS_METHODS.sourceControlStarred]: "source-control",
   [WS_METHODS.projectCloneStart]: "source-control",
   [WS_METHODS.projectCloneCancel]: "source-control",
   [WS_METHODS.projectCloneRetry]: "source-control",
@@ -159,6 +156,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.projectsWriteFile]: "workspace",
   [WS_METHODS.projectsEnsureScratch]: "orchestration",
   [WS_METHODS.projectsCreateNew]: "orchestration",
+  [WS_METHODS.projectsCreateFromThread]: "orchestration",
   [WS_METHODS.shellOpenInEditor]: "workspace",
   [WS_METHODS.filesystemBrowse]: "workspace",
   [WS_METHODS.filesystemGetMetadata]: "workspace",
@@ -191,6 +189,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.vcsCreateRef]: "vcs",
   [WS_METHODS.vcsSwitchRef]: "vcs",
   [WS_METHODS.vcsInit]: "vcs",
+  [WS_METHODS.reviewGetBranchCommits]: "review",
   [WS_METHODS.reviewGetDiffPreview]: "review",
   [WS_METHODS.reviewGetDiffFileContents]: "review",
   [WS_METHODS.terminalOpen]: "terminal",
@@ -215,6 +214,7 @@ const RPC_AGGREGATES = {
   [WS_METHODS.deviceConfigure]: "device",
   [WS_METHODS.deviceTestHost]: "device",
   [WS_METHODS.deviceEasAccount]: "device",
+  [WS_METHODS.deviceSimlockIdentity]: "device",
   [WS_METHODS.deviceList]: "device",
   [WS_METHODS.deviceOpen]: "device",
   [WS_METHODS.deviceClose]: "device",

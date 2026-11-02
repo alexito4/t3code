@@ -13,8 +13,6 @@ import {
 import { describe, expect, it } from "vite-plus/test";
 
 import {
-  canAskComposerSideQuestion,
-  canOfferComposerSideQuestionCommand,
   clampCollapsedComposerCursor,
   collapseExpandedComposerCursor,
   composerSubmissionIntentForKey,
@@ -24,9 +22,10 @@ import {
   extendReplacementRangeForTrailingSpace,
   formatAssistantCitationForComposer,
   isPathSuggestionCurrent,
-  parseComposerSideQuestion,
+  parseSideChatCommand,
   replaceTextRange,
 } from "./composer-logic";
+import { slashCommandItemsForPromptPosition } from "./components/chat/composerSlashCommandSearch";
 import { carryDisplacedCustomAnswerIntoPrompt } from "./pendingUserInput";
 import { formatTerminalContextReference } from "./lib/terminalContext";
 
@@ -233,63 +232,6 @@ describe("composerSubmissionIntentForKey", () => {
     { event: { ...enter, repeat: true } },
   ])("does not submit with %j", (override) => {
     expect(composerSubmissionIntentForKey({ ...input, event: enter, ...override })).toBeNull();
-  });
-});
-
-describe("side-question composer state", () => {
-  const supported = { sideQuestionsSupported: true, isServerThread: true };
-
-  it("hides side-question actions while pending user input owns the composer", () => {
-    expect(canAskComposerSideQuestion({ ...supported, hasPendingUserInput: true })).toBe(false);
-    expect(canAskComposerSideQuestion({ ...supported, hasPendingUserInput: false })).toBe(true);
-  });
-
-  it("sends /btw to the agent on environments without side chat", () => {
-    const unsupported = {
-      sideQuestionsSupported: false,
-      isServerThread: true,
-      hasPendingUserInput: false,
-    };
-
-    expect(canAskComposerSideQuestion(unsupported)).toBe(false);
-    expect(parseComposerSideQuestion("/btw side question", unsupported)).toBeNull();
-  });
-
-  it("keeps /btw text on the pending user-input response path", () => {
-    expect(
-      parseComposerSideQuestion("/btw custom answer", {
-        ...supported,
-        hasPendingUserInput: true,
-      }),
-    ).toBeNull();
-    expect(
-      parseComposerSideQuestion("/btw side question", {
-        ...supported,
-        hasPendingUserInput: false,
-      }),
-    ).toBe("side question");
-  });
-
-  it("offers /btw only from a slash trigger at the prompt start", () => {
-    const promptStartTrigger = detectComposerTrigger("/bt", 3);
-    const laterLineTrigger = detectComposerTrigger("Keep this\n/bt", 13);
-
-    expect(promptStartTrigger).not.toBeNull();
-    expect(laterLineTrigger).not.toBeNull();
-    expect(
-      canOfferComposerSideQuestionCommand({
-        trigger: promptStartTrigger!,
-        ...supported,
-        hasPendingUserInput: false,
-      }),
-    ).toBe(true);
-    expect(
-      canOfferComposerSideQuestionCommand({
-        trigger: laterLineTrigger!,
-        ...supported,
-        hasPendingUserInput: false,
-      }),
-    ).toBe(false);
   });
 });
 
@@ -606,5 +548,31 @@ describe("extendReplacementRangeForTrailingSpace", () => {
     expect(extendReplacementRangeForTrailingSpace("@firest", 3, "@file ")).toBe(3);
     expect(extendReplacementRangeForTrailingSpace("@fi rest", 3, "@file")).toBe(3);
     expect(extendReplacementRangeForTrailingSpace("@fi", 3, "@file ")).toBe(3);
+  });
+});
+
+describe("parseSideChatCommand", () => {
+  it("reads an optional prompt after /side or /btw", () => {
+    expect(parseSideChatCommand("/side")).toEqual({ prompt: "" });
+    expect(parseSideChatCommand("  /SIDE  why does this fail?\nline two ")).toEqual({
+      prompt: "why does this fail?\nline two",
+    });
+    expect(parseSideChatCommand("/btw check @src/a.ts")).toEqual({ prompt: "check @src/a.ts" });
+  });
+
+  it("ignores other commands and inline mentions, which the menu does not offer", () => {
+    expect(parseSideChatCommand("/sidebar")).toBeNull();
+    expect(parseSideChatCommand("/btwx")).toBeNull();
+    expect(parseSideChatCommand("ask /side later")).toBeNull();
+    const items = (["side", "btw", "plan"] as const).map((command) => ({
+      id: `slash:${command}`,
+      type: "slash-command" as const,
+      command,
+      label: `/${command}`,
+      description: "",
+    }));
+    expect(slashCommandItemsForPromptPosition(items, false).map((item) => item.id)).toEqual([
+      "slash:plan",
+    ]);
   });
 });

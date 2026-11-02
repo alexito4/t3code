@@ -104,7 +104,6 @@ export function buildComposerSlashCommandItems(input: {
   readonly hasThread: boolean;
   readonly hasCompactableConversation?: boolean;
   readonly offersUsageLimits?: boolean;
-  readonly offersSideQuestions?: boolean;
   readonly allowInteractionMode: boolean;
   readonly selectedProviderStatus: Pick<
     ServerProvider,
@@ -123,13 +122,6 @@ export function buildComposerSlashCommandItems(input: {
       description: "Switch model",
     },
     {
-      id: "cmd:btw",
-      type: "slash-command",
-      command: "btw",
-      label: "/btw",
-      description: "Ask without interrupting the agent",
-    },
-    {
       id: "cmd:plan",
       type: "slash-command",
       command: "plan",
@@ -145,10 +137,7 @@ export function buildComposerSlashCommandItems(input: {
     },
   ] satisfies ComposerCommandItem[];
   const items: ComposerCommandItem[] = builtIn.filter(
-    (item) =>
-      item.command.includes(query) &&
-      (item.command === "model" ||
-        (item.command === "btw" ? input.offersSideQuestions === true : allowInteractionMode)),
+    (item) => item.command.includes(query) && (item.command === "model" || allowInteractionMode),
   );
 
   // Providers expand commands only at the start of a message. T3 commands
@@ -232,7 +221,6 @@ export function useComposerCommandMenu({
   hasThread,
   hasCompactableConversation,
   offersUsageLimits = false,
-  offersSideQuestions = false,
   enabled = true,
   onChangeDraftMessage,
   onUpdateInteractionMode,
@@ -254,7 +242,6 @@ export function useComposerCommandMenu({
   readonly hasThread: boolean;
   readonly hasCompactableConversation: boolean;
   readonly offersUsageLimits?: boolean;
-  readonly offersSideQuestions?: boolean;
   readonly enabled?: boolean;
   readonly onChangeDraftMessage: (value: string) => void;
   readonly onUpdateInteractionMode?: (mode: ProviderInteractionMode) => void;
@@ -362,7 +349,6 @@ export function useComposerCommandMenu({
         hasThread,
         hasCompactableConversation,
         offersUsageLimits,
-        offersSideQuestions,
         allowInteractionMode: onUpdateInteractionMode !== undefined,
         selectedProviderStatus: selectedProviderStatus
           ? {

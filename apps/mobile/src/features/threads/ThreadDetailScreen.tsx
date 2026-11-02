@@ -1,3 +1,4 @@
+import { ChildThreadApprovals } from "./ChildThreadApprovals";
 import { useOpenThreadInspector } from "./thread-inspector-navigation";
 import { useSidebarWorkspaceTabs } from "../workspace/useSystemWorkspaceTabBar";
 import { useWorkspaceTabs } from "../workspace/WorkspaceTabsContext";
@@ -14,7 +15,7 @@ import { createThreadVisitTracker } from "@t3tools/client-runtime/state/thread-v
 import { useChildThreadInputs, useThreadReportedModelSelection } from "../../state/entities";
 import { UsageLimitRecoveryCard } from "./UsageLimitRecoveryCard";
 import { ChatGptUsageLimitNotice } from "./ChatGptUsageLimitNotice";
-import { StackActions, useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import {
   effectiveSnoozed,
   threadWokeAt,
@@ -25,11 +26,6 @@ import type { WorktreeSetupCardProps } from "./worktree-setup-card";
 import type { ComposerTextPaste } from "../../native/T3ComposerEditor.types";
 import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import {
-  parseSideQuestion,
-  sideQuestionCancellationSucceeded,
-  sideQuestionPreviousTurns,
-} from "@t3tools/client-runtime/state/orchestration";
 import type { HandoffEndpoints } from "@t3tools/client-runtime/handoff";
 import { queuedRunEditBlockedReason } from "@t3tools/client-runtime/queued-run-edit";
 import {
@@ -51,6 +47,7 @@ import type {
   ScopedThreadRef,
   ServerConfig as T3ServerConfig,
   UsageLimitsReport,
+  RunId,
 } from "@t3tools/contracts";
 import {
   appendCodexArtifactTemplateUsePrompt,
@@ -62,7 +59,11 @@ import {
   type ApprovalResponder,
   type ThreadUserInputQuestion,
 } from "@t3tools/client-runtime/state/thread-requests";
+import { useDeadlinePassed } from "../../lib/clock";
 import {
+  BACKGROUND_WORK_STOP_RETRY_AFTER_MS,
+  type BackgroundWorkStopRequest,
+  isBackgroundWorkStopPending,
   presentPendingBackgroundWork,
   presentProviderGoal,
 } from "@t3tools/client-runtime/state/thread-execution";
@@ -87,12 +88,9 @@ import {
   useSyncExternalStore,
 } from "react";
 import {
-  ActivityIndicator,
   AppState,
   Keyboard,
   Platform,
-  Pressable,
-  ScrollView,
   useWindowDimensions,
   View,
   type GestureResponderEvent,
@@ -121,10 +119,6 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkspaceContentWidth } from "../layout/workspace-content-width";
 import { useAdaptiveWorkspaceLayout } from "../layout/adaptive-workspace-context";
-import { AppText as Text, AppTextInput as TextInput } from "../../components/ui/AppText";
-import { ControlPill } from "../../components/ui/ControlPill";
-import { ComposerInlineControl } from "../../components/ComposerToolbar";
-import { ProviderIcon } from "../../components/ProviderIcon";
 import { useNativeWorkspaceColumnsSupported } from "../../native/NativeWorkspaceColumns";
 import {
   useDeviceType,
@@ -136,7 +130,6 @@ import { useAppearancePreferences } from "../settings/appearance/AppearancePrefe
 import { collectProviderUsageLimits } from "@t3tools/shared/usageLimits";
 import type { ComposerEditorHandle } from "../../components/ComposerEditor";
 import type { StatusTone } from "../../components/StatusPill";
-import { orchestrationEnvironment } from "../../state/orchestration";
 import { getComposerDraftSnapshot } from "../../state/use-composer-drafts";
 import { RenderErrorBoundary, RenderFailureView } from "../../components/RenderErrorBoundary";
 import {
@@ -152,14 +145,6 @@ import { ThreadBrowserFloat } from "../browser/ThreadBrowserFloat";
 import { useThreadServerBrowserTabs } from "../../state/preview";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import { scopedThreadKey } from "../../lib/scopedEntities";
-import { buildModelOptions } from "../../lib/modelOptions";
-import { randomHex } from "../../lib/uuid";
-import {
-  patchSideQuestionState,
-  sideQuestionAwaitsAnswer,
-  sideQuestionStateAtom,
-  updateSideQuestions,
-} from "../../state/side-questions";
 import {
   finishThreadMessageJump,
   pendingThreadMessageJump,
@@ -177,16 +162,19 @@ import {
 import { appAtomRegistry } from "../../state/atom-registry";
 import { threadStreamHaptics } from "./threadStreamHaptics";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { orchestrationEnvironment } from "../../state/orchestration";
 import { useDelayedStatus } from "../../lib/useDelayedStatus";
+import type { PendingUserInputDraftAnswer } from "@t3tools/client-runtime/state/pending-user-input";
+import type { RunStopPresentation } from "@t3tools/client-runtime/state/thread-execution";
 import type {
   PendingApproval,
   PendingUserInput,
-  PendingUserInputDraftAnswer,
   ThreadFeedEntry,
   ThreadFeedLatestRun,
 } from "../../lib/threadActivity";
 import { PendingApprovalCard } from "./PendingApprovalCard";
 import { ComposerErrorNotice } from "./ComposerErrorNotice";
+import { ManagedRuntimeModeNotice } from "./ManagedRuntimeModeNotice";
 import { ComposerFeedback } from "./ComposerFeedback";
 import { ComposerUsageLimits } from "./ComposerUsageLimits";
 import { PendingUserInputCard } from "./PendingUserInputCard";
@@ -213,9 +201,9 @@ import { useThreadTurnSubagents } from "./ThreadAgentsSheet";
 import { ComposerQueuedEditBanner } from "./ComposerQueuedEdit";
 import { useThreadQueuedCount } from "./ThreadQueueControl";
 import { ThreadGuestShareBar } from "./ThreadGuestShareBar";
+import { ThreadSideChatsRow } from "./ThreadSideChatsRow";
 import type { ThreadContentPresentation } from "./threadContentPresentation";
 import { resolveThreadFeedSubmissionAnchor } from "./thread-feed-live-follow";
-import type { SideChatSettingsRouteParams } from "./SideChatSettingsSheet";
 import { useOpenLinkedThread } from "./useOpenLinkedThread";
 import { useGlobalVoiceInput } from "../voice-input/VoiceInputProvider";
 
@@ -324,6 +312,8 @@ export interface ThreadDetailScreenProps {
   readonly showContent?: boolean;
 }
 
+// iOS questions overlay the controls; Android questions stack with child approvals.
+const ComposerPanels = Platform.OS === "android" ? Animated.ScrollView : Animated.View;
 const USAGE_LIMITS_PANEL_GAP = 12;
 const USAGE_LIMITS_PANEL_MIN_HEIGHT = 44;
 
@@ -361,19 +351,37 @@ const threadVisitTracker = createThreadVisitTracker({
 
 // Past the composer's 180 ms height animation.
 const COMPOSER_HEIGHT_SETTLE_MS = 220;
+const NO_RUN_STOP_ATOM = Atom.make<RunStopPresentation | null>(null).pipe(
+  Atom.withLabel("mobile-thread-run-stop:empty"),
+);
+
+// Connection failures survive retries and app suspension.
+const RECONNECT_ERROR_DELAY_MS = 5_000;
 
 // Anchors, the submitted message, follow state and pending scrolls belong to
 // one thread, so the body remounts when the thread changes.
 export function ThreadDetailScreen(props: ThreadDetailScreenProps) {
+  const [statusRequests, setStatusRequests] = useState<
+    Record<string, BackgroundWorkStopRequest | undefined>
+  >({});
   return (
     <ThreadDetailBody
       key={scopedThreadKey(props.environmentId, props.selectedThread.id)}
       {...props}
+      statusRequests={statusRequests}
+      setStatusRequests={setStatusRequests}
     />
   );
 }
 
-function ThreadDetailBody(props: ThreadDetailScreenProps) {
+function ThreadDetailBody(
+  props: ThreadDetailScreenProps & {
+    statusRequests: Record<string, BackgroundWorkStopRequest | undefined>;
+    setStatusRequests: React.Dispatch<
+      React.SetStateAction<Record<string, BackgroundWorkStopRequest | undefined>>
+    >;
+  },
+) {
   const usesNativeWorkspaceColumns = useNativeWorkspaceColumnsSupported();
   const { layout } = useAdaptiveWorkspaceLayout();
   const deviceType = useDeviceType();
@@ -469,18 +477,6 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
     threadId: props.selectedThread.id,
   });
   const composerError = useAtomValue(threadComposerErrorsAtom)[selectedThreadKey]?.message ?? null;
-  const askSideQuestion = useAtomCommand(orchestrationEnvironment.askSideQuestion, {
-    reportFailure: false,
-  });
-  const cancelSideQuestion = useAtomCommand(orchestrationEnvironment.cancelSideQuestion, {
-    reportFailure: false,
-  });
-  const sideQuestionState = useAtomValue(sideQuestionStateAtom(selectedThreadKey));
-  // Unpatched servers reject side chat as an unknown RPC; /btw goes to the agent there.
-  const sideQuestionsSupported =
-    props.serverConfig?.environment.capabilities.sideQuestions === true;
-  const setSideQuestionMode = (mode: "expanded" | "minimized" | "hidden") =>
-    patchSideQuestionState(selectedThreadKey, { mode });
   const queuedCount = useThreadQueuedCount(props.selectedThreadDetailRef);
   const turnSubagents = useThreadTurnSubagents(props.selectedThreadDetailRef);
   const agentsSegment = resolveSubagentPillSegment(turnSubagents);
@@ -495,29 +491,6 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
     return () => cancelAnimationFrame(frame);
   }, [editingRunId, composerEditorRef]);
   const composerOverlayRef = useRef<ViewInstance>(null);
-  const sideModelSelection =
-    sideQuestionState?.modelSelection ?? props.selectedThread.modelSelection;
-  const sideModelOptions = buildModelOptions(
-    props.serverConfig,
-    sideModelSelection,
-    undefined,
-    props.selectedThread.projectId,
-  );
-  const sideCurrentModelOption =
-    sideModelOptions.find(
-      (option) =>
-        option.selection.instanceId === sideModelSelection.instanceId &&
-        option.selection.model === sideModelSelection.model,
-    ) ?? null;
-  const openSideSettings = () => {
-    Keyboard.dismiss();
-    navigation.dispatch(
-      StackActions.push("SideChatSettingsSheet", {
-        environmentId: props.environmentId,
-        threadId: props.selectedThread.id,
-      } satisfies SideChatSettingsRouteParams),
-    );
-  };
   const listRef = useRef<LegendListRef>(null);
   const feedTouchStartRef = useRef<{ pageX: number; pageY: number } | null>(null);
   // Aborted when this thread's body unmounts, so async work started for it
@@ -578,6 +551,14 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
     }
   })();
   const threadSyncLabel = useDelayedStatus(selectedThreadKey, realThreadSyncLabel);
+  const connectionRetrying =
+    props.connectionStateLabel === "connecting" || props.connectionStateLabel === "reconnecting";
+  const retryError = connectionRetrying ? props.connectionError : null;
+  const retryConnectionError = useDelayedStatus(
+    `${props.environmentId}:${retryError !== null}`,
+    retryError,
+    RECONNECT_ERROR_DELAY_MS,
+  );
   const interruptThreadTurn = useAtomCommand(threadEnvironment.interruptTurn, {
     reportFailure: false,
   });
@@ -585,8 +566,57 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
   const unsettleThread = useAtomCommand(threadEnvironment.unsettle, { reportFailure: false });
   const updateMetadata = useAtomCommand(threadEnvironment.updateMetadata, { reportFailure: false });
   const visitThread = useAtomCommand(threadEnvironment.visit, { reportFailure: false });
-  const [statusRequest, setStatusRequest] = useState<{ threadKey: string } | null>(null);
-  const statusPending = statusRequest?.threadKey === selectedThreadKey;
+  const anyRunStop = useAtomValue(
+    props.selectedThreadDetailRef === null
+      ? NO_RUN_STOP_ATOM
+      : environmentThreadDetails.runStopAtom(props.selectedThreadDetailRef),
+  );
+  // A background Stop matters only while that work is still pending.
+  const runStop =
+    anyRunStop?.background && props.selectedThread.pendingBackgroundTasks.length === 0
+      ? null
+      : anyRunStop;
+  const forceStopThread = useAtomCommand(orchestrationEnvironment.forceStopThread, {
+    reportFailure: false,
+  });
+  const canForceStop =
+    useAtomValue(orchestrationEnvironment.forceStopThread.permissionAtom(props.environmentId)) &&
+    props.serverConfig?.environment.capabilities.threadForceStop === true;
+  const [forceStoppingKey, setForceStoppingKey] = useState<string | null>(null);
+  // The run that ignored Stop, so a confirmation left open cannot hit a newer run.
+  const forceStop = async (runId: RunId | undefined) => {
+    const threadKey = selectedThreadKey;
+    setForceStoppingKey(threadKey);
+    const result = await forceStopThread({
+      environmentId: props.environmentId,
+      input:
+        runId === undefined
+          ? { threadId: props.selectedThread.id }
+          : { threadId: props.selectedThread.id, runId },
+    });
+    setForceStoppingKey((current) => (current === threadKey ? null : current));
+    if (result._tag === "Failure") {
+      if (!isAtomCommandInterrupted(result)) Dialog.alert("Could not force stop the agent");
+      return;
+    }
+    const others = result.value.sharedWithThreadIds.length;
+    if (result.value.outcome === "releasing") {
+      Dialog.alert("Turn stopped; the agent is still shutting down");
+    }
+    if (result.value.outcome === "shared") {
+      Dialog.alert(
+        "Turn stopped; the agent process kept running",
+        `It is shared with ${others === 0 ? "other" : others} working ${others === 1 ? "thread" : "threads"}. Stop those to free it.`,
+      );
+    }
+  };
+  const statusRequest = props.statusRequests[selectedThreadKey] ?? null;
+  const statusPending = isBackgroundWorkStopPending(
+    statusRequest,
+    selectedThreadKey,
+    props.selectedThread.pendingBackgroundTasks,
+    useDeadlinePassed(statusRequest?.retryAt ?? null),
+  );
   const [lifecycleNow, setLifecycleNow] = useState(() => new Date().toISOString());
   useFocusEffect(
     useCallback(() => {
@@ -618,8 +648,15 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
   });
   const runStatusAction = async (action: "stop" | "wake" | "unsettle" | "dismiss") => {
     if (statusPending || !props.canOperateThread) return;
-    const request = { threadKey: selectedThreadKey };
-    setStatusRequest(request);
+    const request: BackgroundWorkStopRequest = {
+      threadKey: selectedThreadKey,
+      taskIds:
+        action === "stop"
+          ? props.selectedThread.pendingBackgroundTasks.map((task) => task.taskId)
+          : [],
+      retryAt: null,
+    };
+    props.setStatusRequests((current) => ({ ...current, [request.threadKey]: request }));
     const target = {
       environmentId: props.environmentId,
       input: { threadId: props.selectedThread.id },
@@ -653,8 +690,17 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
                 ...target,
                 input: { ...target.input, visitedAt: wokeAt ?? lifecycleNow },
               });
-    // An accepted interrupt can leave tasks running. Release the action for retry.
-    setStatusRequest((current) => (current === request ? null : current));
+    props.setStatusRequests((current) =>
+      current[request.threadKey] !== request
+        ? current
+        : {
+            ...current,
+            [request.threadKey]:
+              action === "stop" && result._tag !== "Failure"
+                ? { ...request, retryAt: Date.now() + BACKGROUND_WORK_STOP_RETRY_AFTER_MS }
+                : undefined,
+          },
+    );
     if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
       const error = squashAtomCommandFailure(result);
       Dialog.alert(
@@ -668,13 +714,39 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
   );
   const floatingStatus = ((): FloatingWorkingStatus | null => {
     const connectionStatus = connectionFloatingStatus({
-      connectionError: props.connectionError,
+      connectionError: connectionRetrying ? retryConnectionError : props.connectionError,
       connectionState: props.connectionStateLabel,
       environmentLabel: props.environmentLabel,
       onReconnect: props.onReconnectEnvironment,
     });
     if (connectionStatus !== null && !props.draftMode) {
       return connectionStatus;
+    }
+    // Before the request check: an agent stuck on an approval may also ignore Stop.
+    if (runStop !== null && contentPresentationKind === "ready") {
+      const unresponsive = runStop.state === "unresponsive";
+      return {
+        kind: "stop",
+        unresponsive,
+        label: unresponsive ? "Not responding to Stop" : "Stopping…",
+        action:
+          unresponsive && canForceStop
+            ? {
+                label: forceStoppingKey === selectedThreadKey ? "Force stopping..." : "Force stop",
+                accessibilityLabel: "Force stop the agent",
+                disabled: forceStoppingKey === selectedThreadKey,
+                onPress: () =>
+                  Dialog.confirm({
+                    title: "Force stop the agent?",
+                    message:
+                      "It has not answered Stop. Force stop ends the turn and kills the agent's processes, unless other working threads share them.",
+                    confirmText: "Force stop",
+                    destructive: true,
+                    onConfirm: () => void forceStop(runStop.runId),
+                  }),
+              }
+            : null,
+      };
     }
     if (props.activePendingApproval !== null || props.activePendingUserInput !== null) {
       return null;
@@ -700,7 +772,7 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
         accessibilityLabel: `Open ${childInput.hasPendingApprovals ? "approval" : "question"} from ${childInput.title}`,
         onPress: () => {
           Keyboard.dismiss();
-          openLinkedThread({ environmentId: props.environmentId, threadId: childInput.id });
+          openLinkedThread({ environmentId: childInput.environmentId, threadId: childInput.id });
         },
       };
     }
@@ -929,6 +1001,10 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
       composerOverlapHeight: composerBottomInset,
     }),
   );
+  const composerPanelsHeightStyle = useAnimatedStyle(() => ({
+    maxHeight: pendingUserInputMaxHeight.value,
+    flexGrow: 0,
+  }));
   // The usage panel stacks with the composer and any approval card, so it gets
   // whatever room they leave below the header. Measured only while it is open
   // so typing in the composer does not re-render the screen.
@@ -1137,174 +1213,6 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
       : [];
   })();
 
-  const submitSideQuestion = async (question: string, mode: "new" | "follow-up") => {
-    if (sideQuestionState?.turns.at(-1)?.status === "loading") return;
-
-    const draftKey = props.composerDraftKey;
-    const previousTurns =
-      mode === "new" ? [] : sideQuestionPreviousTurns(sideQuestionState?.turns ?? []);
-    const retainedTurns = mode === "new" ? [] : (sideQuestionState?.turns ?? []);
-    const requestId = randomHex(16);
-    const modelSelection =
-      mode === "new"
-        ? props.selectedThread.modelSelection
-        : (sideQuestionState?.modelSelection ?? props.selectedThread.modelSelection);
-    updateSideQuestions((current) => ({
-      ...current,
-      [selectedThreadKey]: {
-        mode: "expanded",
-        modelSelection,
-        turns: [...retainedTurns, { id: requestId, question, answer: "", status: "loading" }],
-        draft: "",
-      },
-    }));
-
-    const result = await askSideQuestion({
-      environmentId: props.environmentId,
-      input: {
-        threadId: props.selectedThread.id,
-        requestId,
-        question,
-        modelSelection,
-        previousTurns,
-      },
-    });
-    if (!sideQuestionAwaitsAnswer(selectedThreadKey, requestId)) return;
-
-    if (result._tag === "Success") {
-      updateSideQuestions((current) => {
-        const state = current[selectedThreadKey];
-        if (!state) return current;
-        return {
-          ...current,
-          [selectedThreadKey]: {
-            ...state,
-            turns: [
-              ...state.turns.slice(0, -1),
-              { id: requestId, question, answer: result.value.answer, status: "success" },
-            ],
-          },
-        };
-      });
-      return;
-    }
-
-    const error = squashAtomCommandFailure(result);
-    // A failed first question goes back to an empty composer so it is not lost.
-    if (mode === "new" && draftKey !== null && !getComposerDraftSnapshot(draftKey).text) {
-      props.onChangeDraftMessage(`/btw ${question}`);
-    }
-    updateSideQuestions((current) => {
-      const state = current[selectedThreadKey];
-      if (!state) return current;
-      return {
-        ...current,
-        [selectedThreadKey]: {
-          ...state,
-          turns: [
-            ...state.turns.slice(0, -1),
-            {
-              question,
-              id: requestId,
-              answer:
-                error instanceof Error ? error.message : "The side chat could not be answered.",
-              status: "error",
-            },
-          ],
-        },
-      };
-    });
-  };
-
-  const stopSideQuestion = async () => {
-    const requestId = sideQuestionState?.turns.at(-1)?.id;
-    if (!requestId || sideQuestionState?.turns.at(-1)?.status !== "loading") return;
-    const result = await cancelSideQuestion({
-      environmentId: props.environmentId,
-      input: { threadId: props.selectedThread.id, requestId },
-    });
-    if (!sideQuestionCancellationSucceeded(result)) return;
-    updateSideQuestions((current) => {
-      const state = current[selectedThreadKey];
-      const latest = state?.turns.at(-1);
-      if (!state || latest?.id !== requestId || latest.status !== "loading") {
-        return current;
-      }
-      return {
-        ...current,
-        [selectedThreadKey]: {
-          ...state,
-          turns: [...state.turns.slice(0, -1), { ...latest, answer: "", status: "stopped" }],
-        },
-      };
-    });
-  };
-
-  // Returns true when the composer draft was a `/btw` side question and the side chat took it.
-  const sendSideQuestionFromComposer = (): boolean => {
-    // Editing a queued message saves it as typed, `/btw` included.
-    if (
-      !sideQuestionsSupported ||
-      props.queuedRunEdit !== null ||
-      props.composerDraftKey === null
-    ) {
-      return false;
-    }
-    const draft = getComposerDraftSnapshot(props.composerDraftKey);
-    const sideQuestion = parseSideQuestion(draft.text.trim());
-    if (sideQuestion === null) return false;
-    if (sideQuestion.length === 0) {
-      updateSideQuestions((current) => ({
-        ...current,
-        [selectedThreadKey]: current[selectedThreadKey]
-          ? { ...current[selectedThreadKey], mode: "expanded" }
-          : {
-              mode: "expanded",
-              modelSelection: props.selectedThread.modelSelection,
-              turns: [
-                {
-                  question: "",
-                  id: randomHex(16),
-                  answer: "Add a question after /btw.",
-                  status: "error",
-                },
-              ],
-              draft: "",
-            },
-      }));
-      return true;
-    }
-    if (sideQuestionState?.turns.at(-1)?.status === "loading") return true;
-    if (draft.attachments.length > 0) {
-      const errorId = randomHex(16);
-      updateSideQuestions((current) => {
-        const state = current[selectedThreadKey];
-        return {
-          ...current,
-          [selectedThreadKey]: {
-            mode: "expanded",
-            modelSelection: state?.modelSelection ?? props.selectedThread.modelSelection,
-            turns: [
-              ...(state?.turns ?? []),
-              {
-                id: errorId,
-                question: sideQuestion,
-                answer: "Side chats are text only. Remove draft images and try again.",
-                status: "error",
-              },
-            ],
-            draft: "",
-          },
-        };
-      });
-      return true;
-    }
-
-    props.onChangeDraftMessage("");
-    void submitSideQuestion(sideQuestion, "new");
-    return true;
-  };
-
   const currentPendingApprovals = () =>
     props.selectedThreadDetailRef === null
       ? []
@@ -1315,7 +1223,6 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
     followUp?: ActiveTurnComposerAction,
     stillSendable?: () => boolean,
   ) => {
-    if (sendSideQuestionFromComposer()) return null;
     const scope = threadScope.current.signal;
     const targetThreadKey = selectedThreadKey;
     const hasUserMessage = selectedThreadFeed.some(
@@ -1442,8 +1349,6 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
 
   const showScrollToEndButton =
     !props.draftMode && contentPresentationKind === "ready" && !endFollowEnabled;
-  const latestSideQuestionTurn = sideQuestionState?.turns.at(-1) ?? null;
-  const sideQuestionPending = latestSideQuestionTurn?.status === "loading";
   const { themeAppearance } = useAppearancePreferences();
   const isDarkMode = themeAppearance === "dark";
 
@@ -1644,289 +1549,155 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
                       });
                     }}
                   />
-                  {sideQuestionState &&
-                  sideQuestionState.mode !== "hidden" &&
-                  latestSideQuestionTurn ? (
-                    <Animated.View
-                      className="mx-4 mb-3 rounded-2xl border border-border bg-card"
-                      entering={FadeInDown.duration(220)}
-                      exiting={FadeOut.duration(140)}
-                    >
-                      {sideQuestionState.mode === "minimized" ? (
-                        <View className="flex-row items-center gap-3 px-4 py-3">
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Open side chat"
-                            className="min-w-0 flex-1"
-                            onPress={() => setSideQuestionMode("expanded")}
-                          >
-                            <Text className="text-2xs font-t3-bold uppercase tracking-wide text-foreground-muted">
-                              Side chat
-                            </Text>
-                            <Text
-                              className="mt-0.5 text-sm text-foreground-secondary"
-                              numberOfLines={1}
-                            >
-                              {latestSideQuestionTurn.question}
-                            </Text>
-                          </Pressable>
-                          {sideQuestionPending ? (
-                            <ControlPill
-                              accessibilityLabel="Stop side chat"
-                              className="h-9 w-9"
-                              icon="stop.fill"
-                              variant="danger"
-                              onPress={stopSideQuestion}
-                            />
-                          ) : null}
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel="Dismiss side chat"
-                            onPress={() => setSideQuestionMode("hidden")}
-                          >
-                            <Text className="text-sm text-foreground-muted">Close</Text>
-                          </Pressable>
-                        </View>
-                      ) : (
-                        <View className="p-4">
-                          <View className="mb-3 flex-row items-start justify-between gap-3">
-                            <View className="min-w-0 flex-1">
-                              <Text className="text-2xs font-t3-bold uppercase tracking-wide text-foreground-muted">
-                                Side chat
-                              </Text>
-                              <Text className="mt-1 text-sm text-foreground-secondary">
-                                Ask without interrupting the main agent.
-                              </Text>
-                            </View>
-                            <View className="flex-row gap-3">
-                              <Pressable
-                                accessibilityRole="button"
-                                accessibilityLabel="Minimize side chat"
-                                onPress={() => setSideQuestionMode("minimized")}
-                              >
-                                <Text className="text-sm text-foreground-muted">Minimize</Text>
-                              </Pressable>
-                              <Pressable
-                                accessibilityRole="button"
-                                accessibilityLabel="Dismiss side chat"
-                                onPress={() => setSideQuestionMode("hidden")}
-                              >
-                                <Text className="text-sm text-foreground-muted">Close</Text>
-                              </Pressable>
-                            </View>
-                          </View>
-                          <ScrollView
-                            style={{ maxHeight: windowHeight * 0.35 }}
-                            contentContainerStyle={{ gap: 12 }}
-                            keyboardShouldPersistTaps="handled"
-                          >
-                            {sideQuestionState.turns.map((turn) => (
-                              <View key={turn.id} className="gap-2">
-                                {turn.question ? (
-                                  <View className="ml-8 self-end rounded-xl bg-background px-3 py-2">
-                                    <Text className="text-sm text-foreground">{turn.question}</Text>
-                                  </View>
-                                ) : null}
-                                {turn.status === "loading" ? (
-                                  <View className="flex-row items-center gap-2">
-                                    <ActivityIndicator size="small" />
-                                    <Text className="text-sm text-foreground-muted">
-                                      Answering without interrupting…
-                                    </Text>
-                                  </View>
-                                ) : turn.status === "stopped" ? (
-                                  <Text className="text-sm text-foreground-muted">Stopped</Text>
-                                ) : (
-                                  <Text
-                                    selectable
-                                    className={
-                                      turn.status === "error"
-                                        ? "text-sm text-danger-foreground"
-                                        : "text-sm text-foreground"
-                                    }
-                                  >
-                                    {turn.answer}
-                                  </Text>
-                                )}
-                              </View>
-                            ))}
-                          </ScrollView>
-                          <View className="mt-3 flex-row items-center justify-between gap-2">
-                            <ComposerInlineControl
-                              accessibilityLabel="Side chat model and reasoning settings"
-                              emphasized
-                              renderIcon={(size) => (
-                                <ProviderIcon
-                                  provider={sideCurrentModelOption?.providerDriver}
-                                  size={size}
-                                />
-                              )}
-                              label={sideCurrentModelOption?.label ?? sideModelSelection.model}
-                              maxWidth={180}
-                              onPress={openSideSettings}
-                            />
-                            {sideQuestionPending ? (
-                              <ControlPill
-                                accessibilityLabel="Stop side chat"
-                                icon="stop.fill"
-                                variant="danger"
-                                onPress={stopSideQuestion}
-                              />
-                            ) : null}
-                          </View>
-                          <View className="mt-2 flex-row items-end gap-2">
-                            <TextInput
-                              multiline
-                              submitBehavior="submit"
-                              value={sideQuestionState.draft}
-                              accessibilityLabel="Continue the side chat"
-                              placeholder="Ask a follow-up…"
-                              onSubmitEditing={() => {
-                                const question = sideQuestionState.draft.trim();
-                                if (!question) return;
-                                void submitSideQuestion(question, "follow-up");
-                              }}
-                              className="min-h-11 flex-1 rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
-                              onChangeText={(draft) =>
-                                patchSideQuestionState(selectedThreadKey, { draft })
-                              }
-                            />
-                            <Pressable
-                              accessibilityRole="button"
-                              accessibilityLabel="Ask follow-up"
-                              disabled={
-                                sideQuestionPending || sideQuestionState.draft.trim().length === 0
-                              }
-                              className="rounded-xl bg-blue-500 px-3 py-2.5 disabled:opacity-40"
-                              onPress={() =>
-                                void submitSideQuestion(sideQuestionState.draft.trim(), "follow-up")
-                              }
-                            >
-                              <Text className="font-t3-bold text-sm text-white">Ask</Text>
-                            </Pressable>
-                          </View>
-                        </View>
-                      )}
-                    </Animated.View>
-                  ) : null}
-                  {props.queuedRunEdit !== null ? (
-                    <Animated.View
-                      className="shrink-0"
-                      entering={FadeInDown.duration(180)}
-                      exiting={FadeOut.duration(120)}
-                    >
-                      <ComposerQueuedEditBanner
-                        saving={props.isSavingQueuedEdit}
-                        onCancel={() => {
-                          voiceInputSession.cancel(props.composerDraftKey);
-                          props.onCancelQueuedRunEdit();
-                        }}
-                      />
-                    </Animated.View>
-                  ) : null}
-                  <UsageLimitRecoveryCard
-                    key={props.selectedThread.latestRun?.runId}
-                    thread={props.selectedThread}
-                    environmentId={props.environmentId}
-                  />
-                  <ChatGptUsageLimitNotice
-                    key={`chatgpt-limit:${props.selectedThread.latestRun?.runId}`}
-                    thread={props.selectedThread}
-                  />
-                  <ThreadGuestShareBar
-                    threadRef={props.selectedThreadDetailRef}
-                    canOperateThread={props.canOperateThread}
-                  />
-                  {props.feedbackSubmissions.map((submission) => (
-                    <ComposerFeedback
-                      key={submission.id}
-                      submission={submission}
-                      onDismiss={() => props.onDismissFeedback(submission.id)}
+                  <ComposerPanels
+                    className="w-full"
+                    style={Platform.OS === "android" ? composerPanelsHeightStyle : undefined}
+                    keyboardShouldPersistTaps="handled"
+                    nestedScrollEnabled
+                  >
+                    {props.queuedRunEdit !== null ? (
+                      <Animated.View
+                        className="shrink-0"
+                        entering={FadeInDown.duration(180)}
+                        exiting={FadeOut.duration(120)}
+                      >
+                        <ComposerQueuedEditBanner
+                          saving={props.isSavingQueuedEdit}
+                          onCancel={() => {
+                            voiceInputSession.cancel(props.composerDraftKey);
+                            props.onCancelQueuedRunEdit();
+                          }}
+                        />
+                      </Animated.View>
+                    ) : null}
+                    <UsageLimitRecoveryCard
+                      key={props.selectedThread.latestRun?.runId}
+                      thread={props.selectedThread}
+                      environmentId={props.environmentId}
                     />
-                  ))}
-                  {composerError !== null ? (
-                    <Animated.View
-                      className="shrink-0"
-                      entering={FadeInDown.duration(180)}
-                      exiting={FadeOut.duration(120)}
-                    >
-                      <ComposerErrorNotice
-                        message={composerError}
-                        onDismiss={() => clearThreadComposerError(selectedThreadKey)}
-                      />
-                    </Animated.View>
-                  ) : null}
-                  {usageLimitsReport && activeUserInputRequestId === null ? (
-                    <Animated.View
-                      className="shrink-0 px-4"
-                      style={{ paddingBottom: USAGE_LIMITS_PANEL_GAP }}
-                      onLayout={handleUsageLimitsLayout}
-                      entering={FadeInDown.duration(220)}
-                      exiting={FadeOut.duration(140)}
-                    >
-                      <ComposerUsageLimits
-                        report={usageLimitsReport}
+                    <ChatGptUsageLimitNotice
+                      key={`chatgpt-limit:${props.selectedThread.latestRun?.runId}`}
+                      thread={props.selectedThread}
+                    />
+                    <ChildThreadApprovals
+                      threadRef={props.selectedThreadDetailRef}
+                      maxHeight={pendingUserInputMaxHeight}
+                    />
+                    <ThreadGuestShareBar
+                      threadRef={props.selectedThreadDetailRef}
+                      canOperateThread={props.canOperateThread}
+                    />
+                    {props.draftMode ? null : (
+                      <ThreadSideChatsRow
                         environmentId={props.environmentId}
-                        maxHeight={usageLimitsMaxHeight}
-                        onClose={dismissUsageLimits}
+                        threadId={props.selectedThread.id}
                       />
-                    </Animated.View>
-                  ) : null}
-                  {props.creationState?.kind === "failed" ? (
-                    <Animated.View
-                      className="shrink-0 px-4"
-                      style={{ paddingBottom: composerBottomInset }}
-                      entering={FadeInDown.duration(220)}
-                      exiting={FadeOut.duration(140)}
-                    >
-                      <ThreadCreationFailedCard
-                        reason={props.creationState.reason}
-                        onEditTask={props.creationState.onEditTask}
+                    )}
+                    {props.feedbackSubmissions.map((submission) => (
+                      <ComposerFeedback
+                        key={submission.id}
+                        submission={submission}
+                        onDismiss={() => props.onDismissFeedback(submission.id)}
                       />
-                    </Animated.View>
-                  ) : null}
-                  {props.activePendingApproval || props.activePendingUserInput ? (
-                    <Animated.View
-                      className="shrink-0 gap-3 px-4 pb-3"
-                      style={
-                        activeUserInputRequestId !== null
-                          ? { paddingBottom: composerBottomInset }
-                          : undefined
-                      }
-                      entering={FadeInDown.duration(220)}
-                      exiting={FadeOut.duration(140)}
-                    >
-                      {props.activePendingApproval ? (
-                        <PendingApprovalCard
-                          canOperateThread={props.canOperateThread}
-                          approval={props.activePendingApproval}
-                          respondingApprovalId={props.respondingApprovalId}
-                          onRespond={props.onRespondToApproval}
+                    ))}
+                    {props.canOperateThread ? (
+                      <ManagedRuntimeModeNotice
+                        threadKey={selectedThreadKey}
+                        threadRuntimeMode={props.selectedThread.runtimeMode}
+                        supportedRuntimeModes={
+                          props.serverConfig?.providers.find(
+                            (provider) =>
+                              provider.instanceId ===
+                              props.selectedThread.modelSelection.instanceId,
+                          )?.supportedRuntimeModes
+                        }
+                        policy={props.serverConfig?.managedPolicy}
+                      />
+                    ) : null}
+                    {composerError !== null ? (
+                      <Animated.View
+                        className="shrink-0"
+                        entering={FadeInDown.duration(180)}
+                        exiting={FadeOut.duration(120)}
+                      >
+                        <ComposerErrorNotice
+                          message={composerError}
+                          onDismiss={() => clearThreadComposerError(selectedThreadKey)}
                         />
-                      ) : null}
-                      {props.activePendingUserInput ? (
-                        <PendingUserInputCard
+                      </Animated.View>
+                    ) : null}
+                    {usageLimitsReport && activeUserInputRequestId === null ? (
+                      <Animated.View
+                        className="shrink-0 px-4"
+                        style={{ paddingBottom: USAGE_LIMITS_PANEL_GAP }}
+                        onLayout={handleUsageLimitsLayout}
+                        entering={FadeInDown.duration(220)}
+                        exiting={FadeOut.duration(140)}
+                      >
+                        <ComposerUsageLimits
+                          report={usageLimitsReport}
                           environmentId={props.environmentId}
-                          canOperateThread={props.canOperateThread}
-                          pendingUserInput={props.activePendingUserInput}
-                          maxHeight={pendingUserInputMaxHeight}
-                          collapsed={userInputCollapsed}
-                          onToggleCollapsed={handleToggleUserInputCollapsed}
-                          onStopThread={props.onStopThread}
-                          cardProgress={userInputCardProgress}
-                          cardCoverage={userInputCardCoverage}
-                          onInputFocusChange={handleOwnedInputFocusChange}
-                          drafts={props.activePendingUserInputDrafts}
-                          answers={props.activePendingUserInputAnswers}
-                          respondingUserInputId={props.respondingUserInputId}
-                          onSelectOption={props.onSelectUserInputOption}
-                          onChangeCustomAnswer={props.onChangeUserInputCustomAnswer}
-                          onSubmit={props.onSubmitUserInput}
-                          onDismiss={props.onDismissUserInput}
+                          maxHeight={usageLimitsMaxHeight}
+                          onClose={dismissUsageLimits}
                         />
-                      ) : null}
-                    </Animated.View>
-                  ) : null}
+                      </Animated.View>
+                    ) : null}
+                    {props.creationState?.kind === "failed" ? (
+                      <Animated.View
+                        className="shrink-0 px-4"
+                        style={{ paddingBottom: composerBottomInset }}
+                        entering={FadeInDown.duration(220)}
+                        exiting={FadeOut.duration(140)}
+                      >
+                        <ThreadCreationFailedCard
+                          reason={props.creationState.reason}
+                          onEditTask={props.creationState.onEditTask}
+                        />
+                      </Animated.View>
+                    ) : null}
+                    {props.activePendingApproval || props.activePendingUserInput ? (
+                      <Animated.View
+                        className="shrink-0 gap-3 px-4 pb-3"
+                        style={
+                          activeUserInputRequestId !== null
+                            ? { paddingBottom: composerBottomInset }
+                            : undefined
+                        }
+                        entering={FadeInDown.duration(220)}
+                        exiting={FadeOut.duration(140)}
+                      >
+                        {props.activePendingApproval ? (
+                          <PendingApprovalCard
+                            canOperateThread={props.canOperateThread}
+                            approval={props.activePendingApproval}
+                            respondingApprovalId={props.respondingApprovalId}
+                            onRespond={props.onRespondToApproval}
+                          />
+                        ) : null}
+                        {props.activePendingUserInput ? (
+                          <PendingUserInputCard
+                            environmentId={props.environmentId}
+                            canOperateThread={props.canOperateThread}
+                            pendingUserInput={props.activePendingUserInput}
+                            maxHeight={pendingUserInputMaxHeight}
+                            collapsed={userInputCollapsed}
+                            onToggleCollapsed={handleToggleUserInputCollapsed}
+                            onStopThread={props.onStopThread}
+                            cardProgress={userInputCardProgress}
+                            cardCoverage={userInputCardCoverage}
+                            onInputFocusChange={handleOwnedInputFocusChange}
+                            drafts={props.activePendingUserInputDrafts}
+                            answers={props.activePendingUserInputAnswers}
+                            respondingUserInputId={props.respondingUserInputId}
+                            onSelectOption={props.onSelectUserInputOption}
+                            onChangeCustomAnswer={props.onChangeUserInputCustomAnswer}
+                            onSubmit={props.onSubmitUserInput}
+                            onDismiss={props.onDismissUserInput}
+                          />
+                        ) : null}
+                      </Animated.View>
+                    ) : null}
+                  </ComposerPanels>
                 </View>
 
                 <View style={composerSlotHidden ? { display: "none" } : undefined}>
@@ -1951,6 +1722,14 @@ function ThreadDetailBody(props: ThreadDetailScreenProps) {
                           reportedModelSelection,
                         )}
                         status={props.providerSubagentStatus ?? null}
+                        inspect={
+                          providerSubagentProvider?.driver === "antigravity"
+                            ? {
+                                environmentId: props.environmentId,
+                                threadId: props.selectedThread.id,
+                              }
+                            : null
+                        }
                         onOpenParent={
                           props.selectedThread.lineage.parentThreadId === null
                             ? null

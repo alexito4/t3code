@@ -94,21 +94,6 @@ describe("mobile slash commands", () => {
     },
   );
 
-  it("offers /btw only on environments with side chat", () => {
-    const btwOffered = (offersSideQuestions: boolean) =>
-      buildComposerSlashCommandItems({
-        query: "btw",
-        atMessageStart: true,
-        hasThread: true,
-        offersSideQuestions,
-        allowInteractionMode: true,
-        selectedProviderStatus: null,
-      }).some((item) => item.type === "slash-command" && item.command === "btw");
-
-    expect(btwOffered(true)).toBe(true);
-    expect(btwOffered(false)).toBe(false);
-  });
-
   it("still applies the T3 plan command for supported providers", () => {
     const items = buildComposerSlashCommandItems({
       query: "plan",

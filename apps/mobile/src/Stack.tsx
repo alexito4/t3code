@@ -88,7 +88,6 @@ import {
   ExistingThreadSettingsRouteScreen,
   NewTaskThreadSettingsRouteScreen,
 } from "./features/threads/ThreadSettingsSheet";
-import { SideChatSettingsRouteScreen } from "./features/threads/SideChatSettingsSheet";
 import { NewTaskFlowProvider } from "./features/threads/new-task-flow-provider";
 import { newTaskFlowKey } from "./features/threads/new-task-flow-state";
 import { NewTaskRouteScreen } from "./features/threads/NewTaskRouteScreen";
@@ -885,18 +884,6 @@ const RootStackConfig = createWorkspaceStackNavigator({
             }),
       },
     }),
-    SideChatSettingsSheet: createNativeStackScreen({
-      screen: SideChatSettingsRouteScreen,
-      options: {
-        gestureEnabled: true,
-        headerShown: false,
-        ...(Platform.OS === "android"
-          ? { presentation: "card" as const }
-          : {
-              ...THREAD_SETTINGS_SHEET_OPTIONS,
-            }),
-      },
-    }),
     ThreadQueue: createNativeStackScreen({
       screen: ThreadQueueSheet,
       options: {
@@ -1019,6 +1006,7 @@ const RootStackConfig = createWorkspaceStackNavigator({
         ...HORIZONTAL_FORM_SHEET_OPTIONS,
         sheetAllowedDetents: [0.55, 0.7],
         sheetGrabberVisible: true,
+        sheetCornerRadius: Platform.OS === "android" ? 28 : undefined,
       },
     }),
     NotFound: createNativeStackScreen({

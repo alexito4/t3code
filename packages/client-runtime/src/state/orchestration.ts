@@ -1,8 +1,5 @@
 import {
-  ORCHESTRATION_SIDE_QUESTION_MAX_PREVIOUS_TURNS,
   ORCHESTRATION_V2_WS_METHODS,
-  SIDE_QUESTION_WS_METHODS,
-  type OrchestrationCancelSideQuestionResult,
   type ThreadId,
   type OrchestrationGetTurnDiffResult,
 } from "@t3tools/contracts";
@@ -16,7 +13,6 @@ import { Atom } from "effect/reactivity";
 import { applyCommandOutputFrame, EMPTY_COMMAND_OUTPUT } from "./commandOutput.ts";
 
 import {
-  type AtomCommandResult,
   createEnvironmentRpcCommand,
   createEnvironmentRpcQueryAtomFamily,
   createEnvironmentRpcSubscriptionAtomFamily,
@@ -30,26 +26,6 @@ import * as ManagedRelayDpopSigner from "../relay/managedRelay.ts";
 import { EnvironmentRpcUnavailableError } from "../rpc/client.ts";
 import { fetchEnvironmentThreadTranscript } from "./threadTranscriptHttp.ts";
 import { createThreadScratchpadAtoms } from "./threadScratchpad.ts";
-
-export function parseSideQuestion(value: string): string | null {
-  const match = /^\/btw(?:\s+([\s\S]*))?$/.exec(value);
-  return match ? (match[1]?.trim() ?? "") : null;
-}
-
-export function sideQuestionPreviousTurns(
-  turns: ReadonlyArray<{ question: string; answer: string; status: string }>,
-) {
-  return turns
-    .filter((turn) => turn.status === "success")
-    .slice(-ORCHESTRATION_SIDE_QUESTION_MAX_PREVIOUS_TURNS)
-    .map((turn) => ({ question: turn.question, answer: turn.answer }));
-}
-
-export function sideQuestionCancellationSucceeded(
-  result: AtomCommandResult<OrchestrationCancelSideQuestionResult, unknown>,
-): boolean {
-  return result._tag === "Success" && result.value.cancelled;
-}
 
 export function createOrchestrationEnvironmentAtoms<R, E>(
   runtime: Atom.AtomRuntime<EnvironmentRegistry | HttpClient.HttpClient | R, E>,
@@ -128,10 +104,21 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
       staleTimeMs: 300_000,
       idleTtlMs: 300_000,
     }),
+    // Mounted only while a subagent inspector is open; running children change between opens.
+    nativeChildWork: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:orchestration:native-child-work",
+      tag: ORCHESTRATION_V2_WS_METHODS.getNativeChildWork,
+      staleTimeMs: 0,
+      idleTtlMs: 0,
+    }),
     ...createThreadScratchpadAtoms(runtime),
     stopWorkflow: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:orchestration:stop-workflow",
       tag: ORCHESTRATION_V2_WS_METHODS.stopWorkflow,
+    }),
+    forceStopThread: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:orchestration:force-stop-thread",
+      tag: ORCHESTRATION_V2_WS_METHODS.forceStopThread,
     }),
     turnItem: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:orchestration:turn-item",
@@ -172,18 +159,6 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
       tag: ORCHESTRATION_V2_WS_METHODS.getWorktreeThreadIds,
       staleTimeMs: 0,
       idleTtlMs: 0,
-    }),
-    askSideQuestion: createEnvironmentRpcCommand(runtime, {
-      label: "environment-data:orchestration:ask-side-question",
-      tag: SIDE_QUESTION_WS_METHODS.askSideQuestion,
-      concurrency: {
-        mode: "singleFlight",
-        key: ({ environmentId, input }) => JSON.stringify([environmentId, input]),
-      },
-    }),
-    cancelSideQuestion: createEnvironmentRpcCommand(runtime, {
-      label: "environment-data:orchestration:cancel-side-question",
-      tag: SIDE_QUESTION_WS_METHODS.cancelSideQuestion,
     }),
   };
 }

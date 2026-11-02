@@ -22,7 +22,6 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
-  buildSideQuestionPrompt,
   buildThreadTitlePrompt,
 } from "@t3tools/provider-core/server/textGenerationPrompts";
 import {
@@ -341,16 +340,6 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     });
     return { title: sanitizeThreadTitle(generated.title) };
   });
-  const answerSideQuestion: ProviderTextGeneration["answerSideQuestion"] = Effect.fn(
-    "MuseTextGeneration.answerSideQuestion",
-  )(function* (input) {
-    const generated = yield* runMuseJson({
-      operation: "answerSideQuestion",
-      ...buildSideQuestionPrompt({ question: input.question, context: input.context }),
-      modelSelection: input.modelSelection,
-    });
-    return { answer: generated.answer.trim() };
-  });
   const generateReviewGuide: ProviderTextGeneration["generateReviewGuide"] = () =>
     Effect.fail(investigationUnsupported("generateReviewGuide", "Muse Code"));
   return {
@@ -358,7 +347,6 @@ export const makeMuseTextGeneration = Effect.fn("makeMuseTextGeneration")(functi
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
-    answerSideQuestion,
     generateReviewGuide,
   } satisfies ProviderTextGeneration;
 });

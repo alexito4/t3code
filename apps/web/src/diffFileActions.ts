@@ -117,7 +117,7 @@ const NO_STAGING_ACTIONS: DiffFileStagingActions = {
  * file, so it offers no unstage; staging again is a no-op and discard reverts the whole file.
  */
 export function resolveDiffFileStagingActions(
-  gitScope: DiffPanelGitScope,
+  gitScope: DiffPanelGitScope | "commit",
   isHistoricalSelection: boolean,
 ): DiffFileStagingActions {
   if (isHistoricalSelection) return NO_STAGING_ACTIONS;
@@ -129,6 +129,7 @@ export function resolveDiffFileStagingActions(
     case "unstaged-only":
       return { canStage: true, canUnstage: false, canDiscard: true };
     case "branch":
+    case "commit":
       return NO_STAGING_ACTIONS;
   }
 }

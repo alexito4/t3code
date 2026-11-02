@@ -72,17 +72,6 @@ export interface ThreadTitleGenerationResult {
   needsRefinement?: boolean | undefined;
 }
 
-export interface SideQuestionGenerationInput {
-  cwd: string;
-  question: string;
-  context: string;
-  modelSelection: ModelSelection;
-}
-
-export interface SideQuestionGenerationResult {
-  answer: string;
-}
-
 export interface ReviewGuideStackLayer {
   readonly number: number;
   readonly title: string | null;
@@ -124,10 +113,6 @@ export interface ProviderTextGeneration {
   readonly generateThreadTitle: (
     input: ThreadTitleGenerationInput,
   ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
-
-  readonly answerSideQuestion: (
-    input: SideQuestionGenerationInput,
-  ) => Effect.Effect<SideQuestionGenerationResult, TextGenerationError>;
 
   readonly generateReviewGuide: (
     input: ReviewGuideGenerationInput,

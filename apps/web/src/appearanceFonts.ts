@@ -68,10 +68,11 @@ export interface AppearanceFontPreferences {
   readonly sizePrompt: number;
   readonly sizeCode: number;
   readonly smoothing: boolean;
+  readonly separate: boolean;
 }
 
 /**
- * Always writes sizes: interface size sets the root; prompt and code use pixels to avoid double scaling.
+ * Interface size sets the root; prompt and code use pixels to avoid double scaling.
  * The conversation size is written only when set, so conversation text otherwise follows the interface size.
  */
 export function applyAppearanceFontVariables(
@@ -81,7 +82,7 @@ export function applyAppearanceFontVariables(
   const families: ReadonlyArray<readonly [variable: string, custom: string, fallback: string]> = [
     ["--font-sans", preferences.sans, DEFAULT_SANS_FONT_STACK],
     ["--font-mono", preferences.code, DEFAULT_CODE_FONT_STACK],
-    ["--font-composer", preferences.composer, "var(--font-sans)"],
+    ["--font-composer", preferences.separate ? preferences.composer : "", "var(--font-sans)"],
   ];
   for (const [variable, custom, fallback] of families) {
     const list = cssFontFamilies(custom);
@@ -101,7 +102,10 @@ export function applyAppearanceFontVariables(
       `${clampInterfaceFontSize(preferences.sizeConversation)}px`,
     );
   }
-  root.style.setProperty("--font-size-prompt", `${clampPromptFontSize(preferences.sizePrompt)}px`);
+  root.style.setProperty(
+    "--font-size-prompt",
+    preferences.separate ? `${clampPromptFontSize(preferences.sizePrompt)}px` : "var(--text-sm)",
+  );
   const code = clampCodeFontSize(preferences.sizeCode);
   root.style.setProperty("--font-size-code", `${code}px`);
   root.style.setProperty("--diffs-font-size", `${code}px`);

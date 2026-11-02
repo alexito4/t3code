@@ -482,31 +482,3 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
 
   return { prompt, outputSchema };
 }
-
-export interface SideQuestionPromptInput {
-  question: string;
-  context: string;
-}
-
-export function buildSideQuestionPrompt(input: SideQuestionPromptInput) {
-  const prompt = [
-    "Answer a side question about an existing coding session.",
-    "Return JSON with exactly one key: answer.",
-    "Rules:",
-    "- Answer only from the session context below.",
-    "- Do not use tools, read files, run commands, or access the network.",
-    "- Do not continue or influence the main coding task.",
-    "- If the context does not contain the answer, say so clearly.",
-    "",
-    "Session context:",
-    input.context,
-    "",
-    "Side question:",
-    input.question,
-  ].join("\n");
-
-  return {
-    prompt,
-    outputSchema: Schema.Struct({ answer: Schema.String }),
-  };
-}

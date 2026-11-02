@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vite-plus/test";
 import { useClosedViewStore } from "./closedViewStore";
 import { reopenClosedView } from "./reopenClosedView";
 import {
+  hostRightPanel,
   migratePersistedRightPanelState,
   pullRequestSurface,
   pullRequestSurfaceId,
@@ -39,6 +40,23 @@ async function reloadRightPanelStore() {
 }
 
 describe("rightPanelStore", () => {
+  it("opens a hosted side chat's panel actions in its parent's panel until unhosted", () => {
+    const store = useRightPanelStore.getState();
+    const unhost = hostRightPanel(refB, refA);
+    store.openFile(refB, "src/app.ts");
+    expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refA)?.id).toBe(
+      "file:src/app.ts",
+    );
+    expect(
+      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refB).surfaces,
+    ).toEqual([]);
+    unhost();
+    store.openFile(refB, "src/app.ts");
+    expect(selectActiveRightPanelSurface(useRightPanelStore.getState().byThreadKey, refB)?.id).toBe(
+      "file:src/app.ts",
+    );
+  });
+
   it("records single and bulk tab closes, newest first", () => {
     const store = useRightPanelStore.getState();
     const pr = pullRequestSurface({
@@ -740,52 +758,6 @@ describe("rightPanelStore", () => {
         refA,
       ),
     ).toEqual({ inlineOpen: true, popoverOpen: true });
-  });
-
-  it("opens a side question as a native singleton surface", () => {
-    useRightPanelStore.getState().open(refA, "side-question");
-    useRightPanelStore.getState().open(refA, "side-question");
-
-    expect(selectActiveRightPanel(useRightPanelStore.getState().byThreadKey, refA)).toBe(
-      "side-question",
-    );
-    expect(
-      selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA).surfaces,
-    ).toEqual([{ id: "side-question", kind: "side-question" }]);
-  });
-
-  it("does not persist view-local side question surfaces", () => {
-    useRightPanelStore.getState().open(refA, "diff");
-    useRightPanelStore.getState().open(refA, "side-question");
-    useRightPanelStore.getState().open(refB, "side-question");
-
-    const partialize = useRightPanelStore.persist.getOptions().partialize;
-    expect(partialize?.(useRightPanelStore.getState())).toEqual({
-      byThreadKey: {
-        "env-1:thread-A": {
-          isOpen: true,
-          activeSurfaceId: "diff",
-          surfaces: [{ id: "diff", kind: "diff" }],
-        },
-      },
-      threadPanelVisibilityByThreadKey: {},
-    });
-  });
-
-  it("persists an open panel with no surfaces", () => {
-    useRightPanelStore.getState().show(refA);
-
-    const partialize = useRightPanelStore.persist.getOptions().partialize;
-    expect(partialize?.(useRightPanelStore.getState())).toEqual({
-      byThreadKey: {
-        "env-1:thread-A": {
-          isOpen: true,
-          activeSurfaceId: null,
-          surfaces: [],
-        },
-      },
-      threadPanelVisibilityByThreadKey: {},
-    });
   });
 
   it("opens workspace-root links as the singleton files explorer", () => {

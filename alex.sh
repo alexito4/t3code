@@ -17,12 +17,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # new branch.
 PATCH_BRANCHES=(
     patch/fork-infra
-    patch/pr8296-side-questions
     fix/codex-usage-archived-sessions
     feat/projects-list-page
     feat/pull-request-review-checklist
     patch/review-diff-staged-unstaged
-    patch/review-diff-committed-mode
     patch/review-diff-file-actions
     feat/thread-share
     feat/scratchpad-panel
@@ -35,7 +33,7 @@ PATCH_BRANCHES=(
 # upstream/main: the parent's fixes flow up, and upstream comes along with it.
 patch_base() {
     case "$1" in
-        patch/review-diff-committed-mode | patch/review-diff-file-actions)
+        patch/review-diff-file-actions)
             echo patch/review-diff-staged-unstaged
             ;;
         *) echo upstream/main ;;

@@ -10,7 +10,6 @@ import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
-  buildSideQuestionPrompt,
   buildReviewGuidePrompt,
   buildThreadTitlePrompt,
 } from "./textGenerationPrompts.ts";
@@ -156,18 +155,6 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
     };
   });
 
-  const answerSideQuestion: ProviderTextGeneration["answerSideQuestion"] = Effect.fn(
-    `${name}.answerSideQuestion`,
-  )(function* (input) {
-    const generated = yield* run({
-      operation: "answerSideQuestion",
-      cwd: input.cwd,
-      modelSelection: input.modelSelection,
-      ...buildSideQuestionPrompt({ question: input.question, context: input.context }),
-    });
-    return { answer: generated.answer.trim() };
-  });
-
   const generateReviewGuide: ProviderTextGeneration["generateReviewGuide"] = Effect.fn(
     `${name}.generateReviewGuide`,
   )(function* (input) {
@@ -185,7 +172,6 @@ export function fromRunner(name: string, run: Runner): ProviderTextGeneration {
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
-    answerSideQuestion,
     generateReviewGuide,
   } satisfies ProviderTextGeneration;
 }
