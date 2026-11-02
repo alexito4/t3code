@@ -36,6 +36,7 @@ export function useScratchpadSaveCoordinator({
 
   // StrictMode replays effect setup. A retired scratchpad session stays inert,
   // while the replay gets a fresh coordinator instead of reusing a disposed one.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- owns the debounced save coordinator's timer while mounted and disposes it on cleanup
   useEffect(session.setup, [session]);
   return session;
 }
