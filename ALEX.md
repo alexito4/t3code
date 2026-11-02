@@ -66,9 +66,17 @@ buildable/runnable for personal use (see Fork infrastructure below).
     `<merge-base>..HEAD` (up to 100) and commit previews load per file like the other views.
     It's gated by a `reviewCommits` server capability. Mobile only gets the data-model update
     (`ReviewSectionKind`), matching #6102's own scope — no mobile "Commits" picker UI.
+    **Dropped 2026-11-02 (nightly 4080)**: upstream #19941 ("review local commits in the Diff
+    pane") ships the same Commits submenu over `<merge-base>..HEAD`, reusing the same names (a
+    `"commit"` source kind, `commitSha`, `selectCommit`) with different shapes, plus the commit
+    subject in the header and code-host links. The fork's extras (falling back to Changes when a
+    commit leaves the branch range, the `reviewCommits` gate) weren't worth a renamed parallel
+    copy. Removed from `PATCH_BRANCHES`; the branch stays at its last tip as a reference. A thread
+    last left on the old Committed mode saved `commitSha` where upstream reads `sha`, which can
+    break its Diff panel; clearing localStorage key `t3code:diff-panel-state:v1` fixes it.
   - `patch/review-diff-file-actions` — per-file stage/unstage/discard buttons in the diff header,
     shown only in the working-tree views (Uncommitted/Unstaged/Staged), not Changes or
-    Committed. They're gated by a `reviewFileActions` server capability and, like upstream's other git
+    commits. They're gated by a `reviewFileActions` server capability and, like upstream's other git
     writes, the `source-control:write` client permission (`clientRpcPermissions.ts`, since
     2026-10-07). `discardFile` runs a
     silent `git stash push -- <path>` immediately before the destructive checkout/clean, left
@@ -76,11 +84,11 @@ buildable/runnable for personal use (see Fork infrastructure below).
     exactly. Git runs at the repository root with literal pathspecs; the V2 port fixed a project
     cwd below the repo root, and a file named like `[ab].txt` sweeping `a.txt` into the stash.
     Web + desktop only, deliberately no mobile UI.
-  - **Stacked since the V2 port**: committed-mode and file-actions each sit on top of
-    staged-unstaged and get updates by merging it (`patch_base` in `alex.sh`), not
+  - **Stacked since the V2 port**: file-actions (and committed-mode, until it was dropped) sits
+    on top of staged-unstaged and gets updates by merging it (`patch_base` in `alex.sh`), not
     `upstream/main`. Before that, each carried its own retyped copy of staged-unstaged, so every
-    sync resolved the same conflicts three times. Dropping staged-unstaged now means dropping all
-    three.
+    sync resolved the same conflicts three times. Dropping staged-unstaged now means dropping
+    file-actions too.
   - `patch/review-diff-file-tree` — a collapsible file-tree sidebar in the diff panel using
     `@pierre/trees`' `gitStatus` option (installed, unused elsewhere in the codebase before this)
     for added/modified/deleted/renamed/untracked badges. **Dropped 2026-09-03**: upstream shipped
@@ -182,7 +190,8 @@ buildable/runnable for personal use (see Fork infrastructure below).
   the tab entirely when connected to an unpatched/upstream server (e.g. a remote machine running
   the official nightly) instead of offering one that would fail. On branch
   `feat/scratchpad-panel` (based on `upstream/main`) and composed into `main` via
-  `PATCH_BRANCHES`. Built for personal use first; not yet sent upstream.
+  `PATCH_BRANCHES`. Built for personal use first; not yet sent upstream. Its panel launcher
+  shortcut is `N` since nightly 4080, because upstream's side chat took `S`.
 
 - **Conversation font size** — the Interface size in Settings → Appearance → Typography was the
   only knob that reached thread messages, and it scales the whole app (sidebar, header,
@@ -197,8 +206,8 @@ buildable/runnable for personal use (see Fork infrastructure below).
   `upstream/main`) and composed into `main` via `PATCH_BRANCHES`. Sent upstream:
   https://github.com/pingdotgg/t3code/pull/13234 (open; this branch is the PR's head, so keep it
   free of fork-only changes, and remember that pushing it updates the PR). Known conflict spot:
-  `MessagesTimeline.tsx`, where `.conversation-text` sits on the timeline viewport and the
-  working row uses `min-h-6`. V2's timeline cards use `text-3xs` badges, which deliberately don't
+  the timeline rows, where `.conversation-text` sits on `TimelineAssistantRows.tsx`,
+  `TimelineUserMessageRow.tsx` and `ProposedPlanCard.tsx`. V2's timeline cards use `text-3xs` badges, which deliberately don't
   scale. Once merged, drop the branch from `PATCH_BRANCHES` and `rebuild`.
 
 - **Hide viewed files in the PR Code tab** — the Code tab had GitHub-style Viewed checkboxes but
@@ -230,6 +239,15 @@ original PR, not pile up here as one-off fixes.
   (`Bil0000/t3code:feat/btw-side-questions`, 44 commits). Closed unmerged on 2026-09-07:
   upstream won't add a second ephemeral side-conversation protocol, so this fork now owns the
   feature outright.
+  - **Dropped 2026-11-02 (nightly 4080)**: upstream shipped its own side chats (#26901,
+    2026-10-31): real child threads with tools, started with `/side` or `/btw` or the right
+    panel's **+** menu, persisted, listed on mobile, with **Bring back** to hand the result to the
+    main thread. Both claimed `/btw` and the panel launcher, and upstream's is the bigger feature,
+    so the fork's stateless version was removed from `PATCH_BRANCHES`. What's lost: the "Ask in
+    side chat" button on the selection toolbar (also removed from the scratchpad branch, which
+    shared that toolbar) and starting a side chat from mobile. The fork's version wrote nothing to
+    the database, so nothing needs cleaning up. The branch stays at its last tip as a reference,
+    and its unfinished 4080 merge is kept locally as `refs/backup/side-chat-4080`.
   - **Branch**: `patch/pr8296-side-questions`, built by merging `upstream-pr-8296` (a mirror of
     `refs/pull/8296/head`, kept independent of everything else) onto fresh `upstream/main`.
     `alex.sh rebuild` merges `upstream/main` into this branch like any other patch branch —
