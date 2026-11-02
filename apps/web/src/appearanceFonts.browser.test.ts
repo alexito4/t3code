@@ -34,6 +34,7 @@ describe("applyAppearanceFontVariables", () => {
       code: "",
       composer: "",
       sizeInterface: 20,
+      sizeConversation: null,
       sizePrompt: 14,
       sizeCode: 13,
       smoothing: true,
