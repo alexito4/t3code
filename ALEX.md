@@ -142,6 +142,9 @@ buildable/runnable for personal use (see Fork infrastructure below).
   `feat/projects-list-page` (based on `upstream/main`) and composed into `main` via
   `PATCH_BRANCHES`. Sent upstream as https://github.com/pingdotgg/t3code/pull/9238, closed
   unmerged 2026-09-30 for lacking prior maintainer approval, so this is permanent fork code.
+  **Dropped 2026-11-02**: rarely used, and carrying fewer patches makes it easier to decide whether
+  the fork is still needed. Removed from `PATCH_BRANCHES`; the branch stays at its last tip
+  (nightly 4080) as a reference. It stored nothing, so nothing needs cleaning up.
 
 - **Export a thread** — no existing way to show a colleague what happened in a thread without
   giving them access to the environment (confirmed by checking upstream: nothing solves this,
@@ -191,7 +194,12 @@ buildable/runnable for personal use (see Fork infrastructure below).
   the official nightly) instead of offering one that would fail. On branch
   `feat/scratchpad-panel` (based on `upstream/main`) and composed into `main` via
   `PATCH_BRANCHES`. Built for personal use first; not yet sent upstream. Its panel launcher
-  shortcut is `N` since nightly 4080, because upstream's side chat took `S`.
+  shortcut is `N` since nightly 4080, because upstream's side chat took `S`. **Dropped
+  2026-11-02**: rarely used, and carrying fewer patches makes it easier to decide whether the fork
+  is still needed. Removed from `PATCH_BRANCHES`; the branch stays at its last tip (nightly 4080) as
+  a reference. Notes stay in `projection_thread_scratchpads`, so re-adding the branch brings them
+  back. A thread that had the Scratchpad tab open shows one empty, untitled tab afterwards (the
+  right panel's migration keeps unknown surface kinds); closing it removes it.
 
 - **Conversation font size** — the Interface size in Settings → Appearance → Typography was the
   only knob that reached thread messages, and it scales the whole app (sidebar, header,

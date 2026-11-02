@@ -18,12 +18,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PATCH_BRANCHES=(
     patch/fork-infra
     fix/codex-usage-archived-sessions
-    feat/projects-list-page
     feat/pull-request-review-checklist
     patch/review-diff-staged-unstaged
     patch/review-diff-file-actions
     feat/thread-share
-    feat/scratchpad-panel
     feat/conversation-font-size
     feat/pull-request-hide-viewed-files
 )
