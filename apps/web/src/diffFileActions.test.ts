@@ -105,12 +105,14 @@ describe("resolveDiffFileStagingActions", () => {
     }
   });
 
-  it("hides every action for the read-only Changes scope", () => {
-    expect(resolveDiffFileStagingActions("branch", false)).toEqual({
-      canStage: false,
-      canUnstage: false,
-      canDiscard: false,
-    });
+  it("hides every action for the read-only Changes and commit scopes", () => {
+    for (const scope of ["branch", "commit"] as const) {
+      expect(resolveDiffFileStagingActions(scope, false)).toEqual({
+        canStage: false,
+        canUnstage: false,
+        canDiscard: false,
+      });
+    }
   });
 
   it("offers stage and discard, but not unstage, in the Unstaged scope", () => {
