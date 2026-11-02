@@ -4,7 +4,7 @@ import {
   type AssistantCitation,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
-import { MessageCirclePlus, NotebookPen, QuoteIcon } from "lucide-react";
+import { NotebookPen, QuoteIcon } from "lucide-react";
 import { use, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -24,16 +24,12 @@ export function AssistantSelectionToolbar({
   viewport,
   threadRef,
   onCite,
-  onAskInSideChat,
-  askInSideChatAvailable = true,
   onAddToScratchpad,
   addToScratchpadAvailable = true,
 }: {
   viewport: HTMLElement | null;
   threadRef: ScopedThreadRef;
   onCite: (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) => boolean;
-  onAskInSideChat?: (citation: AssistantCitation) => boolean;
-  askInSideChatAvailable?: boolean;
   onAddToScratchpad?: (citation: AssistantCitation) => boolean;
   addToScratchpadAvailable?: boolean;
 }) {
@@ -199,12 +195,6 @@ export function AssistantSelectionToolbar({
     dismiss();
     return true;
   };
-  const askInSideChat = () => {
-    if (tooLong || !askInSideChatAvailable || !onAskInSideChat?.(selection.citation)) return false;
-    window.getSelection()?.removeAllRanges();
-    dismiss();
-    return true;
-  };
   const addToScratchpad = () => {
     if (tooLong || !addToScratchpadAvailable || !onAddToScratchpad?.(selection.citation)) {
       return false;
@@ -239,26 +229,6 @@ export function AssistantSelectionToolbar({
         <QuoteIcon aria-hidden="true" className="size-3.5" />
         {tooLong ? "Shorten selection" : "Cite"}
       </Button>
-      {onAskInSideChat ? (
-        <>
-          <div aria-hidden="true" className="h-4 w-px shrink-0 bg-border/60" />
-          <Button
-            type="button"
-            size="xs"
-            variant="ghost"
-            disabled={tooLong || !askInSideChatAvailable}
-            aria-label={
-              askInSideChatAvailable
-                ? "Ask about selection in a side chat"
-                : "Side chats need a running thread with no pending input"
-            }
-            onClick={askInSideChat}
-          >
-            <MessageCirclePlus aria-hidden="true" className="size-3.5" />
-            Ask in side chat
-          </Button>
-        </>
-      ) : null}
       {onAddToScratchpad ? (
         <>
           <div aria-hidden="true" className="h-4 w-px shrink-0 bg-border/60" />
