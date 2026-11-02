@@ -128,7 +128,8 @@ buildable/runnable for personal use (see Fork infrastructure below).
   (headline stat + legend on the left, chart beside it, no card wrapper). Also adds a "Projects"
   icon to the sidebar's bottom-left utility bar. (It also linked the per-project settings
   breadcrumb back to the list until upstream #13139 removed that breadcrumb.) V2 thread shells
-  include subagent child threads, so counts and the chart skip them (`isSidebarSubagentThread`);
+  include subagent and side-chat child threads, so counts and the chart skip them
+  (`isSidebarHiddenThread`, renamed from `isSidebarSubagentThread` in nightly 4080);
   the no-project "Scratch" project is listed like any other. On branch
   `feat/projects-list-page` (based on `upstream/main`) and composed into `main` via
   `PATCH_BRANCHES`. Sent upstream as https://github.com/pingdotgg/t3code/pull/9238, closed
@@ -315,7 +316,7 @@ the official one. Never meant to merge upstream.
     the first V2 launch starts with a fresh Electron profile (website and T3 Connect sign-ins
     again). App state (`~/.t3/userdata`) is resolved independently; see the V2 note at the top
     for how the database is shared and why the two apps must not run at the same time. `alex.sh
-pair` writes into whichever database this checkout's server uses, so from a V2 `main` it
+    pair` writes into whichever database this checkout's server uses, so from a V2 `main` it
     only pairs with V2 servers.
   - **Personal build branding** — same idea as the official Nightly channel's distinctive
     visuals, so a personal build is recognizable at a glance next to an official install:
