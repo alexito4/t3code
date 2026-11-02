@@ -149,7 +149,6 @@ import { FileMetadataThreadProvider } from "../hooks/FileMetadataThreadProvider"
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
 import { PopoverCreateHandle } from "./ui/popover";
 import {
-  rightPanelHostRef,
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
   selectThreadPanelOpen,
@@ -185,7 +184,7 @@ import { shortcutLabelForCommand } from "../keybindings";
 import { cn } from "~/lib/utils";
 import { isModelPickerOpen } from "../modelPickerVisibility";
 import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "~/workspaceTitlebar";
-import { stackedThreadToast, toastManager } from "./ui/toast";
+import { toastManager } from "./ui/toast";
 import { projectScriptIdFromCommand } from "~/projectScripts";
 import { newMessageId } from "~/lib/utils";
 import { isInSideChatPane, type SideChatParentPanel } from "~/lib/sideChatPane";
@@ -233,7 +232,6 @@ import {
   primaryServerKeybindingsAtom,
   serverEnvironment,
 } from "../state/server";
-import { orchestrationEnvironment } from "../state/orchestration";
 import { threadEnvironment } from "../state/threads";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
 import { vcsEnvironment } from "../state/vcs";
@@ -2387,42 +2385,6 @@ export default function ChatView(props: ChatViewProps) {
     onDiffPanelOpen,
     closeRightPanelSurface,
   });
-  // This fork's own patch: absent on servers without it, so hide the tab
-  // instead of offering one that would fail against them.
-  const scratchpadAvailable =
-    activeThreadRef !== null && serverConfig?.environment.capabilities.scratchpad === true;
-  const addScratchpadSurface = () => {
-    if (!activeThreadRef || !scratchpadAvailable) return;
-    useRightPanelStore.getState().open(activeThreadRef, "scratchpad");
-  };
-  const addScratchpadSurfaceStable = useStableCallback(addScratchpadSurface);
-  const appendScratchpad = useAtomCommand(orchestrationEnvironment.appendThreadScratchpad, {
-    reportFailure: false,
-  });
-  const addSelectionToScratchpad = (citation: AssistantCitation) => {
-    if (!activeThreadRef || !scratchpadAvailable) return false;
-    // A side chat's selection goes to the notes its host panel shows.
-    const scratchpadRef = rightPanelHostRef(activeThreadRef);
-    void appendScratchpad({
-      environmentId: scratchpadRef.environmentId,
-      input: { threadId: scratchpadRef.threadId, text: citation.text },
-    }).then((result) => {
-      if (result._tag === "Success") {
-        toastManager.add({ type: "success", title: "Added to scratchpad" });
-      } else if (!isAtomCommandInterrupted(result)) {
-        const error = squashAtomCommandFailure(result);
-        toastManager.add(
-          stackedThreadToast({
-            type: "error",
-            title: "Could not add to scratchpad",
-            description: error instanceof Error ? error.message : "An error occurred.",
-          }),
-        );
-      }
-    });
-    return true;
-  };
-  const addSelectionToScratchpadStable = useStableCallback(addSelectionToScratchpad);
   const pullRequestSurfaceAvailable = supportsPullRequests && pullRequestPanelTarget !== null;
   const {
     acknowledgeActiveThreadWoke,
@@ -3439,8 +3401,6 @@ export default function ChatView(props: ChatViewProps) {
                 citationRequest={citationRequest}
                 citationHistory={citationHistory}
                 onCiteAssistantText={citeAssistantTextStable}
-                onAddToScratchpad={addSelectionToScratchpadStable}
-                addToScratchpadAvailable={scratchpadAvailable}
                 {...(activeProject
                   ? { onRunShellCommand: parentPanel?.runShellCommand ?? runShellCommandStable }
                   : {})}
@@ -4027,7 +3987,6 @@ export default function ChatView(props: ChatViewProps) {
           onAddPullRequests={addPullRequestsSurfaceStable}
           onAddDevice={addDeviceSurfaceStable}
           onAddSideChat={sideChatsOffered ? openSideChatStable : undefined}
-          onAddScratchpad={addScratchpadSurfaceStable}
           browserAvailable={canOperatePreview && browserAvailable}
           terminalAvailable={activeProject !== null && canOperateTerminal}
           diffAvailable={isServerThread && isGitRepo}
@@ -4037,7 +3996,6 @@ export default function ChatView(props: ChatViewProps) {
           deviceAvailable={activeThreadRef !== null}
           sideChatAvailable={sideChat.available}
           sideChatDisabledReason={sideChatDisabledReason}
-          scratchpadAvailable={scratchpadAvailable}
         >
           {rightPanelContent}
         </ChatRightPanel>

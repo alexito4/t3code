@@ -33,7 +33,6 @@ const DevicePanel = lazy(() =>
   import("../device/DevicePanel").then((module) => ({ default: module.DevicePanel })),
 );
 const FilePreviewPanel = lazy(() => import("../files/FilePreviewPanel"));
-const ScratchpadPanel = lazy(() => import("../scratchpad/ScratchpadPanel"));
 
 type RightPanelTerminalProps = Omit<
   PersistentThreadTerminalPanelProps,
@@ -179,12 +178,6 @@ export function RightPanelSurfaceContent(props: {
           parentPanel={props.sideChatParentPanel}
           onClose={() => onCloseSurface(surface)}
         />
-      );
-    case "scratchpad":
-      return (
-        <Suspense fallback={null}>
-          <ScratchpadPanel threadRef={threadRef} composerDraftTarget={props.composerDraftTarget} />
-        </Suspense>
       );
     case "device":
       return (

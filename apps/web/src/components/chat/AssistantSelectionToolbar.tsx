@@ -4,7 +4,7 @@ import {
   type AssistantCitation,
   type ScopedThreadRef,
 } from "@t3tools/contracts";
-import { NotebookPen, QuoteIcon } from "lucide-react";
+import { QuoteIcon } from "lucide-react";
 import { use, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -24,22 +24,17 @@ export function AssistantSelectionToolbar({
   viewport,
   threadRef,
   onCite,
-  onAddToScratchpad,
-  addToScratchpadAvailable = true,
 }: {
   viewport: HTMLElement | null;
   threadRef: ScopedThreadRef;
   onCite: (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) => boolean;
-  onAddToScratchpad?: (citation: AssistantCitation) => boolean;
-  addToScratchpadAvailable?: boolean;
 }) {
   const [selection, setSelection] = useState<{
     citation: AssistantCitation;
     position: SelectionActionPoint;
     sourceAnchor: AssistantCitationSourceAnchor;
   } | null>(null);
-  const toolbarRef = useRef<HTMLDivElement>(null);
-  const citeActionRef = useRef<HTMLButtonElement>(null);
+  const toolbarRef = useRef<HTMLButtonElement>(null);
   const actionsRef = useRef<ReturnType<typeof observeSelectionActions> | null>(null);
   const backgroundThread = use(BackgroundThreadContext);
 
@@ -152,7 +147,6 @@ export function AssistantSelectionToolbar({
     actionsRef.current = actions;
     const focusActions = (event: KeyboardEvent) => {
       const toolbar = toolbarRef.current;
-      const firstAction = citeActionRef.current;
       if (
         event.key !== "Tab" ||
         event.shiftKey ||
@@ -162,15 +156,14 @@ export function AssistantSelectionToolbar({
         event.isComposing ||
         event.defaultPrevented ||
         !toolbar ||
-        !firstAction ||
         toolbar.contains(event.target as Node)
       ) {
         return;
       }
-      if (firstAction.disabled) return;
+      if (toolbar.disabled) return;
       event.preventDefault();
       event.stopPropagation();
-      firstAction.focus({ preventScroll: true });
+      toolbar.focus({ preventScroll: true });
     };
     // Tab belongs to the foreground chat; a background timeline only follows its selection.
     if (!backgroundThread) document.addEventListener("keydown", focusActions, true);
@@ -195,20 +188,18 @@ export function AssistantSelectionToolbar({
     dismiss();
     return true;
   };
-  const addToScratchpad = () => {
-    if (tooLong || !addToScratchpadAvailable || !onAddToScratchpad?.(selection.citation)) {
-      return false;
-    }
-    window.getSelection()?.removeAllRanges();
-    dismiss();
-    return true;
-  };
   return createPortal(
-    <div
+    <Button
       ref={toolbarRef}
-      className="surface-glass fixed z-50 flex max-w-[calc(100vw-1rem)] items-center overflow-hidden rounded-full border border-border/60 shadow-sm"
+      type="button"
+      size="xs"
+      variant="glass"
+      disabled={tooLong}
+      aria-label={tooLong ? "Selection is too long to cite" : "Cite selection in composer"}
+      className="fixed z-50 max-w-[calc(100vw-1rem)]"
       style={{ left: selection.position.x, top: selection.position.y }}
       onPointerDown={(event) => event.preventDefault()}
+      onClick={cite}
       onKeyDown={(event) => {
         event.stopPropagation();
         if (event.key === "Escape" && !event.nativeEvent.isComposing) {
@@ -217,39 +208,9 @@ export function AssistantSelectionToolbar({
         }
       }}
     >
-      <Button
-        ref={citeActionRef}
-        type="button"
-        size="xs"
-        variant="ghost"
-        disabled={tooLong}
-        aria-label={tooLong ? "Selection is too long to cite" : "Cite selection in composer"}
-        onClick={cite}
-      >
-        <QuoteIcon aria-hidden="true" className="size-3.5" />
-        {tooLong ? "Shorten selection" : "Cite"}
-      </Button>
-      {onAddToScratchpad ? (
-        <>
-          <div aria-hidden="true" className="h-4 w-px shrink-0 bg-border/60" />
-          <Button
-            type="button"
-            size="xs"
-            variant="ghost"
-            disabled={tooLong || !addToScratchpadAvailable}
-            aria-label={
-              addToScratchpadAvailable
-                ? "Add selection to scratchpad"
-                : "Scratchpad is not available for this thread"
-            }
-            onClick={addToScratchpad}
-          >
-            <NotebookPen aria-hidden="true" className="size-3.5" />
-            Add to scratchpad
-          </Button>
-        </>
-      ) : null}
-    </div>,
+      <QuoteIcon aria-hidden="true" className="size-3.5" />
+      {tooLong ? "Shorten selection" : "Cite"}
+    </Button>,
     document.body,
   );
 }

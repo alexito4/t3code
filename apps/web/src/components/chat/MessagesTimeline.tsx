@@ -223,8 +223,6 @@ interface MessagesTimelineProps {
     citation: AssistantCitation,
     sourceAnchor: AssistantCitationSourceAnchor,
   ) => boolean;
-  onAddToScratchpad?: (citation: AssistantCitation) => boolean;
-  addToScratchpadAvailable?: boolean;
   isWorking: boolean;
   runlessWorkActive?: boolean;
   activeTurnStartedAt?: string | null;
@@ -338,8 +336,6 @@ const ConversationTimeline = memo(function ConversationTimeline({
   citationRequest = null,
   citationHistory = CITED_HISTORY_LOADING,
   onCiteAssistantText,
-  onAddToScratchpad,
-  addToScratchpadAvailable = false,
   isWorking,
   runlessWorkActive = false,
   activeTurnStartedAt = null,
@@ -1306,7 +1302,6 @@ const ConversationTimeline = memo(function ConversationTimeline({
                 viewport={timelineViewportElement}
                 threadRef={citationThreadRef}
                 onCite={onCiteAssistantText}
-                {...(onAddToScratchpad ? { onAddToScratchpad, addToScratchpadAvailable } : {})}
               />
             ) : null}
             <LegendList<MessagesTimelineRow>

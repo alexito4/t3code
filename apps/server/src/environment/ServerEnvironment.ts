@@ -267,8 +267,6 @@ export const make = Effect.gen(function* () {
       threadStop: true,
       ...(hostPlatform === "win32" ? {} : { localServerStop: true }),
       environmentIcon: true,
-      // This fork's own personal patch, absent on official/upstream builds.
-      scratchpad: true,
       projectCloneTracking: true,
       projectOrganization: true,
       ignoredFileListing: true,

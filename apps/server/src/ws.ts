@@ -95,7 +95,6 @@ import {
   type ProviderDriverKind,
   type ProviderInstanceId,
   ThreadId,
-  ThreadScratchpadError,
   type TerminalMetadataStreamEvent,
   type PullRequestRef,
   WS_METHODS,
@@ -245,7 +244,6 @@ import * as UsageService from "./usage/UsageService.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as TriageService from "./triage/TriageService.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
-import * as ThreadScratchpads from "./persistence/ThreadScratchpads.ts";
 import * as PullRequestReviewGuideService from "./pullRequest/PullRequestReviewGuideService.ts";
 import { listLinkedPullRequestThreads } from "./pullRequest/linkedThreads.ts";
 import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
@@ -602,42 +600,12 @@ const PROVIDER_STATUS_DEBOUNCE_MS = 200;
 
 // Middleware added later wraps middleware added earlier, so instrumentation wraps authorization.
 const ServerWsRpcGroup = WsRpcGroup.middleware(RpcInstrumentation);
-// The fork's procedures are implemented outside upstream's handler map, so upstream's
-// edits to that map and its split below merge without touching them.
-const CoreWsRpcGroup = ServerWsRpcGroup.omit(
-  WS_METHODS.threadScratchpadGet,
-  WS_METHODS.threadScratchpadSet,
-);
-// Fetched on demand, never part of the thread snapshot, so a long scratchpad costs
-// nothing until its panel opens.
-const layerThreadScratchpadWsRpc = Layer.mergeAll(
-  ServerWsRpcGroup.toLayerHandler(WS_METHODS.threadScratchpadGet, (input) =>
-    Effect.gen(function* () {
-      const threadScratchpads = yield* ThreadScratchpads.ThreadScratchpadRepository;
-      return yield* threadScratchpads.get(input.threadId);
-    }).pipe(
-      Effect.mapError(
-        (cause) => new ThreadScratchpadError({ message: "Could not read the scratchpad.", cause }),
-      ),
-    ),
-  ),
-  ServerWsRpcGroup.toLayerHandler(WS_METHODS.threadScratchpadSet, (input) =>
-    Effect.gen(function* () {
-      const threadScratchpads = yield* ThreadScratchpads.ThreadScratchpadRepository;
-      return yield* threadScratchpads.set(input);
-    }).pipe(
-      Effect.mapError(
-        (cause) => new ThreadScratchpadError({ message: "Could not save the scratchpad.", cause }),
-      ),
-    ),
-  ),
-);
 
 // RpcGroup.toLayer derives each handler's requirements by scanning every RPC in
 // the group, so its type cost grows with handlers × RPCs. Near 200 methods that
 // crosses TypeScript's instantiation limit and the layer's requirements degrade to
 // `any`, so the handlers are registered as two disjoint, smaller groups.
-type ServerWsRpc = RpcGroup.Rpcs<typeof CoreWsRpcGroup>;
+type ServerWsRpc = RpcGroup.Rpcs<typeof ServerWsRpcGroup>;
 const SPLIT_WS_RPC_PREFIXES = ["server", "pullRequests", "provider", "orchestration"] as const;
 type SplitWsRpc = Extract<
   ServerWsRpc,
@@ -647,7 +615,7 @@ const isSplitWsRpc = (rpc: ServerWsRpc): rpc is SplitWsRpc =>
   SPLIT_WS_RPC_PREFIXES.some((prefix) => rpc._tag.startsWith(`${prefix}.`));
 const isOtherWsRpc = (rpc: ServerWsRpc): rpc is Exclude<ServerWsRpc, SplitWsRpc> =>
   !isSplitWsRpc(rpc);
-const serverWsRpcs = Array.from(CoreWsRpcGroup.requests.values());
+const serverWsRpcs = Array.from(ServerWsRpcGroup.requests.values());
 const SplitWsRpcGroup = RpcGroup.make(...serverWsRpcs.filter(isSplitWsRpc));
 const OtherWsRpcGroup = RpcGroup.make(...serverWsRpcs.filter(isOtherWsRpc));
 // Replaying each intervening event costs a shell refetch; past this gap a
@@ -1293,7 +1261,7 @@ export const subscribeOrchestrationV2Shell = Effect.fn("ws.orchestrationV2.subsc
   },
 );
 
-const layerCoreWsRpc = (
+export const layerWsRpc = (
   currentSession: EnvironmentAuth.AuthenticatedSession,
   clientAnalyticsProps: Readonly<Record<string, unknown>>,
   serverBrowser: ServerBrowser.ServerBrowser["Service"],
@@ -1943,7 +1911,7 @@ const layerCoreWsRpc = (
         return yield* mutateProjectWithClone(projectService, projectCloneTracker, mutation);
       });
 
-      const handlers = CoreWsRpcGroup.of({
+      const handlers = ServerWsRpcGroup.of({
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": command.commandId,
@@ -3365,9 +3333,6 @@ const layerCoreWsRpc = (
       );
     }),
   );
-
-export const layerWsRpc = (...args: Parameters<typeof layerCoreWsRpc>) =>
-  Layer.mergeAll(layerCoreWsRpc(...args), layerThreadScratchpadWsRpc);
 
 // Default socket-level Defect frames end every pending client request.
 export const WS_RPC_SERVER_OPTIONS = {

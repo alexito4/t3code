@@ -22,7 +22,6 @@ const RIGHT_PANEL_KINDS = [
   "pull-request",
   "pull-requests",
   "side-chat",
-  "scratchpad",
 ] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
@@ -77,14 +76,10 @@ export type RightPanelSurface =
       detailTab?: PullRequestDetailTab;
     }
   | { id: "pull-requests"; kind: "pull-requests" }
-  | { id: `side-chat:${string}`; kind: "side-chat"; threadId: ThreadId }
-  /** A thread's personal notes, one singleton tab per thread like diff/files. */
-  | { id: "scratchpad"; kind: "scratchpad" };
+  | { id: `side-chat:${string}`; kind: "side-chat"; threadId: ThreadId };
 
 const RIGHT_PANEL_STORAGE_KEY = "t3code:right-panel-state:v2";
-// v15 (fork) adds the scratchpad surface. The fork's own v14 also meant scratchpad, so this bump
-// re-runs the migration for those installs and strips the agents surfaces they still hold.
-const RIGHT_PANEL_STORAGE_VERSION = 15;
+const RIGHT_PANEL_STORAGE_VERSION = 14;
 
 export const PULL_REQUESTS_PANEL_REF = scopeThreadRef(
   EnvironmentId.make("pull-requests-panel"),
@@ -224,8 +219,6 @@ const singletonSurface = (
       return { id: "pull-requests", kind };
     case "device":
       return { id: "device", kind };
-    case "scratchpad":
-      return { id: "scratchpad", kind };
   }
 };
 

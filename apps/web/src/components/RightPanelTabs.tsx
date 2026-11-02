@@ -44,7 +44,6 @@ import {
   Files,
   Globe2,
   MessagesSquare,
-  NotebookPen,
   Plus,
   TerminalSquare,
 } from "lucide-react";
@@ -144,7 +143,6 @@ export interface RightPanelTabsProps {
   onAddDevice: () => void;
   /** Absent where side chats are not offered. */
   onAddSideChat?: (() => void) | undefined;
-  onAddScratchpad: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -155,7 +153,6 @@ export interface RightPanelTabsProps {
   sideChatAvailable?: boolean;
   /** Overrides the default reason while side chats are available but cannot start. */
   sideChatDisabledReason?: string | null;
-  scratchpadAvailable: boolean;
   pullRequestStatusSeeds?: Readonly<Record<string, PullRequestTabStatusSeed>>;
   children: ReactNode;
 }
@@ -183,7 +180,6 @@ const SURFACE_DISABLED_REASONS = {
   pullRequests: "No linked pull requests are available for this thread.",
   device: "Devices are only available from a thread.",
   sideChat: "Side chats start after the first message.",
-  scratchpad: "Scratchpad is only available from a thread on a server with this fork's changes.",
 } as const;
 
 // Closed keepMounted popups must stop blocking shortcuts once their exit transition ends.
@@ -209,7 +205,6 @@ const SURFACE_UNAVAILABLE_HINTS = {
   pullRequests: "No linked pull requests available.",
   device: "Available from a thread.",
   sideChat: "Available after the first message.",
-  scratchpad: "Available from a thread on a server with this fork's changes.",
 } as const;
 
 type TabContextMenuAction =
@@ -329,7 +324,6 @@ function RightPanelEmptyState(props: {
   onAddDevice: () => void;
   /** Absent where side chats are not offered. */
   onAddSideChat?: (() => void) | undefined;
-  onAddScratchpad: () => void;
   browserAvailable: boolean;
   terminalAvailable: boolean;
   diffAvailable: boolean;
@@ -339,7 +333,6 @@ function RightPanelEmptyState(props: {
   deviceAvailable: boolean;
   sideChatAvailable: boolean;
   sideChatDisabledReason: string | null;
-  scratchpadAvailable: boolean;
 }) {
   const [highlight, setHighlight] = useState(-1);
 
@@ -414,15 +407,6 @@ function RightPanelEmptyState(props: {
           },
         ]
       : []),
-    {
-      label: "Scratchpad",
-      description: "Keep notes about this thread.",
-      icon: NotebookPen,
-      shortcut: "N",
-      available: props.scratchpadAvailable,
-      disabledReason: SURFACE_UNAVAILABLE_HINTS.scratchpad,
-      onClick: props.onAddScratchpad,
-    },
   ] as const;
 
   type SurfaceAction = (typeof actions)[number];
@@ -610,8 +594,6 @@ function surfaceTitle(
       return surface.title ?? surface.target?.name ?? "Device";
     case "side-chat":
       return "Side chat";
-    case "scratchpad":
-      return "Scratchpad";
     case "preview": {
       const snapshot = surface.resourceId ? sessions[surface.resourceId] : null;
       if (!snapshot || snapshot.navStatus._tag === "Idle") return "Browser";
@@ -710,8 +692,6 @@ function SurfaceIcon({
       ) : (
         <Smartphone className="size-3 shrink-0" />
       );
-    case "scratchpad":
-      return <NotebookPen className="size-3 shrink-0" />;
   }
 }
 
@@ -1179,14 +1159,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
           },
         ]
       : []),
-    {
-      label: "Scratchpad",
-      icon: NotebookPen,
-      shortcut: "N",
-      available: props.scratchpadAvailable,
-      disabledReason: SURFACE_DISABLED_REASONS.scratchpad,
-      onClick: props.onAddScratchpad,
-    },
   ] as const;
 
   const handleAddSurfaceMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -1562,7 +1534,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             onAddPullRequests={props.onAddPullRequests}
             onAddDevice={props.onAddDevice}
             onAddSideChat={props.onAddSideChat}
-            onAddScratchpad={props.onAddScratchpad}
             browserAvailable={props.browserAvailable}
             terminalAvailable={props.terminalAvailable}
             diffAvailable={props.diffAvailable}
@@ -1572,7 +1543,6 @@ export function RightPanelTabs(props: RightPanelTabsProps) {
             deviceAvailable={props.deviceAvailable}
             sideChatAvailable={props.sideChatAvailable === true}
             sideChatDisabledReason={props.sideChatDisabledReason ?? null}
-            scratchpadAvailable={props.scratchpadAvailable}
           />
         ) : (
           props.children
