@@ -83,6 +83,7 @@ function setup() {
       attachesToComposer={false}
       askAboutPullRequest={() => {}}
       explainPullRequest={() => {}}
+      onReview={() => {}}
       canFixFindings={false}
       startFixFindings={() => {}}
       handoffLabels={{ fixFindings: "Fix review findings" }}
